@@ -1,0 +1,74 @@
+---
+title: AngleAttenuationsFlatMap
+description: ""
+---
+
+<CodeBlock id="AngleAttenuationsFlatMap" links={{"AngleAttenuationsFlatMap": "angleattenuationsflatmap"}}>
+```cpp showLineNumbers={false}
+template <typename T1>
+struct AngleAttenuationsFlatMap
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <AngleAttenuations.h>
+```
+
+**Template parameters**
+
+<ParamField path="T1" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### AngleAttenuationsFlatMap [#angleattenuationsflatmap]
+
+<CodeBlock links={{"AngleAttenuationsFlatMap": "angleattenuationsflatmap"}}>
+```cpp showLineNumbers={false}
+AngleAttenuationsFlatMap<T1>::AngleAttenuationsFlatMap(
+    const T1 min_angle,
+    const T1 max_angle,
+    const int32_t num_segments
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_angle_attenuation [#getangleattenuation]
+
+<CodeBlock links={{"AngleAttenuationsFlatMap": "angleattenuationsflatmap"}}>
+```cpp showLineNumbers={false}
+T1 AngleAttenuationsFlatMap<T1>::get_angle_attenuation(
+    const T1 angle
+) const
+```
+</CodeBlock>
+
+### add_attenuations [#addattenuations]
+
+<CodeBlock links={{"AngleAttenuationsFlatMap": "angleattenuationsflatmap"}}>
+```cpp showLineNumbers={false}
+void AngleAttenuationsFlatMap<T1>::add_attenuations(
+    const T1 start_angle,
+    const T1 end_angle,
+    const T1 attenuation_dbm
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `min_angle` | `const T1` | |
+| `max_angle` | `const T1` | |
+| `num_segments` | `const int32_t` | |
+| `angle_segment_ratio` | `const T1` | |
+| `attenuations` | `std::vector< T1 >` | |

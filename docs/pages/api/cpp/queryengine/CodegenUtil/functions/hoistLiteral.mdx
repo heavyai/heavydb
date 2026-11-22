@@ -1,0 +1,16 @@
+---
+title: CodegenUtil::hoistLiteral
+description: ""
+---
+
+<CodeBlock links={{"CodeGenerator": "../../classes/codegenerator", "CompilationOptions": "../../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::unordered_map<int, llvm::Value *> CodegenUtil::hoistLiteral(
+    CodeGenerator *code_generator,
+    CompilationOptions const &co,
+    Datum d,
+    SQLTypeInfo type,
+    std::set<int> const &target_device_ids
+)
+```
+</CodeBlock>

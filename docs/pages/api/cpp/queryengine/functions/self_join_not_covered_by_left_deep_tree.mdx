@@ -1,0 +1,33 @@
+---
+title: self_join_not_covered_by_left_deep_tree
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+bool self_join_not_covered_by_left_deep_tree(
+    const Analyzer::ColumnVar *key_side,
+    const Analyzer::ColumnVar *val_side,
+    const int max_rte_covered
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+bool self_join_not_covered_by_left_deep_tree(
+    const Analyzer::ColumnVar *lhs,
+    const Analyzer::ColumnVar *rhs,
+    const int max_rte_covered
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,46 @@
+---
+title: ZStdNormalizationSummaryStats
+description: ""
+---
+
+<CodeBlock id="ZStdNormalizationSummaryStats" links={{"ZStdNormalizationSummaryStats": "zstdnormalizationsummarystats"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+struct ZStdNormalizationSummaryStats
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <TableFunctionsCommon.hpp>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### ZStdNormalizationSummaryStats [#zstdnormalizationsummarystats]
+
+<CodeBlock links={{"ZStdNormalizationSummaryStats": "zstdnormalizationsummarystats"}}>
+```cpp showLineNumbers={false}
+ZStdNormalizationSummaryStats<T>::ZStdNormalizationSummaryStats(
+    const std::vector<std::vector<T>> &normalized_data,
+    const std::vector<T> &means,
+    const std::vector<T> &std_devs
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `normalized_data` | `std::vector< std::vector< T > >` | |
+| `means` | `std::vector< T >` | |
+| `std_devs` | `std::vector< T >` | |

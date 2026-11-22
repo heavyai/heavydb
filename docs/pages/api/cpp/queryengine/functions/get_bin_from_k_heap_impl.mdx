@@ -1,0 +1,21 @@
+---
+title: get_bin_from_k_heap_impl
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename KeyT = int64_t>
+ALWAYS_INLINE DEVICE int64_t * get_bin_from_k_heap_impl(
+    int64_t *heaps,
+    const uint32_t k,
+    const uint32_t row_size_quad,
+    const uint32_t key_offset,
+    const bool min_heap,
+    const bool has_null,
+    const bool nulls_first,
+    const KeyT null_key,
+    const KeyT curr_key
+)
+```
+</CodeBlock>

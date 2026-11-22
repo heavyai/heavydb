@@ -1,0 +1,470 @@
+---
+title: Buffer_Namespace::CpuBufferMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Buffer_Namespace/CpuBufferMgr.h>
+```
+
+**Inherits from:** `Buffer_Namespace::BufferMgr` (public)
+
+---
+
+## Constructors
+
+### CpuBufferMgr [#cpubuffermgr]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr"}}>
+```cpp showLineNumbers={false}
+Buffer_Namespace::CpuBufferMgr::CpuBufferMgr(
+    const int device_id,
+    const size_t max_buffer_pool_size,
+    CudaMgr_Namespace::CudaMgr *cuda_mgr,
+    const size_t min_slab_size,
+    const size_t max_slab_size,
+    const size_t default_slab_size,
+    const size_t page_size,
+    AbstractBufferMgr *parent_mgr = nullptr
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~CpuBufferMgr
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr"}}>
+```cpp showLineNumbers={false}
+Buffer_Namespace::CpuBufferMgr::~CpuBufferMgr() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getMgrType [#getmgrtype]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr"}}>
+```cpp showLineNumbers={false}
+MgrType Buffer_Namespace::CpuBufferMgr::getMgrType() override
+```
+</CodeBlock>
+
+### getStringMgrType [#getstringmgrtype]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr"}}>
+```cpp showLineNumbers={false}
+std::string Buffer_Namespace::CpuBufferMgr::getStringMgrType() override
+```
+</CodeBlock>
+
+### setAllocator [#setallocator]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "DramArena": "../../classes/dramarena"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::setAllocator(
+    std::unique_ptr<DramArena> allocator
+)
+```
+</CodeBlock>
+
+### getMemoryUsage [#getmemoryusage]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "CpuBufferMgrMemoryUsage": "#cpubuffermgrmemoryusage"}}>
+```cpp showLineNumbers={false}
+CpuBufferMgrMemoryUsage Buffer_Namespace::CpuBufferMgr::getMemoryUsage() const
+```
+</CodeBlock>
+
+### printSlabs [#printslabs]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+std::string Buffer_Namespace::CpuBufferMgr::printSlabs() override
+```
+</CodeBlock>
+
+### clearSlabs [#clearslabs]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::clearSlabs()
+```
+</CodeBlock>
+
+### printMap [#printmap]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+std::string Buffer_Namespace::CpuBufferMgr::printMap()
+```
+</CodeBlock>
+
+### printSegs [#printsegs]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::printSegs()
+```
+</CodeBlock>
+
+### getInUseSize [#getinusesize]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+size_t Buffer_Namespace::CpuBufferMgr::getInUseSize() const override
+```
+</CodeBlock>
+
+### getMaxSize [#getmaxsize]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+size_t Buffer_Namespace::CpuBufferMgr::getMaxSize() const override
+```
+</CodeBlock>
+
+### getAllocated [#getallocated]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+size_t Buffer_Namespace::CpuBufferMgr::getAllocated() const override
+```
+</CodeBlock>
+
+### getMaxBufferSize [#getmaxbuffersize]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+size_t Buffer_Namespace::CpuBufferMgr::getMaxBufferSize() const
+```
+</CodeBlock>
+
+### getMaxSlabSize [#getmaxslabsize]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+size_t Buffer_Namespace::CpuBufferMgr::getMaxSlabSize() const
+```
+</CodeBlock>
+
+### getPageSize [#getpagesize]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+size_t Buffer_Namespace::CpuBufferMgr::getPageSize() const
+```
+</CodeBlock>
+
+### isAllocationCapped [#isallocationcapped]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+bool Buffer_Namespace::CpuBufferMgr::isAllocationCapped() const override
+```
+</CodeBlock>
+
+### getSlabSegments [#getslabsegments]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+const std::vector<BufferList> & Buffer_Namespace::CpuBufferMgr::getSlabSegments()
+```
+</CodeBlock>
+
+### createBuffer [#createbuffer]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "AbstractBuffer": "../../classes/abstractbuffer", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * Buffer_Namespace::CpuBufferMgr::createBuffer(
+    const ChunkKey &key,
+    const size_t page_size = 0,
+    const size_t initial_size = 0
+) override
+```
+</CodeBlock>
+
+Creates a chunk with the specified key and page size.
+
+Throws a runtime_error if the Chunk already exists.
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+Buffer * Buffer_Namespace::CpuBufferMgr::createBuffer(
+    BufferList::iterator seg_it,
+    size_t page_size
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### deleteBuffer [#deletebuffer]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::deleteBuffer(
+    const ChunkKey &key,
+    const bool purge = true
+) override
+```
+</CodeBlock>
+
+Deletes the chunk with the specified key.
+
+This method throws a runtime_error when deleting a Chunk that does not exist.
+
+### deleteBuffersWithPrefix [#deletebufferswithprefix]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::deleteBuffersWithPrefix(
+    const ChunkKey &key_prefix,
+    const bool purge = true
+) override
+```
+</CodeBlock>
+
+### getBuffer [#getbuffer]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "AbstractBuffer": "../../classes/abstractbuffer", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * Buffer_Namespace::CpuBufferMgr::getBuffer(
+    const ChunkKey &key,
+    const size_t num_bytes = 0
+) override
+```
+</CodeBlock>
+
+Returns the a pointer to the chunk with the specified key.
+
+Returns a pointer to the [Buffer](buffer) holding the chunk, if it exists; otherwise, throws a runtime_error.
+
+### isBufferOnDevice [#isbufferondevice]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+bool Buffer_Namespace::CpuBufferMgr::isBufferOnDevice(
+    const ChunkKey &key
+) override
+```
+</CodeBlock>
+
+Puts the contents of d into the [Buffer](buffer) with ChunkKey key.
+
+**Returns:** AbstractBuffer*
+
+**Parameters**
+
+<ParamField path="key" type="const ChunkKey &">
+- Unique identifier for a Chunk.
+</ParamField>
+
+### fetchBuffer [#fetchbuffer]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "AbstractBuffer": "../../classes/abstractbuffer", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::fetchBuffer(
+    const ChunkKey &key,
+    AbstractBuffer *dest_buffer,
+    const size_t num_bytes = 0
+) override
+```
+</CodeBlock>
+
+### putBuffer [#putbuffer]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "AbstractBuffer": "../../classes/abstractbuffer", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * Buffer_Namespace::CpuBufferMgr::putBuffer(
+    const ChunkKey &key,
+    AbstractBuffer *d,
+    const size_t num_bytes = 0
+) override
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::checkpoint() override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::checkpoint(
+    const int db_id,
+    const int tb_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### removeTableRelatedDS [#removetablerelatedds]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::removeTableRelatedDS(
+    const int db_id,
+    const int table_id
+) override
+```
+</CodeBlock>
+
+### alloc [#alloc]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "AbstractBuffer": "../../classes/abstractbuffer", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * Buffer_Namespace::CpuBufferMgr::alloc(
+    const size_t num_bytes = 0
+) override
+```
+</CodeBlock>
+
+client is responsible for deleting memory allocated for b-&gt;mem_
+
+### free [#free]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "AbstractBuffer": "../../classes/abstractbuffer", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::free(
+    AbstractBuffer *buffer
+) override
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+size_t Buffer_Namespace::CpuBufferMgr::size() const
+```
+</CodeBlock>
+
+Returns the total number of bytes allocated.
+
+### getNumChunks [#getnumchunks]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+size_t Buffer_Namespace::CpuBufferMgr::getNumChunks() override
+```
+</CodeBlock>
+
+### reserveBuffer [#reservebuffer]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+BufferList::iterator Buffer_Namespace::CpuBufferMgr::reserveBuffer(
+    BufferList::iterator &seg_it,
+    const size_t num_bytes
+)
+```
+</CodeBlock>
+
+### getChunkMetadataVecForKeyPrefix [#getchunkmetadatavecforkeyprefix]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::getChunkMetadataVecForKeyPrefix(
+    ChunkMetadataVector &chunk_metadata_vec,
+    const ChunkKey &key_prefix
+) override
+```
+</CodeBlock>
+
+### getMemoryInfo [#getmemoryinfo]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "MemoryInfo": "../structs/memoryinfo", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+MemoryInfo Buffer_Namespace::CpuBufferMgr::getMemoryInfo() const
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr", "BufferMgr": "buffermgr"}}>
+```cpp showLineNumbers={false}
+int Data_Namespace::AbstractBufferMgr::getDeviceId()
+```
+</CodeBlock>
+
+### addSlab [#addslab]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::addSlab(
+    const size_t slab_size
+) override
+```
+</CodeBlock>
+
+### freeAllMem [#freeallmem]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::freeAllMem() override
+```
+</CodeBlock>
+
+### initializeMem [#initializemem]
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::CpuBufferMgr::initializeMem()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cuda_mgr_` | `CudaMgr_Namespace::CudaMgr *` | |
+| `max_buffer_pool_size_` | `const size_t` | |
+| `min_slab_size_` | `const size_t` | max number of bytes allocated for the buffer pool |
+| `max_slab_size_` | `const size_t` | minimum size of the individual memory allocations that compose the buffer pool (up to maxBufferSize_) |
+| `default_slab_size_` | `const size_t` | max size of the individual memory allocations that compose the buffer pool (up to maxBufferSize_) |
+| `page_size_` | `const size_t` | default size of the individual memory allocations that compose the buffer pool (up to maxBufferSize_) |
+| `slabs_` | `std::vector< int8_t * >` | |
+| `slab_segments_` | `std::vector< BufferList >` | vector of beginning memory addresses for each allocation of the buffer pool |
+| `parentMgr_` | `AbstractBufferMgr *` | |
+| `device_id_` | `int` | |
+| `allocator_` | `std::unique_ptr< DramArena >` | |
+
+---
+
+## Inner classes
+
+### CpuBufferMgrMemoryUsage
+
+<CodeBlock links={{"CpuBufferMgr": "cpubuffermgr"}}>
+```cpp showLineNumbers={false}
+struct Buffer_Namespace::CpuBufferMgr::CpuBufferMgrMemoryUsage
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `allocated` | `size_t` | |
+| `in_use` | `size_t` | |

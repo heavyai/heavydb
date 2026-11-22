@@ -1,0 +1,75 @@
+---
+title: ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy
+description: "Specifies the policies for resource grants in the presence of other requests, both under situations of resource undersubscription (i.e there are still resources of the given type in the pool) and oversubscription."
+---
+
+Specifies the policies for resource grants in the presence of other requests, both under situations of resource undersubscription (i.e there are still resources of the given type in the pool) and oversubscription.
+
+[For](../../classes/for) example, it may make sense to allow concurrent grants for CPU threads (via `ResourceConcurrencyPolicy::ALLOW_CONCURRENT_REQUESTS`), but if there would be oversubscription of CPU threads, to only allow a single request for that type to run (via `ResourceConcurrencyPolicy::ALLOW_SINGLE_REQUEST``). Or if the desired policy was to have GPU requests run alone in the system, `ConcurrentResourceGrantPolicy::concurrency_policy` could be set to `ResourceConcurrencyPolicy::ALLOW_SINGLE_REQUEST_GLOBALLY1
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/ResourceGrantPolicy.h>
+```
+
+---
+
+## Constructors
+
+### ConcurrentResourceGrantPolicy [#concurrentresourcegrantpolicy]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ConcurrentResourceGrantPolicy": "concurrentresourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy::ConcurrentResourceGrantPolicy()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ConcurrentResourceGrantPolicy": "concurrentresourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy::ConcurrentResourceGrantPolicy(
+    const ResourceType resource_type,
+    const ResourceConcurrencyPolicy concurrency_policy,
+    const ResourceConcurrencyPolicy oversubscription_concurrency_policy
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"ConcurrentResourceGrantPolicy": "concurrentresourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+bool ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy::operator==(
+    const ConcurrentResourceGrantPolicy &rhs
+) const
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"ConcurrentResourceGrantPolicy": "concurrentresourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+std::string ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy::to_string() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `resource_type` | `ResourceType` | The type of a resource this concurrent resource grant policy pertains to. |
+| `concurrency_policy` | `ResourceConcurrencyPolicy` | The grant policy in effect when there are concurrent requests for the resource specified by `resource_type`, but the resource is not oversubscribed (i.e. |
+| `oversubscription_concurrency_policy` | `ResourceConcurrencyPolicy` | The grant policy in effect when there are concurrent requests for the resource specified by `resource_type`, and the resource is oversubscribed (i.e. |

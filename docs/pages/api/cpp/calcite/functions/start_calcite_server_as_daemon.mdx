@@ -1,0 +1,22 @@
+---
+title: start_calcite_server_as_daemon
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+static void start_calcite_server_as_daemon(
+    const int db_port,
+    const int port,
+    const std::string &data_dir,
+    const size_t calcite_max_mem,
+    const std::string &ssl_trust_store,
+    const std::string &ssl_trust_password_X,
+    const std::string &ssl_keystore,
+    const std::string &ssl_keystore_password_X,
+    const std::string &ssl_key_file,
+    const std::string &db_config_file,
+    const std::string &udf_filename
+)
+```
+</CodeBlock>

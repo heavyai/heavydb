@@ -1,0 +1,246 @@
+---
+title: RexSubQuery
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RexScalar` (public)
+
+---
+
+## Constructors
+
+### RexSubQuery [#rexsubquery]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+RexSubQuery::RexSubQuery()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+RexSubQuery::RexSubQuery(
+    const std::shared_ptr<const RelAlgNode> ra
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+RexSubQuery::RexSubQuery(
+    std::shared_ptr<SQLTypeInfo> type,
+    std::shared_ptr<ExecutionResultShPtr> result,
+    const std::shared_ptr<const RelAlgNode> ra
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Deleted overloads">
+
+The following overloads are deleted to prevent misuse:
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+RexSubQuery::RexSubQuery(const RexSubQuery &) = delete;
+RexSubQuery::RexSubQuery(RexSubQuery &&) = delete;
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<Tabs>
+<Tab title="Deleted overloads">
+
+The following overloads are deleted to prevent misuse:
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+RexSubQuery & RexSubQuery::operator=(const RexSubQuery &) = delete;
+RexSubQuery & RexSubQuery::operator=(RexSubQuery &&) = delete;
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexSubQuery::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexSubQuery::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & RexSubQuery::getType() const
+```
+</CodeBlock>
+
+### getExecutionResult [#getexecutionresult]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+ExecutionResultShPtr RexSubQuery::getExecutionResult() const
+```
+</CodeBlock>
+
+### getId [#getid]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+unsigned RexSubQuery::getId() const
+```
+</CodeBlock>
+
+### getRelAlg [#getrelalg]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RexSubQuery::getRelAlg() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RexSubQuery::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<RexSubQuery> RexSubQuery::deepCopy() const
+```
+</CodeBlock>
+
+### setExecutionResult [#setexecutionresult]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+void RexSubQuery::setExecutionResult(
+    const ExecutionResultShPtr result
+)
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual size_t Rex::getStepNumber() const
+```
+</CodeBlock>
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+size_t Rex::toHash() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+size_t RexSubQuery::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ExecutionResultShPtr` | `std::shared_ptr< const ExecutionResult >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type_` | `std::shared_ptr< SQLTypeInfo >` | |
+| `result_` | `std::shared_ptr< ExecutionResultShPtr >` | |
+| `ra_` | `std::shared_ptr< const RelAlgNode >` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

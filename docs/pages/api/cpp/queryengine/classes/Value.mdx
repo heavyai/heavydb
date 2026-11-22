@@ -1,0 +1,71 @@
+---
+title: Value
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+---
+
+## Constructors
+
+### Value [#value]
+
+<CodeBlock links={{"Value": "value"}}>
+```cpp showLineNumbers={false}
+Value::Value(
+    const Type type,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~Value
+
+<CodeBlock links={{"Value": "value"}}>
+```cpp showLineNumbers={false}
+virtual Value::~Value() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### type [#type]
+
+<CodeBlock links={{"Value": "value"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"Value": "value"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"Value": "value"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type_` | `const Type` | |
+| `label_` | `const std::string` | |
+| `id_` | `const size_t` | |

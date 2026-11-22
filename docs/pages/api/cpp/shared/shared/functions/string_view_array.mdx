@@ -1,0 +1,13 @@
+---
+title: shared::string_view_array
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename... STR>
+std::array<std::string_view, sizeof...(
+    STR
+)
+```
+</CodeBlock>

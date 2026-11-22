@@ -1,0 +1,64 @@
+---
+title: foreign_storage::RowGroupIntervalTracker
+description: ""
+---
+
+**Inherits from:** `foreign_storage::AbstractRowGroupIntervalTracker` (public)
+
+---
+
+## Constructors
+
+### RowGroupIntervalTracker [#rowgroupintervaltracker]
+
+<CodeBlock links={{"RowGroupIntervalTracker": "rowgroupintervaltracker", "FileReaderMap": "filereadermap"}}>
+```cpp showLineNumbers={false}
+foreign_storage::RowGroupIntervalTracker::RowGroupIntervalTracker(
+    const std::set<std::string> &file_paths,
+    FileReaderMap *file_reader_cache,
+    std::shared_ptr<arrow::fs::FileSystem> file_system
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getNextRowGroupInterval [#getnextrowgroupinterval]
+
+<CodeBlock links={{"RowGroupIntervalTracker": "rowgroupintervaltracker", "RowGroupInterval": "../structs/rowgroupinterval"}}>
+```cpp showLineNumbers={false}
+std::optional<RowGroupInterval> foreign_storage::RowGroupIntervalTracker::getNextRowGroupInterval() override
+```
+</CodeBlock>
+
+### filesAreExhausted [#filesareexhausted]
+
+<CodeBlock links={{"RowGroupIntervalTracker": "rowgroupintervaltracker"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::RowGroupIntervalTracker::filesAreExhausted()
+```
+</CodeBlock>
+
+### advanceToNextRowGroup [#advancetonextrowgroup]
+
+<CodeBlock links={{"RowGroupIntervalTracker": "rowgroupintervaltracker"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::RowGroupIntervalTracker::advanceToNextRowGroup()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `file_paths_` | `std::set< std::string >` | |
+| `file_reader_cache_` | `FileReaderMap *` | |
+| `file_system_` | `std::shared_ptr< arrow::fs::FileSystem >` | |
+| `is_initialized_` | `bool` | |
+| `num_row_groups_` | `int` | |
+| `current_row_group_index_` | `int` | |
+| `current_file_iter_` | `std::set< std::string >::const_iterator` | |

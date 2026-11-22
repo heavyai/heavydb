@@ -1,0 +1,58 @@
+---
+title: DBObjectKey
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DBObject.h>
+```
+
+---
+
+## Methods
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"DBObjectKey": "dbobjectkey"}}>
+```cpp showLineNumbers={false}
+bool DBObjectKey::operator<(
+    const DBObjectKey &key
+) const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"DBObjectKey": "dbobjectkey"}}>
+```cpp showLineNumbers={false}
+bool DBObjectKey::operator==(
+    const DBObjectKey &key
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### fromStringVector [#fromstringvector]
+
+<CodeBlock links={{"DBObjectKey": "dbobjectkey"}}>
+```cpp showLineNumbers={false}
+DBObjectKey DBObjectKey::fromStringVector(
+    const std::vector<std::string> &key,
+    const DBObjectType &type
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `permissionType` | `int32_t` | |
+| `dbId` | `int32_t` | |
+| `objectId` | `int32_t` | |
+| `subObjectId` | `int32_t` | |

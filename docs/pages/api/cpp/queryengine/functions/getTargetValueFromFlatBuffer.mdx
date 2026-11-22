@@ -1,0 +1,19 @@
+---
+title: getTargetValueFromFlatBuffer
+description: ""
+---
+
+<CodeBlock links={{"RowSetMemoryOwner": "../classes/rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+TargetValue getTargetValueFromFlatBuffer(
+    const int8_t *col_ptr,
+    const TargetInfo &target_info,
+    const size_t slot_idx,
+    const size_t target_logical_idx,
+    const size_t global_entry_idx,
+    const size_t local_entry_idx,
+    const bool translate_strings,
+    const std::shared_ptr<RowSetMemoryOwner> &row_set_mem_owner_
+)
+```
+</CodeBlock>

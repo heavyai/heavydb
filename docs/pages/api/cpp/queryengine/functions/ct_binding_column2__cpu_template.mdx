@@ -1,0 +1,86 @@
+---
+title: ct_binding_column2__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename U, typename K>
+NEVER_INLINE HOST int32_t ct_binding_column2__cpu_template(
+    const Column<T> &input1,
+    const Column<U> &input2,
+    Column<K> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_column2__cpu_template(
+    const Column<int32_t> &input1,
+    const Column<int32_t> &input2,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_column2__cpu_template(
+    const Column<int32_t> &input1,
+    const Column<double> &input2,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_column2__cpu_template(
+    const Column<double> &input1,
+    const Column<int32_t> &input2,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_column2__cpu_template(
+    const Column<double> &input1,
+    const Column<double> &input2,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_column2__cpu_template(
+    const Column<TextEncodingDict> &input1,
+    const Column<TextEncodingDict> &input2,
+    Column<TextEncodingDict> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

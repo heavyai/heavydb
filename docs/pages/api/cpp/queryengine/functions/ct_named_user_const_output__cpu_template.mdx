@@ -1,0 +1,47 @@
+---
+title: ct_named_user_const_output__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t ct_named_user_const_output__cpu_template(
+    const Column<T> &input,
+    int32_t c,
+    Column<T> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_named_user_const_output__cpu_template(
+    const Column<int32_t> &input,
+    int32_t c,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_named_user_const_output__cpu_template(
+    const Column<double> &input,
+    int32_t c,
+    Column<double> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

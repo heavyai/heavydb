@@ -1,0 +1,206 @@
+---
+title: QueryFragmentDescriptor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryFragmentDescriptor.h>
+```
+
+---
+
+## Constructors
+
+### QueryFragmentDescriptor [#queryfragmentdescriptor]
+
+<CodeBlock links={{"QueryFragmentDescriptor": "queryfragmentdescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+QueryFragmentDescriptor::QueryFragmentDescriptor(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<InputTableInfo> &query_infos,
+    const std::vector<Buffer_Namespace::MemoryInfo> &gpu_mem_infos,
+    const double gpu_input_mem_limit_percent,
+    const std::vector<size_t> allowed_outer_fragment_indices
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### buildFragmentKernelMap [#buildfragmentkernelmap]
+
+<CodeBlock links={{"QueryFragmentDescriptor": "queryfragmentdescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void QueryFragmentDescriptor::buildFragmentKernelMap(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<uint64_t> &frag_offsets,
+    const std::set<int> &device_ids,
+    const ExecutorDeviceType &device_type,
+    const bool enable_multifrag_kernels,
+    const bool enable_inner_join_fragment_skipping,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### assignFragsToMultiDispatch [#assignfragstomultidispatch]
+
+<CodeBlock links={{"QueryFragmentDescriptor": "queryfragmentdescriptor"}}>
+```cpp showLineNumbers={false}
+template <typename DISPATCH_FCN>
+void QueryFragmentDescriptor::assignFragsToMultiDispatch(
+    DISPATCH_FCN f
+) const
+```
+</CodeBlock>
+
+Dispatch multi-fragment kernels.
+
+Currently GPU only. Each GPU should have only one kernel, with multiple fragments in its fragments list.
+
+### assignFragsToKernelDispatch [#assignfragstokerneldispatch]
+
+<CodeBlock links={{"QueryFragmentDescriptor": "queryfragmentdescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+template <typename DISPATCH_FCN>
+void QueryFragmentDescriptor::assignFragsToKernelDispatch(
+    DISPATCH_FCN f,
+    const RelAlgExecutionUnit &ra_exe_unit
+) const
+```
+</CodeBlock>
+
+Dispatch one fragment for each device.
+
+Iterate the device map and dispatch one kernel for each device per iteration. This allows balanced dispatch as well as early termination if the number of rows passing the kernel can be computed at dispatch time and the scan limit is reached.
+
+### shouldCheckWorkUnitWatchdog [#shouldcheckworkunitwatchdog]
+
+<CodeBlock links={{"QueryFragmentDescriptor": "queryfragmentdescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryFragmentDescriptor::shouldCheckWorkUnitWatchdog() const
+```
+</CodeBlock>
+
+### buildFragmentPerKernelMapForUnion [#buildfragmentperkernelmapforunion]
+
+<CodeBlock links={{"QueryFragmentDescriptor": "queryfragmentdescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<uint64_t> &frag_offsets,
+    const std::set<int> &device_ids,
+    const size_t num_bytes_for_row,
+    const ExecutorDeviceType &device_type,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### buildFragmentPerKernelMap [#buildfragmentperkernelmap]
+
+<CodeBlock links={{"QueryFragmentDescriptor": "queryfragmentdescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void QueryFragmentDescriptor::buildFragmentPerKernelMap(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<uint64_t> &frag_offsets,
+    const std::set<int> &device_ids,
+    const size_t num_bytes_for_row,
+    const ExecutorDeviceType &device_type,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### buildMultifragKernelMap [#buildmultifragkernelmap]
+
+<CodeBlock links={{"QueryFragmentDescriptor": "queryfragmentdescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void QueryFragmentDescriptor::buildMultifragKernelMap(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<uint64_t> &frag_offsets,
+    const std::set<int> &device_ids,
+    const size_t num_bytes_for_row,
+    const ExecutorDeviceType &device_type,
+    const bool enable_inner_join_fragment_skipping,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### buildFragmentPerKernelForTable [#buildfragmentperkernelfortable]
+
+<CodeBlock links={{"QueryFragmentDescriptor": "queryfragmentdescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "InputDescriptor": "inputdescriptor", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
+    const TableFragments *fragments,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const InputDescriptor &table_desc,
+    const bool is_temporary_table,
+    const std::vector<uint64_t> &frag_offsets,
+    const std::set<int> &device_ids,
+    const size_t num_bytes_for_row,
+    const ChunkMetadataVector &deleted_chunk_metadata_vec,
+    const std::optional<size_t> table_desc_offset,
+    const ExecutorDeviceType &device_type,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### terminateDispatchMaybe [#terminatedispatchmaybe]
+
+<CodeBlock links={{"QueryFragmentDescriptor": "queryfragmentdescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "ExecutionKernelDescriptor": "../structs/executionkerneldescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryFragmentDescriptor::terminateDispatchMaybe(
+    size_t &tuple_count,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const ExecutionKernelDescriptor &kernel
+) const
+```
+</CodeBlock>
+
+### checkDeviceMemoryUsage [#checkdevicememoryusage]
+
+<CodeBlock links={{"QueryFragmentDescriptor": "queryfragmentdescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryFragmentDescriptor::checkDeviceMemoryUsage(
+    const Fragmenter_Namespace::FragmentInfo &fragment,
+    const int device_id,
+    const size_t num_cols
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### computeAllTablesFragments [#computealltablesfragments]
+
+<CodeBlock links={{"QueryFragmentDescriptor": "queryfragmentdescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+void QueryFragmentDescriptor::computeAllTablesFragments(
+    std::map<shared::TableKey, const TableFragments *> &all_tables_fragments,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<InputTableInfo> &query_infos
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `allowed_outer_fragment_indices_` | `std::vector< size_t >` | |
+| `outer_fragments_size_` | `size_t` | |
+| `rowid_lookup_key_` | `int64_t` | |
+| `selected_tables_fragments_` | `std::map< shared::TableKey, const TableFragments * >` | |
+| `execution_kernels_per_device_` | `std::map< int, std::vector< ExecutionKernelDescriptor > >` | |
+| `gpu_input_mem_limit_percent_` | `double` | |
+| `tuple_count_per_device_` | `std::map< size_t, size_t >` | |
+| `available_gpu_mem_bytes_` | `std::map< size_t, size_t >` | |

@@ -1,0 +1,74 @@
+---
+title: Parser::OrderSpec
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Node` (public)
+
+---
+
+## Constructors
+
+### OrderSpec [#orderspec]
+
+<CodeBlock links={{"OrderSpec": "orderspec", "ColumnRef": "columnref"}}>
+```cpp showLineNumbers={false}
+Parser::OrderSpec::OrderSpec(
+    int n,
+    ColumnRef *c,
+    bool d,
+    bool f
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_colno [#getcolno]
+
+<CodeBlock links={{"OrderSpec": "orderspec"}}>
+```cpp showLineNumbers={false}
+int Parser::OrderSpec::get_colno() const
+```
+</CodeBlock>
+
+### get_column [#getcolumn]
+
+<CodeBlock links={{"OrderSpec": "orderspec", "ColumnRef": "columnref"}}>
+```cpp showLineNumbers={false}
+const ColumnRef * Parser::OrderSpec::get_column() const
+```
+</CodeBlock>
+
+### get_is_desc [#getisdesc]
+
+<CodeBlock links={{"OrderSpec": "orderspec"}}>
+```cpp showLineNumbers={false}
+bool Parser::OrderSpec::get_is_desc() const
+```
+</CodeBlock>
+
+### get_nulls_first [#getnullsfirst]
+
+<CodeBlock links={{"OrderSpec": "orderspec"}}>
+```cpp showLineNumbers={false}
+bool Parser::OrderSpec::get_nulls_first() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `colno_` | `int` | |
+| `column_` | `std::unique_ptr< ColumnRef >` | |
+| `is_desc_` | `bool` | |
+| `nulls_first_` | `bool` | |

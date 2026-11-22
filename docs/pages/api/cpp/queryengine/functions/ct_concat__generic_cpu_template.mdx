@@ -1,0 +1,36 @@
+---
+title: ct_concat__generic_cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t ct_concat__generic_cpu_template(
+    TableFunctionManager &mgr,
+    const Column<T> &input1,
+    const Column<T> &input2,
+    Column<T> &outputs
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_concat__generic_cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingNone> &input1,
+    const Column<TextEncodingNone> &input2,
+    Column<TextEncodingNone> &outputs
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

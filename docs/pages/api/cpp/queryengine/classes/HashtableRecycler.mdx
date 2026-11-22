@@ -1,0 +1,466 @@
+---
+title: HashtableRecycler
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashtableRecycler.h>
+```
+
+**Inherits from:** `DataRecycler< std::shared_ptr< HashTable >, HashtableCacheMetaInfo >` (public)
+
+---
+
+## Constructors
+
+### HashtableRecycler [#hashtablerecycler]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+HashtableRecycler::HashtableRecycler(
+    CacheItemType hashtable_type,
+    int num_gpus
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getItemFromCache [#getitemfromcache]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "HashtableCacheMetaInfo": "../structs/hashtablecachemetainfo", "HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashTable> HashtableRecycler::getItemFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::optional<HashtableCacheMetaInfo> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### putItemToCache [#putitemtocache]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "HashTable": "hashtable", "HashtableCacheMetaInfo": "../structs/hashtablecachemetainfo"}}>
+```cpp showLineNumbers={false}
+void HashtableRecycler::putItemToCache(
+    QueryPlanHash key,
+    std::shared_ptr<HashTable> item_ptr,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    size_t item_size,
+    size_t compute_time,
+    std::optional<HashtableCacheMetaInfo> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### initCache [#initcache]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+void HashtableRecycler::initCache() override
+```
+</CodeBlock>
+
+### clearCache [#clearcache]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+void HashtableRecycler::clearCache() override
+```
+</CodeBlock>
+
+### markCachedItemAsDirty [#markcacheditemasdirty]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+void HashtableRecycler::markCachedItemAsDirty(
+    size_t table_key,
+    std::unordered_set<QueryPlanHash> &key_set,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+std::string HashtableRecycler::toString() const override
+```
+</CodeBlock>
+
+### getCachedHashtableWithoutCacheKey [#getcachedhashtablewithoutcachekey]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "HashTable": "hashtable", "HashtableCacheMetaInfo": "../structs/hashtablecachemetainfo"}}>
+```cpp showLineNumbers={false}
+std::tuple<QueryPlanHash, std::shared_ptr<HashTable>, std::optional<HashtableCacheMetaInfo>> HashtableRecycler::getCachedHashtableWithoutCacheKey(
+    std::set<size_t> &visited,
+    CacheItemType hash_table_type,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### addQueryPlanDagForTableKeys [#addqueryplandagfortablekeys]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+void HashtableRecycler::addQueryPlanDagForTableKeys(
+    size_t hashed_query_plan_dag,
+    const std::unordered_set<size_t> &table_keys
+)
+```
+</CodeBlock>
+
+### getMappedQueryPlanDagsWithTableKey [#getmappedqueryplandagswithtablekey]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+std::optional<std::unordered_set<size_t>> HashtableRecycler::getMappedQueryPlanDagsWithTableKey(
+    size_t table_key
+) const
+```
+</CodeBlock>
+
+### removeTableKeyInfoFromQueryPlanDagMap [#removetablekeyinfofromqueryplandagmap]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+void HashtableRecycler::removeTableKeyInfoFromQueryPlanDagMap(
+    size_t table_key
+)
+```
+</CodeBlock>
+
+### markCachedItemAsDirtyImpl [#markcacheditemasdirtyimpl]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::markCachedItemAsDirtyImpl(
+    QueryPlanHash key,
+    CachedItemContainer &m
+) const
+```
+</CodeBlock>
+
+### isCachedItemDirty [#iscacheditemdirty]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+bool DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::isCachedItemDirty(
+    QueryPlanHash key,
+    CachedItemContainer &m
+) const
+```
+</CodeBlock>
+
+### getCachedItemContainer [#getcacheditemcontainer]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CachedItemContainer> DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::getCachedItemContainer(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCachedItemWithoutConsideringMetaInfo [#getcacheditemwithoutconsideringmetainfo]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "CachedItem": "../structs/cacheditem", "HashTable": "hashtable", "HashtableCacheMetaInfo": "../structs/hashtablecachemetainfo", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::optional<CachedItem<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>> DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::getCachedItemWithoutConsideringMetaInfo(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    CachedItemContainer &m,
+    std::lock_guard<std::mutex> &lock
+)
+```
+</CodeBlock>
+
+### getCurrentNumCachedItems [#getcurrentnumcacheditems]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::getCurrentNumCachedItems(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCurrentNumDirtyCachedItems [#getcurrentnumdirtycacheditems]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::getCurrentNumDirtyCachedItems(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCurrentNumCleanCachedItems [#getcurrentnumcleancacheditems]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::getCurrentNumCleanCachedItems(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCurrentCacheSizeForDevice [#getcurrentcachesizefordevice]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::getCurrentCacheSizeForDevice(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCachedItemMetric [#getcacheditemmetric]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "CacheItemMetric": "cacheitemmetric", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CacheItemMetric> DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::getCachedItemMetric(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    QueryPlanHash key
+) const
+```
+</CodeBlock>
+
+### setTotalCacheSize [#settotalcachesize]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::setTotalCacheSize(
+    CacheItemType item_type,
+    size_t new_total_cache_size
+)
+```
+</CodeBlock>
+
+### setMaxCacheItemSize [#setmaxcacheitemsize]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::setMaxCacheItemSize(
+    CacheItemType item_type,
+    size_t new_max_cache_item_size
+)
+```
+</CodeBlock>
+
+### hasItemInCache [#hasitemincache]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "HashtableCacheMetaInfo": "../structs/hashtablecachemetainfo"}}>
+```cpp showLineNumbers={false}
+bool HashtableRecycler::hasItemInCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex> &lock,
+    std::optional<HashtableCacheMetaInfo> meta_info = std::nullopt
+) const override
+```
+</CodeBlock>
+
+### removeItemFromCache [#removeitemfromcache]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "HashtableCacheMetaInfo": "../structs/hashtablecachemetainfo"}}>
+```cpp showLineNumbers={false}
+void HashtableRecycler::removeItemFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex> &lock,
+    std::optional<HashtableCacheMetaInfo> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### cleanupCacheForInsertion [#cleanupcacheforinsertion]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "HashtableCacheMetaInfo": "../structs/hashtablecachemetainfo"}}>
+```cpp showLineNumbers={false}
+void HashtableRecycler::cleanupCacheForInsertion(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    size_t required_size,
+    std::lock_guard<std::mutex> &lock,
+    std::optional<HashtableCacheMetaInfo> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### getCachedItem [#getcacheditem]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "HashtableCacheMetaInfo": "../structs/hashtablecachemetainfo"}}>
+```cpp showLineNumbers={false}
+HashtableRecycler::CachedItemContainer::value_type * HashtableRecycler::getCachedItem(
+    QueryPlanHash,
+    CacheItemType,
+    DeviceIdentifier,
+    std::lock_guard<std::mutex> &,
+    std::optional<HashtableCacheMetaInfo> const &
+) const
+```
+</CodeBlock>
+
+### removeCachedHashtableBuiltFromSyntheticTable [#removecachedhashtablebuiltfromsynthetictable]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+void HashtableRecycler::removeCachedHashtableBuiltFromSyntheticTable(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex> &lock
+)
+```
+</CodeBlock>
+
+### removeCachedItemFromBeginning [#removecacheditemfrombeginning]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::removeCachedItemFromBeginning(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    int offset
+)
+```
+</CodeBlock>
+
+### sortCacheContainerByQueryMetric [#sortcachecontainerbyquerymetric]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::sortCacheContainerByQueryMetric(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### getCacheLock [#getcachelock]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::mutex & DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::getCacheLock() const
+```
+</CodeBlock>
+
+### getMetricTracker [#getmetrictracker]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "CacheMetricTracker": "cachemetrictracker", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+CacheMetricTracker & DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::getMetricTracker(
+    CacheItemType item_type
+)
+```
+</CodeBlock>
+
+### getCacheItemType [#getcacheitemtype]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::unordered_set<CacheItemType> const & DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::getCacheItemType() const
+```
+</CodeBlock>
+
+### getItemCache [#getitemcache]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+PerTypeCacheItemContainer const & DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo>::getItemCache() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getHashtableAccessPathInfo [#gethashtableaccesspathinfo]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "Executor": "executor", "HashtableAccessPathInfo": "../structs/hashtableaccesspathinfo"}}>
+```cpp showLineNumbers={false}
+HashtableAccessPathInfo HashtableRecycler::getHashtableAccessPathInfo(
+    const std::vector<InnerOuter> &inner_outer_pairs,
+    const std::vector<InnerOuterStringOpInfos> &inner_outer_string_op_infos_pairs,
+    const SQLOps op_type,
+    const JoinType join_type,
+    const HashTableBuildDagMap &hashtable_build_dag_map,
+    const std::set<int> &device_ids,
+    int shard_count,
+    const std::unordered_map<int, std::vector<Fragmenter_Namespace::FragmentInfo>> &frags_for_device,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### getJoinColumnInfoHash [#getjoincolumninfohash]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+size_t HashtableRecycler::getJoinColumnInfoHash(
+    std::vector<const Analyzer::ColumnVar *> &inner_cols,
+    std::vector<const Analyzer::ColumnVar *> &outer_cols,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### isSafeToCacheHashtable [#issafetocachehashtable]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+bool HashtableRecycler::isSafeToCacheHashtable(
+    const TableIdToNodeMap &table_id_to_node_map,
+    bool need_dict_translation,
+    const std::vector<InnerOuterStringOpInfos> &inner_outer_string_op_info_pairs,
+    const shared::TableKey &table_key
+)
+```
+</CodeBlock>
+
+### isInvalidHashTableCacheKey [#isinvalidhashtablecachekey]
+
+<CodeBlock links={{"HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+bool HashtableRecycler::isInvalidHashTableCacheKey(
+    const std::unordered_map<int, QueryPlanHash> &cache_keys
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `CachedItemContainer` | `std::vector< CachedItem< std::shared_ptr< HashTable >, HashtableCacheMetaInfo > >` |
+| `PerDeviceCacheItemContainer` | `std::unordered_map< DeviceIdentifier, std::shared_ptr< CachedItemContainer > >` |
+| `PerTypeCacheItemContainer` | `std::unordered_map< CacheItemType, std::shared_ptr< PerDeviceCacheItemContainer > >` |
+| `PerTypeCacheMetricTracker` | `std::unordered_map< CacheItemType, CacheMetricTracker >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_key_to_query_plan_dag_map_` | `std::unordered_map< size_t, std::unordered_set< size_t > >` | |

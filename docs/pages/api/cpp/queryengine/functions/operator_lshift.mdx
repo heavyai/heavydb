@@ -1,0 +1,389 @@
+---
+title: "operator<<"
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    CacheItemType const item_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"InputDescriptor": "../classes/inputdescriptor"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    InputDescriptor const &id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"InputColDescriptor": "../classes/inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    InputColDescriptor const &icd
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"InputColDescriptor": "../classes/inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    std::shared_ptr<const InputColDescriptor> const &icd
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"CompilationResult": "../structs/compilationresult"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    CompilationResult const &cr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"FragmentsPerTable": "../structs/fragmentspertable"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    FragmentsPerTable const &fragments_per_table
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"FragmentsPerTable": "../structs/fragmentspertable"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &,
+    FragmentsPerTable const &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"DeviceKernelLaunchErrorLogDump": "../structs/devicekernellauncherrorlogdump"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &,
+    DeviceKernelLaunchErrorLogDump const &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"FetchResult": "../structs/fetchresult"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    FetchResult const &fetch_result
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<CodeBlock links={{"FetchResult": "../structs/fetchresult"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &,
+    FetchResult const &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 12">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 13">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 14">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"GpuSharedMemoryContext": "../classes/gpusharedmemorycontext"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    GpuSharedMemoryContext const ctx
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 15">
+
+<CodeBlock links={{"ColRangeInfo": "../structs/colrangeinfo"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &out,
+    const ColRangeInfo &info
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 16">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &out,
+    const CountDistinctImplType &type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 17">
+
+<CodeBlock links={{"CountDistinctDescriptor": "../structs/countdistinctdescriptor"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &out,
+    const CountDistinctDescriptor &desc
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 18">
+
+<CodeBlock links={{"DecodedJoinHashBufferEntry": "../structs/decodedjoinhashbufferentry"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const DecodedJoinHashBufferEntry &e
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 19">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const DecodedJoinHashBufferSet &s
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 20">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const InnerOuterStringOpInfos &inner_outer_string_op_infos
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 21">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const std::vector<InnerOuterStringOpInfos> &inner_outer_string_op_infos_pairs
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 22">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    InnerQualDecision const decision
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 23">
+
+<CodeBlock links={{"KernelParamsLog": "../structs/kernelparamslog"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    KernelParamsLog const &kpl
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 24">
+
+<CodeBlock links={{"PhysicalInput": "../structs/physicalinput"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    PhysicalInput const &physical_input
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 25">
+
+<CodeBlock links={{"PhysicalInput": "../structs/physicalinput"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &,
+    PhysicalInput const &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 26">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const Type &type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 27">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const std::vector<Type> &types
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 28">
+
+<CodeBlock links={{"TargetExprCodegen": "../structs/targetexprcodegen"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const TargetExprCodegen &target_expr_codegen
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 29">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"TargetMetaInfo": "../classes/targetmetainfo"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    TargetMetaInfo const &tmi
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 30">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelAlgDagViewer": "../classes/relalgdagviewer"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    RelAlgDagViewer const &dagv
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

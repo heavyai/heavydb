@@ -1,0 +1,22 @@
+---
+title: CrossSectionTableFunctions::tf_cross_section_1d_impl
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../../structs/tablefunctionmanager", "Column": "../../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename TLL, typename TV>
+int32_t CrossSectionTableFunctions::tf_cross_section_1d_impl(
+    TableFunctionManager &mgr,
+    const Column<TLL> &lon,
+    const Column<TLL> &lat,
+    const Column<TV> &values,
+    const TLL line_x1,
+    const TLL line_y1,
+    const TLL line_x2,
+    const TLL line_y2,
+    const int32_t num_points,
+    Column<GeoLineString> &line
+)
+```
+</CodeBlock>

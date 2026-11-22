@@ -1,0 +1,58 @@
+---
+title: Fragmenter_Namespace::RowDataProvider
+description: "slim interface to wrap the result set into"
+---
+
+slim interface to wrap the result set into
+
+```cpp showLineNumbers={false}
+#include <Fragmenter_Namespace/AbstractFragmenter.h>
+```
+
+---
+
+## Methods
+
+### getRowCount [#getrowcount]
+
+<CodeBlock links={{"RowDataProvider": "rowdataprovider"}}>
+```cpp showLineNumbers={false}
+virtual size_t const Fragmenter_Namespace::RowDataProvider::getRowCount() const
+```
+</CodeBlock>
+
+### getEntryCount [#getentrycount]
+
+<CodeBlock links={{"RowDataProvider": "rowdataprovider"}}>
+```cpp showLineNumbers={false}
+virtual size_t const Fragmenter_Namespace::RowDataProvider::getEntryCount() const
+```
+</CodeBlock>
+
+### getLiteralDictionary [#getliteraldictionary]
+
+<CodeBlock links={{"RowDataProvider": "rowdataprovider"}}>
+```cpp showLineNumbers={false}
+virtual StringDictionaryProxy * Fragmenter_Namespace::RowDataProvider::getLiteralDictionary() const
+```
+</CodeBlock>
+
+### getEntryAt [#getentryat]
+
+<CodeBlock links={{"RowDataProvider": "rowdataprovider"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<TargetValue> Fragmenter_Namespace::RowDataProvider::getEntryAt(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+### getTranslatedEntryAt [#gettranslatedentryat]
+
+<CodeBlock links={{"RowDataProvider": "rowdataprovider"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<TargetValue> Fragmenter_Namespace::RowDataProvider::getTranslatedEntryAt(
+    const size_t index
+) const
+```
+</CodeBlock>

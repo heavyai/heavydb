@@ -1,0 +1,35 @@
+---
+title: TableFunctionExecutionUnit
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgExecutionUnit.h>
+```
+
+---
+
+## Methods
+
+### toString [#tostring]
+
+<CodeBlock links={{"TableFunctionExecutionUnit": "tablefunctionexecutionunit"}}>
+```cpp showLineNumbers={false}
+std::string TableFunctionExecutionUnit::toString() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `input_descs` | `const std::vector< InputDescriptor >` | |
+| `input_col_descs` | `std::list< std::shared_ptr< const InputColDescriptor > >` | |
+| `input_exprs` | `std::vector< Analyzer::Expr * >` | |
+| `table_func_inputs` | `std::vector< Analyzer::ColumnVar * >` | |
+| `target_exprs` | `std::vector< Analyzer::Expr * >` | |
+| `output_buffer_size_param` | `size_t` | |
+| `table_func` | `const table_functions::TableFunction` | |
+| `query_plan_dag_hash` | `QueryPlanHash` | |

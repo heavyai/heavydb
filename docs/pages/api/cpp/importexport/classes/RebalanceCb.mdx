@@ -1,0 +1,32 @@
+---
+title: RebalanceCb
+description: ""
+---
+
+**Inherits from:** `RdKafka::RebalanceCb` (public)
+
+---
+
+## Methods
+
+### part_list_print [#partlistprint]
+
+<CodeBlock links={{"RebalanceCb": "rebalancecb"}}>
+```cpp showLineNumbers={false}
+static void RebalanceCb::part_list_print(
+    const std::vector<RdKafka::TopicPartition *> &partitions
+)
+```
+</CodeBlock>
+
+### rebalance_cb [#rebalancecb]
+
+<CodeBlock links={{"RebalanceCb": "rebalancecb"}}>
+```cpp showLineNumbers={false}
+void RebalanceCb::rebalance_cb(
+    RdKafka::KafkaConsumer *consumer,
+    RdKafka::ErrorCode err,
+    std::vector<RdKafka::TopicPartition *> &partitions
+) override
+```
+</CodeBlock>

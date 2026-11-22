@@ -1,0 +1,78 @@
+---
+title: SortDesc
+description: ""
+---
+
+<CodeBlock id="SortDesc" links={{"SortDesc": "sortdesc"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+struct SortDesc
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### SortDesc [#sortdesc]
+
+<CodeBlock links={{"SortDesc": "sortdesc"}}>
+```cpp showLineNumbers={false}
+SortDesc<T>::SortDesc(
+    const bool nulls_last
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### mapValue [#mapvalue]
+
+<CodeBlock links={{"SortDesc": "sortdesc"}}>
+```cpp showLineNumbers={false}
+T SortDesc<T>::mapValue(
+    const T &val
+)
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"SortDesc": "sortdesc"}}>
+```cpp showLineNumbers={false}
+bool SortDesc<T>::operator()(
+    const T &a,
+    const T &b
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### map_null_value [#mapnullvalue]
+
+<CodeBlock links={{"SortDesc": "sortdesc"}}>
+```cpp showLineNumbers={false}
+static T SortDesc<T>::map_null_value(
+    const bool nulls_last
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `null_value_` | `const T` | |
+| `null_value_mapped_` | `const T` | |

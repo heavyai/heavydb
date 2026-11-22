@@ -1,0 +1,97 @@
+---
+title: CallbackManager
+description: "Template class for managing notification callbacks."
+---
+
+<CodeBlock id="CallbackManager" links={{"CallbackManager": "callbackmanager"}}>
+```cpp showLineNumbers={false}
+template <typename IDType, typename CallbackType, typename ContextType>
+class CallbackManager
+```
+</CodeBlock>
+
+Template class for managing notification callbacks.
+
+IDType must be an intergral type CallbackType must be a callable type: lambda, functor, etc ContextType can be any basic type, struct, or class
+
+Notification broadcast is in registration order IDs DO NOT wrap around, and a free-list is not used, so IDType must not be exhaustible
+
+Unregistering a callback during notification handling will defer unregistration until notification completes
+
+Example:
+
+struct MyContextType &#123; int value; ... &#125;; using MyCallbackType = std::function&lt;void(const MyContextType&)&gt;; using MyCallbackID = uint32_t;
+
+class SomeClass &#123; `CallbackManager<MyCallbackID, MyCallbackType, MyContextType>` callbacks;
+
+SomeClass() &#123; callbacks.registerCallback([this](const MyContextType& context) &#123; handleCallback(context); &#125; ); &#125;
+
+void handleCallback(const MyContextType& context) &#123; doStuff(context.value); &#125; &#125;;
+
+```cpp showLineNumbers={false}
+#include <CallbackManager.h>
+```
+
+**Template parameters**
+
+<ParamField path="IDType" type="typename">
+</ParamField>
+
+<ParamField path="CallbackType" type="typename">
+</ParamField>
+
+<ParamField path="ContextType" type="typename">
+</ParamField>
+
+---
+
+## Methods
+
+### registerCallback [#registercallback]
+
+<CodeBlock links={{"CallbackManager": "callbackmanager"}}>
+```cpp showLineNumbers={false}
+IDType CallbackManager<IDType, CallbackType, ContextType>::registerCallback(
+    CallbackType callback
+)
+```
+</CodeBlock>
+
+### unregisterCallback [#unregistercallback]
+
+<CodeBlock links={{"CallbackManager": "callbackmanager"}}>
+```cpp showLineNumbers={false}
+void CallbackManager<IDType, CallbackType, ContextType>::unregisterCallback(
+    IDType id
+)
+```
+</CodeBlock>
+
+### notify [#notify]
+
+<CodeBlock links={{"CallbackManager": "callbackmanager"}}>
+```cpp showLineNumbers={false}
+void CallbackManager<IDType, CallbackType, ContextType>::notify(
+    const ContextType &context
+)
+```
+</CodeBlock>
+
+### isEmpty [#isempty]
+
+<CodeBlock links={{"CallbackManager": "callbackmanager"}}>
+```cpp showLineNumbers={false}
+bool CallbackManager<IDType, CallbackType, ContextType>::isEmpty() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `callbacks_` | `std::map< IDType, CallbackType >` | |
+| `next_id_` | `IDType` | |
+| `is_notifying_` | `bool` | |
+| `deferred_unregister_ids_` | `std::vector< IDType >` | |

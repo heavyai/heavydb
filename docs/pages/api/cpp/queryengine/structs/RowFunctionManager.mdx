@@ -1,0 +1,196 @@
+---
+title: RowFunctionManager
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RowFunctionManager.h>
+```
+
+---
+
+## Constructors
+
+### RowFunctionManager [#rowfunctionmanager]
+
+<CodeBlock links={{"RowFunctionManager": "rowfunctionmanager", "Executor": "../classes/executor", "RelAlgExecutionUnit": "relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+RowFunctionManager::RowFunctionManager(
+    const Executor *executor,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getString [#getstring]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RowFunctionManager": "rowfunctionmanager"}}>
+```cpp showLineNumbers={false}
+std::string RowFunctionManager::getString(
+    int32_t db_id,
+    int32_t dict_id,
+    int32_t string_id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RowFunctionManager": "rowfunctionmanager"}}>
+```cpp showLineNumbers={false}
+std::string RowFunctionManager::getString(
+    int32_t db_id,
+    int32_t dict_id,
+    int32_t string_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getDictDbId [#getdictdbid]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RowFunctionManager": "rowfunctionmanager"}}>
+```cpp showLineNumbers={false}
+int32_t RowFunctionManager::getDictDbId(
+    const char *func_name,
+    size_t arg_idx
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RowFunctionManager": "rowfunctionmanager"}}>
+```cpp showLineNumbers={false}
+int32_t RowFunctionManager::getDictDbId(
+    const std::string &func_name,
+    size_t arg_idx
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getDictId [#getdictid]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RowFunctionManager": "rowfunctionmanager"}}>
+```cpp showLineNumbers={false}
+int32_t RowFunctionManager::getDictId(
+    const char *func_name,
+    size_t arg_idx
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RowFunctionManager": "rowfunctionmanager"}}>
+```cpp showLineNumbers={false}
+int32_t RowFunctionManager::getDictId(
+    const std::string &func_name,
+    size_t arg_idx
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getOrAddTransient [#getoraddtransient]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RowFunctionManager": "rowfunctionmanager"}}>
+```cpp showLineNumbers={false}
+int32_t RowFunctionManager::getOrAddTransient(
+    int32_t db_id,
+    int32_t dict_id,
+    std::string str
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RowFunctionManager": "rowfunctionmanager"}}>
+```cpp showLineNumbers={false}
+int32_t RowFunctionManager::getOrAddTransient(
+    int32_t db_id,
+    int32_t dict_id,
+    std::string str
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### makeBuffer [#makebuffer]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RowFunctionManager": "rowfunctionmanager"}}>
+```cpp showLineNumbers={false}
+int8_t * RowFunctionManager::makeBuffer(
+    int64_t element_count,
+    int64_t element_size
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RowFunctionManager": "rowfunctionmanager"}}>
+```cpp showLineNumbers={false}
+int8_t * RowFunctionManager::makeBuffer(
+    int64_t element_count,
+    int64_t element_size
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getStringDictionaryProxy [#getstringdictionaryproxy]
+
+<CodeBlock links={{"RowFunctionManager": "rowfunctionmanager"}}>
+```cpp showLineNumbers={false}
+int8_t * RowFunctionManager::getStringDictionaryProxy(
+    int32_t db_id,
+    int32_t dict_id
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_` | `const Executor *` | |
+| `target_exprs_` | `std::vector< const Analyzer::Expr * >` | |

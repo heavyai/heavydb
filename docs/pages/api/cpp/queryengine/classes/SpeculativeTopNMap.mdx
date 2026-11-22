@@ -1,0 +1,77 @@
+---
+title: SpeculativeTopNMap
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <SpeculativeTopN.h>
+```
+
+---
+
+## Constructors
+
+### SpeculativeTopNMap [#speculativetopnmap]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"SpeculativeTopNMap": "speculativetopnmap"}}>
+```cpp showLineNumbers={false}
+SpeculativeTopNMap::SpeculativeTopNMap()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"SpeculativeTopNMap": "speculativetopnmap", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+SpeculativeTopNMap::SpeculativeTopNMap(
+    const ResultSet &rows,
+    const std::vector<Analyzer::Expr *> &target_exprs,
+    const size_t truncate_n
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### reduce [#reduce]
+
+<CodeBlock links={{"SpeculativeTopNMap": "speculativetopnmap"}}>
+```cpp showLineNumbers={false}
+void SpeculativeTopNMap::reduce(
+    SpeculativeTopNMap &that
+)
+```
+</CodeBlock>
+
+### asRows [#asrows]
+
+<CodeBlock links={{"SpeculativeTopNMap": "speculativetopnmap", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "RowSetMemoryOwner": "rowsetmemoryowner", "QueryMemoryDescriptor": "querymemorydescriptor", "Executor": "executor", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const Executor *executor,
+    const size_t top_n,
+    const bool desc
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `map_` | `std::unordered_map< int64_t, SpeculativeTopNVal >` | |
+| `unknown_` | `size_t` | |

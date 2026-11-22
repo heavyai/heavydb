@@ -1,0 +1,76 @@
+---
+title: heavyai::SharedMutexInterface
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavyai/heavyai_locks.h>
+```
+
+**Inherits from:** `heavyai::MutexInterface` (public)
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~SharedMutexInterface
+
+<CodeBlock links={{"SharedMutexInterface": "sharedmutexinterface"}}>
+```cpp showLineNumbers={false}
+virtual heavyai::SharedMutexInterface::~SharedMutexInterface()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### lock_shared [#lockshared]
+
+<CodeBlock links={{"SharedMutexInterface": "sharedmutexinterface"}}>
+```cpp showLineNumbers={false}
+virtual void heavyai::SharedMutexInterface::lock_shared()
+```
+</CodeBlock>
+
+### try_lock_shared [#trylockshared]
+
+<CodeBlock links={{"SharedMutexInterface": "sharedmutexinterface"}}>
+```cpp showLineNumbers={false}
+virtual bool heavyai::SharedMutexInterface::try_lock_shared()
+```
+</CodeBlock>
+
+### unlock_shared [#unlockshared]
+
+<CodeBlock links={{"SharedMutexInterface": "sharedmutexinterface"}}>
+```cpp showLineNumbers={false}
+virtual void heavyai::SharedMutexInterface::unlock_shared()
+```
+</CodeBlock>
+
+### lock [#lock]
+
+<CodeBlock links={{"SharedMutexInterface": "sharedmutexinterface", "MutexInterface": "mutexinterface"}}>
+```cpp showLineNumbers={false}
+virtual void heavyai::SharedMutexInterface::lock()
+```
+</CodeBlock>
+
+### try_lock [#trylock]
+
+<CodeBlock links={{"SharedMutexInterface": "sharedmutexinterface", "MutexInterface": "mutexinterface"}}>
+```cpp showLineNumbers={false}
+virtual bool heavyai::SharedMutexInterface::try_lock()
+```
+</CodeBlock>
+
+### unlock [#unlock]
+
+<CodeBlock links={{"SharedMutexInterface": "sharedmutexinterface", "MutexInterface": "mutexinterface"}}>
+```cpp showLineNumbers={false}
+virtual void heavyai::SharedMutexInterface::unlock()
+```
+</CodeBlock>

@@ -1,0 +1,116 @@
+---
+title: sum_along_row__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t sum_along_row__cpu_template(
+    const Column<Array<T>> &input,
+    Column<T> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sum_along_row__cpu_template(
+    const Column<Array<float>> &input,
+    Column<float> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sum_along_row__cpu_template(
+    const Column<Array<double>> &input,
+    Column<double> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (4)">
+
+<CodeBlock links={{"Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sum_along_row__cpu_template(
+    const Column<Array<int8_t>> &input,
+    Column<int8_t> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (5)">
+
+<CodeBlock links={{"Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sum_along_row__cpu_template(
+    const Column<Array<int16_t>> &input,
+    Column<int16_t> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (6)">
+
+<CodeBlock links={{"Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sum_along_row__cpu_template(
+    const Column<Array<int32_t>> &input,
+    Column<int32_t> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (7)">
+
+<CodeBlock links={{"Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sum_along_row__cpu_template(
+    const Column<Array<int64_t>> &input,
+    Column<int64_t> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (8)">
+
+<CodeBlock links={{"Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sum_along_row__cpu_template(
+    const Column<Array<bool>> &input,
+    Column<bool> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (9)">
+
+<CodeBlock links={{"Column": "../structs/column", "Array": "../structs/array", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sum_along_row__cpu_template(
+    const Column<Array<TextEncodingDict>> &input,
+    Column<TextEncodingDict> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

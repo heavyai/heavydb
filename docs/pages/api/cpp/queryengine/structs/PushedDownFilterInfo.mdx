@@ -1,0 +1,23 @@
+---
+title: PushedDownFilterInfo
+description: "The main purpose of this struct is to help identify the selected filters in Calcite just by looking at the query."
+---
+
+The main purpose of this struct is to help identify the selected filters in Calcite just by looking at the query.
+
+input_prev, intput_start, and input_next represent the beginning column index for the previous, current and next tables in the query string respectively. TODO(Saman): should add some encoding based on the structure of the whole query to be able to uniquely identify fitlers in multi-step queries and/or subqueries.
+
+```cpp showLineNumbers={false}
+#include <JoinFilterPushDown.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `filter_expressions` | `std::vector< std::shared_ptr< Analyzer::Expr > >` | |
+| `input_prev` | `size_t` | |
+| `input_start` | `size_t` | |
+| `input_next` | `size_t` | |

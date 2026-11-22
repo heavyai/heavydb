@@ -1,0 +1,1199 @@
+---
+title: QueryMemoryDescriptor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryMemoryDescriptor.h>
+```
+
+---
+
+## Constructors
+
+### QueryMemoryDescriptor [#querymemorydescriptor]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+QueryMemoryDescriptor::QueryMemoryDescriptor()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor", "Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "InputTableInfo": "../structs/inputtableinfo", "ColRangeInfo": "../structs/colrangeinfo", "ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+QueryMemoryDescriptor::QueryMemoryDescriptor(
+    const Executor *executor,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<InputTableInfo> &query_infos,
+    const bool allow_multifrag,
+    const bool keyless_hash,
+    const bool interleaved_bins_on_gpu,
+    const int32_t idx_target_as_key,
+    const ColRangeInfo &col_range_info,
+    const ColSlotContext &col_slot_context,
+    const std::vector<int8_t> &group_col_widths,
+    const int8_t group_col_compact_width,
+    const std::vector<int64_t> &target_groupby_indices,
+    const size_t entry_count,
+    const ApproxQuantileDescriptors &,
+    const size_t nmode_targets,
+    const CountDistinctDescriptors,
+    const bool sort_on_gpu_hint,
+    const bool output_columnar,
+    const bool render_output,
+    const bool must_use_baseline_sort,
+    const bool use_streaming_top_n,
+    const bool threads_can_reuse_group_by_buffers
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+QueryMemoryDescriptor::QueryMemoryDescriptor(
+    const Executor *executor,
+    const size_t entry_count,
+    const QueryDescriptionType query_desc_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+QueryMemoryDescriptor::QueryMemoryDescriptor(
+    const QueryDescriptionType query_desc_type,
+    const int64_t min_val,
+    const int64_t max_val,
+    const bool has_nulls,
+    const std::vector<int8_t> &group_col_widths
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+QueryMemoryDescriptor::QueryMemoryDescriptor(
+    const TResultSetBufferDescriptor &thrift_query_memory_descriptor
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::operator==(
+    const QueryMemoryDescriptor &other
+) const
+```
+</CodeBlock>
+
+### getQueryExecutionContext [#getqueryexecutioncontext]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "Executor": "executor", "RowSetMemoryOwner": "rowsetmemoryowner", "RenderInfo": "renderinfo", "QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionContext(
+    const RelAlgExecutionUnit &,
+    const Executor *executor,
+    const ExecutorDeviceType device_type,
+    const ExecutorDispatchMode dispatch_mode,
+    const int device_id,
+    const shared::TableKey &outer_table_key,
+    const int64_t num_rows,
+    const std::vector<std::vector<const int8_t *>> &col_buffers,
+    const std::vector<std::vector<uint64_t>> &frag_offsets,
+    std::shared_ptr<RowSetMemoryOwner>,
+    const bool output_columnar,
+    const bool sort_on_gpu,
+    const size_t thread_idx,
+    RenderInfo *
+) const
+```
+</CodeBlock>
+
+### isGpuSharedMemoryUsed [#isgpusharedmemoryused]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::isGpuSharedMemoryUsed() const
+```
+</CodeBlock>
+
+### enableGpuSharedMemory [#enablegpusharedmemory]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::enableGpuSharedMemory()
+```
+</CodeBlock>
+
+### countDistinctDescriptorsLogicallyEmpty [#countdistinctdescriptorslogicallyempty]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::countDistinctDescriptorsLogicallyEmpty() const
+```
+</CodeBlock>
+
+### getExecutor [#getexecutor]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const Executor * QueryMemoryDescriptor::getExecutor() const
+```
+</CodeBlock>
+
+### getQueryDescriptionType [#getquerydescriptiontype]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+QueryDescriptionType QueryMemoryDescriptor::getQueryDescriptionType() const
+```
+</CodeBlock>
+
+### setQueryDescriptionType [#setquerydescriptiontype]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::setQueryDescriptionType(
+    const QueryDescriptionType val
+)
+```
+</CodeBlock>
+
+### isSingleColumnGroupByWithPerfectHash [#issinglecolumngroupbywithperfecthash]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::isSingleColumnGroupByWithPerfectHash() const
+```
+</CodeBlock>
+
+### hasKeylessHash [#haskeylesshash]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::hasKeylessHash() const
+```
+</CodeBlock>
+
+### setHasKeylessHash [#sethaskeylesshash]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::setHasKeylessHash(
+    const bool val
+)
+```
+</CodeBlock>
+
+### hasInterleavedBinsOnGpu [#hasinterleavedbinsongpu]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::hasInterleavedBinsOnGpu() const
+```
+</CodeBlock>
+
+### setHasInterleavedBinsOnGpu [#sethasinterleavedbinsongpu]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::setHasInterleavedBinsOnGpu(
+    const bool val
+)
+```
+</CodeBlock>
+
+### getTargetIdxForKey [#gettargetidxforkey]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+int32_t QueryMemoryDescriptor::getTargetIdxForKey() const
+```
+</CodeBlock>
+
+### setTargetIdxForKey [#settargetidxforkey]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::setTargetIdxForKey(
+    const int32_t val
+)
+```
+</CodeBlock>
+
+### groupColWidth [#groupcolwidth]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+int8_t QueryMemoryDescriptor::groupColWidth(
+    const size_t key_idx
+) const
+```
+</CodeBlock>
+
+### getPrependedGroupColOffInBytes [#getprependedgroupcoloffinbytes]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getPrependedGroupColOffInBytes(
+    const size_t group_idx
+) const
+```
+</CodeBlock>
+
+### getPrependedGroupBufferSizeInBytes [#getprependedgroupbuffersizeinbytes]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getPrependedGroupBufferSizeInBytes() const
+```
+</CodeBlock>
+
+### groupColWidthsBegin [#groupcolwidthsbegin]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+const auto QueryMemoryDescriptor::groupColWidthsBegin() const
+```
+</CodeBlock>
+
+### groupColWidthsEnd [#groupcolwidthsend]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+const auto QueryMemoryDescriptor::groupColWidthsEnd() const
+```
+</CodeBlock>
+
+### clearGroupColWidths [#cleargroupcolwidths]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::clearGroupColWidths()
+```
+</CodeBlock>
+
+### isGroupBy [#isgroupby]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::isGroupBy() const
+```
+</CodeBlock>
+
+### setGroupColCompactWidth [#setgroupcolcompactwidth]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::setGroupColCompactWidth(
+    const int8_t val
+)
+```
+</CodeBlock>
+
+### getColCount [#getcolcount]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getColCount() const
+```
+</CodeBlock>
+
+### getSlotCount [#getslotcount]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getSlotCount() const
+```
+</CodeBlock>
+
+### getPaddedSlotWidthBytes [#getpaddedslotwidthbytes]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+const int8_t QueryMemoryDescriptor::getPaddedSlotWidthBytes(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### getLogicalSlotWidthBytes [#getlogicalslotwidthbytes]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+const int8_t QueryMemoryDescriptor::getLogicalSlotWidthBytes(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### setPaddedSlotWidthBytes [#setpaddedslotwidthbytes]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::setPaddedSlotWidthBytes(
+    const size_t slot_idx,
+    const int8_t bytes
+)
+```
+</CodeBlock>
+
+### getSlotIndexForSingleSlotCol [#getslotindexforsingleslotcol]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+const int8_t QueryMemoryDescriptor::getSlotIndexForSingleSlotCol(
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getPaddedColWidthForRange [#getpaddedcolwidthforrange]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getPaddedColWidthForRange(
+    const size_t offset,
+    const size_t range
+) const
+```
+</CodeBlock>
+
+### useConsistentSlotWidthSize [#useconsistentslotwidthsize]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::useConsistentSlotWidthSize(
+    const int8_t slot_width_size
+)
+```
+</CodeBlock>
+
+### getRowWidth [#getrowwidth]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getRowWidth() const
+```
+</CodeBlock>
+
+### updateActualMinByteWidth [#updateactualminbytewidth]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+int8_t QueryMemoryDescriptor::updateActualMinByteWidth(
+    const int8_t actual_min_byte_width
+) const
+```
+</CodeBlock>
+
+### addColSlotInfo [#addcolslotinfo]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::addColSlotInfo(
+    const std::vector<std::tuple<int8_t, int8_t>> &slots_for_col
+)
+```
+</CodeBlock>
+
+### addColSlotInfoFlatBuffer [#addcolslotinfoflatbuffer]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::addColSlotInfoFlatBuffer(
+    const int64_t flatbuffer_size
+)
+```
+</CodeBlock>
+
+### getFlatBufferSize [#getflatbuffersize]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+int64_t QueryMemoryDescriptor::getFlatBufferSize(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### checkSlotUsesFlatBufferFormat [#checkslotusesflatbufferformat]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::checkSlotUsesFlatBufferFormat(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### getPaddedSlotBufferSize [#getpaddedslotbuffersize]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+int64_t QueryMemoryDescriptor::getPaddedSlotBufferSize(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### clearSlotInfo [#clearslotinfo]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::clearSlotInfo()
+```
+</CodeBlock>
+
+### alignPaddedSlots [#alignpaddedslots]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::alignPaddedSlots()
+```
+</CodeBlock>
+
+### getTargetGroupbyIndex [#gettargetgroupbyindex]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+int64_t QueryMemoryDescriptor::getTargetGroupbyIndex(
+    const size_t target_idx
+) const
+```
+</CodeBlock>
+
+### setAllTargetGroupbyIndices [#setalltargetgroupbyindices]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::setAllTargetGroupbyIndices(
+    std::vector<int64_t> group_by_indices
+)
+```
+</CodeBlock>
+
+### targetGroupbyIndicesSize [#targetgroupbyindicessize]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::targetGroupbyIndicesSize() const
+```
+</CodeBlock>
+
+### targetGroupbyNegativeIndicesSize [#targetgroupbynegativeindicessize]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::targetGroupbyNegativeIndicesSize() const
+```
+</CodeBlock>
+
+### clearTargetGroupbyIndices [#cleartargetgroupbyindices]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::clearTargetGroupbyIndices()
+```
+</CodeBlock>
+
+### getEntryCount [#getentrycount]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getEntryCount() const
+```
+</CodeBlock>
+
+### setEntryCount [#setentrycount]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::setEntryCount(
+    const size_t val
+)
+```
+</CodeBlock>
+
+### getMinVal [#getminval]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+int64_t QueryMemoryDescriptor::getMinVal() const
+```
+</CodeBlock>
+
+### getMaxVal [#getmaxval]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+int64_t QueryMemoryDescriptor::getMaxVal() const
+```
+</CodeBlock>
+
+### getBucket [#getbucket]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+int64_t QueryMemoryDescriptor::getBucket() const
+```
+</CodeBlock>
+
+### hasNulls [#hasnulls]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::hasNulls() const
+```
+</CodeBlock>
+
+### getApproxQuantileDescriptors [#getapproxquantiledescriptors]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+const ApproxQuantileDescriptors & QueryMemoryDescriptor::getApproxQuantileDescriptors() const
+```
+</CodeBlock>
+
+### getCountDistinctDescriptor [#getcountdistinctdescriptor]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor", "CountDistinctDescriptor": "../structs/countdistinctdescriptor"}}>
+```cpp showLineNumbers={false}
+const CountDistinctDescriptor & QueryMemoryDescriptor::getCountDistinctDescriptor(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getCountDistinctDescriptorsSize [#getcountdistinctdescriptorssize]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getCountDistinctDescriptorsSize() const
+```
+</CodeBlock>
+
+### getAggMode [#getaggmode]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor", "AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+AggMode * QueryMemoryDescriptor::getAggMode(
+    int64_t const ival
+) const
+```
+</CodeBlock>
+
+### getNumModeTargets [#getnummodetargets]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getNumModeTargets() const
+```
+</CodeBlock>
+
+### sortOnGpu [#sortongpu]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::sortOnGpu() const
+```
+</CodeBlock>
+
+### canOutputColumnar [#canoutputcolumnar]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::canOutputColumnar() const
+```
+</CodeBlock>
+
+### didOutputColumnar [#didoutputcolumnar]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::didOutputColumnar() const
+```
+</CodeBlock>
+
+### setOutputColumnar [#setoutputcolumnar]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::setOutputColumnar(
+    const bool val
+)
+```
+</CodeBlock>
+
+### useStreamingTopN [#usestreamingtopn]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::useStreamingTopN() const
+```
+</CodeBlock>
+
+### isLogicalSizedColumnsAllowed [#islogicalsizedcolumnsallowed]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::isLogicalSizedColumnsAllowed() const
+```
+</CodeBlock>
+
+### mustUseBaselineSort [#mustusebaselinesort]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::mustUseBaselineSort() const
+```
+</CodeBlock>
+
+### threadsCanReuseGroupByBuffers [#threadscanreusegroupbybuffers]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::threadsCanReuseGroupByBuffers() const
+```
+</CodeBlock>
+
+### setThreadsCanReuseGroupByBuffers [#setthreadscanreusegroupbybuffers]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::setThreadsCanReuseGroupByBuffers(
+    const bool val
+)
+```
+</CodeBlock>
+
+### forceFourByteFloat [#forcefourbytefloat]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::forceFourByteFloat() const
+```
+</CodeBlock>
+
+### setForceFourByteFloat [#setforcefourbytefloat]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::setForceFourByteFloat(
+    const bool val
+)
+```
+</CodeBlock>
+
+### getGroupbyColCount [#getgroupbycolcount]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getGroupbyColCount() const
+```
+</CodeBlock>
+
+### getKeyCount [#getkeycount]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getKeyCount() const
+```
+</CodeBlock>
+
+### getBufferColSlotCount [#getbuffercolslotcount]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getBufferColSlotCount() const
+```
+</CodeBlock>
+
+### getBufferSizeBytes [#getbuffersizebytes]
+
+<Tabs>
+<Tab title="Const (with ra exe unit and thread count)">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getBufferSizeBytes(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const unsigned thread_count,
+    const ExecutorDeviceType device_type
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getBufferSizeBytes(
+    const ExecutorDeviceType device_type
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with override entry count)">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getBufferSizeBytes(
+    const ExecutorDeviceType device_type,
+    const size_t override_entry_count
+) const override
+```
+</CodeBlock>
+
+Returns total amount of output buffer memory for each device (CPU/GPU).
+
+Columnar: if projection: it returns index buffer + columnar buffer (all non-lazy columns) if table function: only the columnar buffer if group by: it returns the amount required for each group column (assumes 64-bit per group) + columnar buffer (all involved agg columns)
+
+Row-wise: returns required memory per row multiplied by number of entries
+
+</Tab>
+</Tabs>
+
+### getColSlotContext [#getcolslotcontext]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor", "ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+const ColSlotContext & QueryMemoryDescriptor::getColSlotContext() const
+```
+</CodeBlock>
+
+### usesGetGroupValueFast [#usesgetgroupvaluefast]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::usesGetGroupValueFast() const
+```
+</CodeBlock>
+
+### blocksShareMemory [#blockssharememory]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::blocksShareMemory() const
+```
+</CodeBlock>
+
+### threadsShareMemory [#threadssharememory]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::threadsShareMemory() const
+```
+</CodeBlock>
+
+### lazyInitGroups [#lazyinitgroups]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::lazyInitGroups(
+    const ExecutorDeviceType
+) const
+```
+</CodeBlock>
+
+### interleavedBins [#interleavedbins]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::interleavedBins(
+    const ExecutorDeviceType
+) const
+```
+</CodeBlock>
+
+### getColOffInBytes [#getcoloffinbytes]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getColOffInBytes(
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getColOffInBytesInNextBin [#getcoloffinbytesinnextbin]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getColOffInBytesInNextBin(
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getNextColOffInBytes [#getnextcoloffinbytes]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getNextColOffInBytes(
+    const int8_t *col_ptr,
+    const size_t bin,
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getNextColOffInBytesRowOnly [#getnextcoloffinbytesrowonly]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getNextColOffInBytesRowOnly(
+    const int8_t *col_ptr,
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getColOnlyOffInBytes [#getcolonlyoffinbytes]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getColOnlyOffInBytes(
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getRowSize [#getrowsize]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getRowSize() const
+```
+</CodeBlock>
+
+### getColsSize [#getcolssize]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getColsSize() const
+```
+</CodeBlock>
+
+### getWarpCount [#getwarpcount]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getWarpCount() const
+```
+</CodeBlock>
+
+### getCompactByteWidth [#getcompactbytewidth]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getCompactByteWidth() const
+```
+</CodeBlock>
+
+### getEffectiveKeyWidth [#geteffectivekeywidth]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getEffectiveKeyWidth() const
+```
+</CodeBlock>
+
+### isWarpSyncRequired [#iswarpsyncrequired]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::isWarpSyncRequired(
+    const ExecutorDeviceType
+) const
+```
+</CodeBlock>
+
+### queryDescTypeToString [#querydesctypetostring]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+std::string QueryMemoryDescriptor::queryDescTypeToString() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+std::string QueryMemoryDescriptor::toString() const
+```
+</CodeBlock>
+
+### reductionKey [#reductionkey]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+std::string QueryMemoryDescriptor::reductionKey() const
+```
+</CodeBlock>
+
+### hasVarlenOutput [#hasvarlenoutput]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::hasVarlenOutput() const
+```
+</CodeBlock>
+
+### varlenOutputBufferElemSize [#varlenoutputbufferelemsize]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> QueryMemoryDescriptor::varlenOutputBufferElemSize() const
+```
+</CodeBlock>
+
+### varlenOutputRowSizeToSlot [#varlenoutputrowsizetoslot]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::varlenOutputRowSizeToSlot(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### slotIsVarlenOutput [#slotisvarlenoutput]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::slotIsVarlenOutput(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### getAvailableCpuThreads [#getavailablecputhreads]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getAvailableCpuThreads() const
+```
+</CodeBlock>
+
+### setAvailableCpuThreads [#setavailablecputhreads]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::setAvailableCpuThreads(
+    size_t num_available_threads
+) const
+```
+</CodeBlock>
+
+### getMaxPerDeviceCardinality [#getmaxperdevicecardinality]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> QueryMemoryDescriptor::getMaxPerDeviceCardinality(
+    const RelAlgExecutionUnit &ra_exe_unit
+) const
+```
+</CodeBlock>
+
+### canUsePerDeviceCardinality [#canuseperdevicecardinality]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+bool QueryMemoryDescriptor::canUsePerDeviceCardinality(
+    const RelAlgExecutionUnit &ra_exe_unit
+) const
+```
+</CodeBlock>
+
+### resetGroupColWidths [#resetgroupcolwidths]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryDescriptor::resetGroupColWidths(
+    const std::vector<int8_t> &new_group_col_widths
+)
+```
+</CodeBlock>
+
+### getTotalBytesOfColumnarBuffers [#gettotalbytesofcolumnarbuffers]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers() const
+```
+</CodeBlock>
+
+Returns the maximum total number of bytes (including required paddings) to store all non-lazy columns' results for columnar cases.
+
+</Tab>
+<Tab title="Const (with num entries per column)">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getTotalBytesOfColumnarBuffers(
+    const size_t num_entries_per_column
+) const
+```
+</CodeBlock>
+
+This is a helper function that returns the total number of bytes (including required paddings) to store all non-lazy columns' results for columnar cases.
+
+</Tab>
+</Tabs>
+
+### getTotalBytesOfColumnarProjections [#gettotalbytesofcolumnarprojections]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryDescriptor::getTotalBytesOfColumnarProjections(
+    const size_t projection_count
+) const
+```
+</CodeBlock>
+
+Returns the effective total number of bytes from columnar projections, which includes 1) total number of bytes used to store all non-lazy columns 2) total number of bytes used to store row indices (for lazy fetches, etc.).
+
+NOTE: this function does not represent the buffer sizes dedicated for the results, but the required memory to fill all valid results into a compact new buffer (with no holes in it)
+
+---
+
+## Static methods
+
+### toThrift [#tothrift]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+TResultSetBufferDescriptor QueryMemoryDescriptor::toThrift(
+    const QueryMemoryDescriptor &
+)
+```
+</CodeBlock>
+
+### init [#init]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor", "Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "InputTableInfo": "../structs/inputtableinfo", "ColRangeInfo": "../structs/colrangeinfo", "KeylessInfo": "../structs/keylessinfo", "RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
+    const Executor *executor,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<InputTableInfo> &query_infos,
+    const ColRangeInfo &col_range_info,
+    const KeylessInfo &keyless_info,
+    const bool allow_multifrag,
+    const ExecutorDeviceType device_type,
+    const int8_t crt_min_byte_width,
+    const bool sort_on_gpu_hint,
+    const size_t shard_count,
+    const size_t max_groups_buffer_entry_count,
+    RenderInfo *render_info,
+    const ApproxQuantileDescriptors &,
+    const size_t nmode_targets,
+    const CountDistinctDescriptors,
+    const bool must_use_baseline_sort,
+    const bool output_columnar_hint,
+    const bool streaming_top_n_hint,
+    const bool threads_can_reuse_group_by_buffers
+)
+```
+</CodeBlock>
+
+### many_entries [#manyentries]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+static bool QueryMemoryDescriptor::many_entries(
+    const int64_t max_val,
+    const int64_t min_val,
+    const int64_t bucket,
+    const int64_t threshold
+)
+```
+</CodeBlock>
+
+### countDescriptorsLogicallyEmpty [#countdescriptorslogicallyempty]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+static bool QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
+    const CountDistinctDescriptors &count_distinct_descriptors
+)
+```
+</CodeBlock>
+
+### pick_target_compact_width [#picktargetcompactwidth]
+
+<CodeBlock links={{"QueryMemoryDescriptor": "querymemorydescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+int8_t QueryMemoryDescriptor::pick_target_compact_width(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<InputTableInfo> &query_infos,
+    const int8_t crt_min_byte_width
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_` | `const Executor *` | |
+| `allow_multifrag_` | `bool` | |
+| `query_desc_type_` | `QueryDescriptionType` | |
+| `keyless_hash_` | `bool` | |
+| `interleaved_bins_on_gpu_` | `bool` | |
+| `idx_target_as_key_` | `int32_t` | |
+| `group_col_widths_` | `std::vector< int8_t >` | |
+| `group_col_compact_width_` | `int8_t` | |
+| `target_groupby_indices_` | `std::vector< int64_t >` | |
+| `entry_count_` | `size_t` | |
+| `min_val_` | `int64_t` | |
+| `max_val_` | `int64_t` | |
+| `bucket_` | `int64_t` | |
+| `has_nulls_` | `bool` | |
+| `approx_quantile_descriptors_` | `ApproxQuantileDescriptors` | |
+| `nmode_targets_` | `size_t` | |
+| `count_distinct_descriptors_` | `CountDistinctDescriptors` | |
+| `sort_on_gpu_` | `bool` | |
+| `output_columnar_` | `bool` | |
+| `render_output_` | `bool` | |
+| `must_use_baseline_sort_` | `bool` | |
+| `use_streaming_top_n_` | `bool` | |
+| `threads_can_reuse_group_by_buffers_` | `bool` | |
+| `force_4byte_float_` | `bool` | |
+| `gpu_shared_mem_used_` | `bool` | |
+| `col_slot_context_` | `ColSlotContext` | |
+| `num_available_threads_` | `size_t` | |
+| `kLargeGroupbyEntryCount` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int64_t constexpr` | |

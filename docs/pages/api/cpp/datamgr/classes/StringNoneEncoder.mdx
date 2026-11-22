@@ -1,0 +1,680 @@
+---
+title: StringNoneEncoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringNoneEncoder.h>
+```
+
+**Inherits from:** `Encoder` (public)
+
+---
+
+## Constructors
+
+### StringNoneEncoder [#stringnoneencoder]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+StringNoneEncoder::StringNoneEncoder(
+    AbstractBuffer *buffer
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getNumElemsForBytesInsertData [#getnumelemsforbytesinsertdata]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+size_t StringNoneEncoder::getNumElemsForBytesInsertData(
+    const std::string *srcData,
+    const int start_idx,
+    const size_t numAppendElems,
+    const size_t byteLimit,
+    const bool replicating = false
+)
+```
+</CodeBlock>
+
+### getNumElemsForBytesEncodedDataAtIndices [#getnumelemsforbytesencodeddataatindices]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+size_t StringNoneEncoder::getNumElemsForBytesEncodedDataAtIndices(
+    const int8_t *index_data,
+    const std::vector<size_t> &selected_idx,
+    const size_t byte_limit
+) override
+```
+</CodeBlock>
+
+Compute the maximum number of variable length encoded elements given a byte limit.
+
+NOTE: optional parameters above may be ignored by the implementation, but may or may not be required depending on the encoder type backing the implementation.
+
+**Returns:** the number of elements
+
+**Parameters**
+
+<ParamField path="index_data" type="const int8_t *">
+- (Optional) index data for the encoded type
+</ParamField>
+
+<ParamField path="selected_idx" type="const std::vector<size_t> &">
+- Which indices in the encoded data to consider
+</ParamField>
+
+<ParamField path="byte_limit" type="const size_t">
+- Byte limit that must be respected
+</ParamField>
+
+### appendData [#appenddata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge> <Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
+    int8_t *&src_data,
+    const size_t num_elems_to_append,
+    const SQLTypeInfo &ti,
+    const bool replicating = false,
+    const int64_t offset = -1
+) override
+```
+</CodeBlock>
+
+Append data to the chunk buffer backing this encoder.
+
+**Parameters**
+
+<ParamField path="src_data" type="int8_t *&">
+Source data for the append
+</ParamField>
+
+<ParamField path="num_elems_to_append" type="const size_t">
+Number of elements to append
+</ParamField>
+
+<ParamField path="ti" type="const SQLTypeInfo &">
+SQL Type Info for the column TODO(adb): used?
+</ParamField>
+
+<ParamField path="replicating" type="const bool" default="false">
+Pass one value and fill the chunk with it
+</ParamField>
+
+<ParamField path="offset" type="const int64_t" default="-1">
+Write data starting at a given offset. Default is -1 which indicates an append, an offset of 0 rewrites the chunk up to `num_elems_to_append`.
+</ParamField>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+template <typename StringType>
+std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
+    const StringType *srcData,
+    const int start_idx,
+    const size_t numAppendElems,
+    const bool replicating = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+template <typename StringType>
+std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(
+    const std::vector<StringType> *srcData,
+    const int start_idx,
+    const size_t numAppendElems,
+    const bool replicating = false
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### appendEncodedDataAtIndices [#appendencodeddataatindices]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendEncodedDataAtIndices(
+    const int8_t *index_data,
+    int8_t *data,
+    const std::vector<size_t> &selected_idx
+) override
+```
+</CodeBlock>
+
+Append selected encoded data to the chunk buffer backing this encoder.
+
+NOTE: `index_data` must be non-null for varlen encoder types.
+
+**Returns:** updated chunk metadata for the chunk buffer backing this encoder
+
+**Parameters**
+
+<ParamField path="index_data" type="const int8_t *">
+- (Optional) the index data of data to append
+</ParamField>
+
+<ParamField path="data" type="int8_t *">
+- The data to append
+</ParamField>
+
+<ParamField path="selected_idx" type="const std::vector<size_t> &">
+- Which indices in the encoded data to append
+</ParamField>
+
+### appendEncodedData [#appendencodeddata]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendEncodedData(
+    const int8_t *index_data,
+    int8_t *data,
+    const size_t start_idx,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+Append encoded data to the chunk buffer backing this encoder.
+
+NOTE: `index_data` must be non-null for varlen encoder types.
+
+**Returns:** updated chunk metadata for the chunk buffer backing this encoder
+
+**Parameters**
+
+<ParamField path="index_data" type="const int8_t *">
+- (Optional) the index data of data to append
+</ParamField>
+
+<ParamField path="data" type="int8_t *">
+- The data to append
+</ParamField>
+
+<ParamField path="start_idx" type="const size_t">
+- The position to start encoding from in the `data` array
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to encode from the `data` array
+</ParamField>
+
+### getChunkStats [#getchunkstats]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "ChunkStats": "../structs/chunkstats"}}>
+```cpp showLineNumbers={false}
+ChunkStats StringNoneEncoder::getChunkStats() const override
+```
+</CodeBlock>
+
+### synthesizeChunkStats [#synthesizechunkstats]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "ChunkStats": "../structs/chunkstats"}}>
+```cpp showLineNumbers={false}
+ChunkStats StringNoneEncoder::synthesizeChunkStats(
+    const SQLTypeInfo &
+) const override
+```
+</CodeBlock>
+
+### updateStats [#updatestats]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::updateStats(
+    const int64_t,
+    const bool
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::updateStats(
+    const double,
+    const bool
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Update statistics for data without appending">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::updateStats(
+    const int8_t *const src_data,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+Update statistics for data without appending.
+
+**Parameters**
+
+<ParamField path="src_data" type="const int8_t *const">
+- The data with which to update statistics
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to scan in the data
+</ParamField>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::updateStats(
+    const std::vector<std::string> *const src_data,
+    const size_t start_idx,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+Update statistics for string data without appending.
+
+**Parameters**
+
+<ParamField path="src_data" type="const std::vector<std::string> *const">
+- The string data with which to update statistics
+</ParamField>
+
+<ParamField path="start_idx" type="const size_t">
+- The offset into `src_data` to start the update
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to scan in the string data
+</ParamField>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::updateStats(
+    const std::string *src_data,
+    const size_t start_idx,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Update statistics for array data without appending">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::updateStats(
+    const std::vector<ArrayDatum> *const src_data,
+    const size_t start_idx,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+Update statistics for array data without appending.
+
+**Parameters**
+
+<ParamField path="src_data" type="const std::vector<ArrayDatum> *const">
+- The array data with which to update statistics
+</ParamField>
+
+<ParamField path="start_idx" type="const size_t">
+- The offset into `src_data` to start the update
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to scan in the array data
+</ParamField>
+
+</Tab>
+<Tab title="Overload 7">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::updateStats(
+    const ArrayDatum *src_data,
+    const size_t start_idx,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### reduceStats [#reducestats]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::reduceStats(
+    const Encoder &
+) override
+```
+</CodeBlock>
+
+### writeChunkStats [#writechunkstats]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::writeChunkStats(
+    FILE *f
+) override
+```
+</CodeBlock>
+
+### readChunkStats [#readchunkstats]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::readChunkStats(
+    FILE *f
+) override
+```
+</CodeBlock>
+
+### copyChunkStats [#copychunkstats]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::copyChunkStats(
+    const Encoder *copyFromEncoder
+) override
+```
+</CodeBlock>
+
+### getIndexBuf [#getindexbuf]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * StringNoneEncoder::getIndexBuf() const
+```
+</CodeBlock>
+
+### setIndexBuffer [#setindexbuffer]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::setIndexBuffer(
+    AbstractBuffer *buf
+)
+```
+</CodeBlock>
+
+### setChunkStats [#setchunkstats]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "ChunkStats": "../structs/chunkstats"}}>
+```cpp showLineNumbers={false}
+bool StringNoneEncoder::setChunkStats(
+    const ChunkStats &stats
+) override
+```
+</CodeBlock>
+
+: Reset chunk level stats (min, max, nulls) using new values from the argument.
+
+**Returns:** : True if an update occurred and the chunk needs to be flushed. False otherwise. Default false if metadata update is unsupported. Only reset chunk stats if the incoming stats differ from the current stats.
+
+### resetChunkStats [#resetchunkstats]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::resetChunkStats() override
+```
+</CodeBlock>
+
+Resets chunk metadata stats to their default values.
+
+### updateStatsEncoded [#updatestatsencoded]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void StringNoneEncoder::updateStatsEncoded(
+    const int8_t *const dst_data,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+Update statistics for encoded data without appending.
+
+**Parameters**
+
+<ParamField path="dst_data" type="const int8_t *const">
+- The data with which to update statistics
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to scan in the data
+</ParamField>
+
+### copyMetadata [#copymetadata]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::copyMetadata(
+    const Encoder *copy_from_encoder
+)
+```
+</CodeBlock>
+
+### writeMetadata [#writemetadata]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::writeMetadata(
+    FILE *f
+)
+```
+</CodeBlock>
+
+### readMetadata [#readmetadata]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::readMetadata(
+    FILE *f,
+    int32_t version
+)
+```
+</CodeBlock>
+
+### getMetadata [#getmetadata]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "ChunkMetadata": "../structs/chunkmetadata", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+ChunkMetadata StringNoneEncoder::getMetadata(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "ChunkMetadata": "../structs/chunkmetadata", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+ChunkMetadata StringNoneEncoder::getMetadata() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getNumElems [#getnumelems]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+size_t StringNoneEncoder::getNumElems() const
+```
+</CodeBlock>
+
+### setNumElems [#setnumelems]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::setNumElems(
+    const size_t num_elems
+)
+```
+</CodeBlock>
+
+### getRasterTileInfo [#getrastertileinfo]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "RasterTileInfo": "../structs/rastertileinfo", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+RasterTileInfo StringNoneEncoder::getRasterTileInfo() const
+```
+</CodeBlock>
+
+### setRasterTileInfo [#setrastertileinfo]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "RasterTileInfo": "../structs/rastertileinfo", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::setRasterTileInfo(
+    const RasterTileInfo &tile
+)
+```
+</CodeBlock>
+
+### setMetadata [#setmetadata]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "ChunkMetadata": "../structs/chunkmetadata", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void StringNoneEncoder::setMetadata(
+    const ChunkMetadata &meta
+)
+```
+</CodeBlock>
+
+### getStringOffsets [#getstringoffsets]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+std::pair<StringOffsetT, StringOffsetT> StringNoneEncoder::getStringOffsets(
+    const int8_t *index_data,
+    size_t index
+)
+```
+</CodeBlock>
+
+### getStringSizeAtIndex [#getstringsizeatindex]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+size_t StringNoneEncoder::getStringSizeAtIndex(
+    const int8_t *index_data,
+    size_t index
+)
+```
+</CodeBlock>
+
+### update_elem_stats [#updateelemstats]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+template <typename StringType>
+void StringNoneEncoder::update_elem_stats(
+    const StringType &elem
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getStringAtIndex [#getstringatindex]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+std::string_view StringNoneEncoder::getStringAtIndex(
+    const int8_t *index_data,
+    const int8_t *data,
+    size_t index
+)
+```
+</CodeBlock>
+
+### Create [#create]
+
+<CodeBlock links={{"StringNoneEncoder": "stringnoneencoder", "AbstractBuffer": "../datanamespace/classes/abstractbuffer", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+Encoder * StringNoneEncoder::Create(
+    Data_Namespace::AbstractBuffer *buffer,
+    const SQLTypeInfo sqlType
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### MetadataVersion
+
+| Name | Value | Description |
+|---|---|---|
+| `kBase` | `= 0` | |
+| `kRaster` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `index_buf_` | `AbstractBuffer *` | |
+| `last_offset_` | `StringOffsetT` | |
+| `has_nulls_` | `bool` | |
+| `metadata_version_` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int32_t` | |
+| `num_elems_` | `size_t` | |
+| `raster_tile_` | `RasterTileInfo` | |
+| `buffer_` | `Data_Namespace::AbstractBuffer *` | |
+| `decimal_overflow_validator_` | `DecimalOverflowValidator` | |
+| `date_days_overflow_validator_` | `DateDaysOverflowValidator` | |

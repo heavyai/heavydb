@@ -1,0 +1,375 @@
+---
+title: Grantee
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Grantee.h>
+```
+
+---
+
+## Constructors
+
+### Grantee [#grantee]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+Grantee::Grantee(
+    const std::string &name
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~Grantee
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+Grantee::~Grantee()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### isUser [#isuser]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+virtual bool Grantee::isUser() const
+```
+</CodeBlock>
+
+### grantPrivileges [#grantprivileges]
+
+<CodeBlock links={{"Grantee": "grantee", "DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void Grantee::grantPrivileges(
+    const DBObject &object
+)
+```
+</CodeBlock>
+
+### revokePrivileges [#revokeprivileges]
+
+<CodeBlock links={{"Grantee": "grantee", "DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+DBObject * Grantee::revokePrivileges(
+    const DBObject &object
+)
+```
+</CodeBlock>
+
+### grantRole [#grantrole]
+
+<CodeBlock links={{"Grantee": "grantee", "Role": "role"}}>
+```cpp showLineNumbers={false}
+void Grantee::grantRole(
+    Role *role
+)
+```
+</CodeBlock>
+
+### revokeRole [#revokerole]
+
+<CodeBlock links={{"Grantee": "grantee", "Role": "role"}}>
+```cpp showLineNumbers={false}
+void Grantee::revokeRole(
+    Role *role
+)
+```
+</CodeBlock>
+
+### hasAnyPrivileges [#hasanyprivileges]
+
+<CodeBlock links={{"Grantee": "grantee", "DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+bool Grantee::hasAnyPrivileges(
+    const DBObject &objectRequested,
+    bool only_direct
+) const
+```
+</CodeBlock>
+
+### checkPrivileges [#checkprivileges]
+
+<CodeBlock links={{"Grantee": "grantee", "DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+bool Grantee::checkPrivileges(
+    const DBObject &objectRequested
+) const
+```
+</CodeBlock>
+
+### updatePrivileges [#updateprivileges]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+void Grantee::updatePrivileges()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Grantee": "grantee", "Role": "role"}}>
+```cpp showLineNumbers={false}
+void Grantee::updatePrivileges(
+    Role *role
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### revokeAllOnDatabase [#revokeallondatabase]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+void Grantee::revokeAllOnDatabase(
+    int32_t dbId
+)
+```
+</CodeBlock>
+
+### renameDbObject [#renamedbobject]
+
+<CodeBlock links={{"Grantee": "grantee", "DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void Grantee::renameDbObject(
+    const DBObject &object
+)
+```
+</CodeBlock>
+
+### getPrivileges [#getprivileges]
+
+<CodeBlock links={{"Grantee": "grantee", "DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void Grantee::getPrivileges(
+    DBObject &object,
+    bool only_direct
+)
+```
+</CodeBlock>
+
+### findDbObject [#finddbobject]
+
+<CodeBlock links={{"Grantee": "grantee", "DBObjectKey": "../structs/dbobjectkey", "DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+DBObject * Grantee::findDbObject(
+    const DBObjectKey &objectKey,
+    bool only_direct
+) const
+```
+</CodeBlock>
+
+### hasAnyPrivilegesOnDb [#hasanyprivilegesondb]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+bool Grantee::hasAnyPrivilegesOnDb(
+    int32_t dbId,
+    bool only_direct
+) const
+```
+</CodeBlock>
+
+### getName [#getname]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+const std::string & Grantee::getName() const
+```
+</CodeBlock>
+
+### setName [#setname]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+void Grantee::setName(
+    const std::string &name
+)
+```
+</CodeBlock>
+
+### getRoles [#getroles]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Grantee::getRoles(
+    bool only_direct = true
+) const
+```
+</CodeBlock>
+
+### hasRole [#hasrole]
+
+<CodeBlock links={{"Grantee": "grantee", "Role": "role"}}>
+```cpp showLineNumbers={false}
+bool Grantee::hasRole(
+    Role *role,
+    bool only_direct
+) const
+```
+</CodeBlock>
+
+### getDbObjects [#getdbobjects]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+const DBObjectMap * Grantee::getDbObjects(
+    bool only_direct
+) const
+```
+</CodeBlock>
+
+### checkCycles [#checkcycles]
+
+<CodeBlock links={{"Grantee": "grantee", "Role": "role"}}>
+```cpp showLineNumbers={false}
+void Grantee::checkCycles(
+    Role *newRole
+)
+```
+</CodeBlock>
+
+### reassignObjectOwners [#reassignobjectowners]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+void Grantee::reassignObjectOwners(
+    const std::set<int32_t> &old_owner_ids,
+    int32_t new_owner_id,
+    int32_t db_id
+)
+```
+</CodeBlock>
+
+### reassignObjectOwner [#reassignobjectowner]
+
+<CodeBlock links={{"Grantee": "grantee", "DBObjectKey": "../structs/dbobjectkey"}}>
+```cpp showLineNumbers={false}
+void Grantee::reassignObjectOwner(
+    DBObjectKey &object_key,
+    int32_t new_owner_id
+)
+```
+</CodeBlock>
+
+### setRestrictions [#setrestrictions]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+virtual void Grantee::setRestrictions(
+    const Restrictions &restrictions
+)
+```
+</CodeBlock>
+
+### getRestrictions [#getrestrictions]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+Restrictions Grantee::getRestrictions(
+    bool only_direct = true
+)
+```
+</CodeBlock>
+
+### setLegacyRestrictionColumnName [#setlegacyrestrictioncolumnname]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+void Grantee::setLegacyRestrictionColumnName(
+    const std::string &column_name
+)
+```
+</CodeBlock>
+
+### removeLegacyRestrictionColumnName [#removelegacyrestrictioncolumnname]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+void Grantee::removeLegacyRestrictionColumnName()
+```
+</CodeBlock>
+
+### addRestrictionValue [#addrestrictionvalue]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+void Grantee::addRestrictionValue(
+    Restriction::Key key,
+    const std::string &value
+)
+```
+</CodeBlock>
+
+### removeRestrictions [#removerestrictions]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+void Grantee::removeRestrictions(
+    Restriction::Key key
+)
+```
+</CodeBlock>
+
+### removeTableRestrictions [#removetablerestrictions]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+void Grantee::removeTableRestrictions(
+    int32_t db_id,
+    int32_t table_id
+)
+```
+</CodeBlock>
+
+### removeDatabaseRestrictions [#removedatabaserestrictions]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+void Grantee::removeDatabaseRestrictions(
+    int32_t db_id
+)
+```
+</CodeBlock>
+
+### removeAllRestrictions [#removeallrestrictions]
+
+<CodeBlock links={{"Grantee": "grantee"}}>
+```cpp showLineNumbers={false}
+void Grantee::removeAllRestrictions()
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `DBObjectMap` | `std::map< DBObjectKey, std::unique_ptr< DBObject > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `name_` | `std::string` | |
+| `roles_` | `std::unordered_set< Role * >` | |
+| `effectivePrivileges_` | `DBObjectMap` | |
+| `directPrivileges_` | `DBObjectMap` | |
+| `restrictions_` | `Restrictions` | |

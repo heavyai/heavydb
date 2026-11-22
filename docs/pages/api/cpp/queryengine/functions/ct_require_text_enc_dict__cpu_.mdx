@@ -1,0 +1,14 @@
+---
+title: ct_require_text_enc_dict__cpu_
+description: ""
+---
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_require_text_enc_dict__cpu_(
+    const Column<TextEncodingDict> &input,
+    const int64_t x,
+    Column<int64_t> &out
+)
+```
+</CodeBlock>

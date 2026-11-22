@@ -1,0 +1,97 @@
+---
+title: Parser::CreateViewStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### CreateViewStmt [#createviewstmt]
+
+<Tabs>
+<Tab title="Copy (with view name and select query and if not exists)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"CreateViewStmt": "createviewstmt"}}>
+```cpp showLineNumbers={false}
+Parser::CreateViewStmt::CreateViewStmt(
+    const std::string &view_name,
+    const std::string &select_query,
+    const bool if_not_exists
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with payload)">
+
+<CodeBlock links={{"CreateViewStmt": "createviewstmt"}}>
+```cpp showLineNumbers={false}
+Parser::CreateViewStmt::CreateViewStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_view_name [#getviewname]
+
+<CodeBlock links={{"CreateViewStmt": "createviewstmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::CreateViewStmt::get_view_name() const
+```
+</CodeBlock>
+
+### get_select_query [#getselectquery]
+
+<CodeBlock links={{"CreateViewStmt": "createviewstmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::CreateViewStmt::get_select_query() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"CreateViewStmt": "createviewstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateViewStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"CreateViewStmt": "createviewstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateViewStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `view_name_` | `std::string` | |
+| `select_query_` | `std::string` | |
+| `if_not_exists_` | `bool` | |

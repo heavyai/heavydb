@@ -20,6 +20,7 @@ name: PR /test Command
 #                        pr-required-checks.yml in deps-build mode against the
 #                        freshly-built images (see those workflows).
 #   `/test dev-tools`  → dispatch dev-tools-tests.yml against the PR head.
+#   `/test docs`       → dispatch docs-tests.yml against the PR head.
 #
 # For anything else (non-PR comment, non-matching comment, unauthorized user)
 # the job no-ops in a few seconds — no build/test jobs are attached here.
@@ -91,7 +92,7 @@ jobs:
               owner, repo, comment_id: comment.id, content: 'rocket' });
 
             // Validate the subcommand before dispatching anything.
-            const knownSubcommands = ['', 'deps', 'dev-tools'];
+            const knownSubcommands = ['', 'deps', 'dev-tools', 'docs'];
             if (!knownSubcommands.includes(subcommand)) {
               core.info(`Unknown /test subcommand '${subcommand}'; ignoring.`);
               return;
@@ -153,6 +154,22 @@ jobs:
                 description: 'dev-tools tests running…',
                 target_url: `${context.serverUrl}/${owner}/${repo}/actions/workflows/dev-tools-tests.yml` });
               core.info(`Dispatched dev-tools-tests for ${sha}.`);
+              return;
+            }
+
+            // /test docs: validate the Fern documentation site against the PR head.
+            if (subcommand === 'docs') {
+              await github.rest.actions.createWorkflowDispatch({
+                owner, repo,
+                workflow_id: 'docs-tests.yml',
+                ref: defaultBranch,
+                inputs: { sha1: sha, pr_number: prNumber } });
+              await github.rest.repos.createCommitStatus({
+                owner, repo, sha, state: 'pending',
+                context: 'docs tests',
+                description: 'docs tests running…',
+                target_url: `${context.serverUrl}/${owner}/${repo}/actions/workflows/docs-tests.yml` });
+              core.info(`Dispatched docs-tests for ${sha}.`);
               return;
             }
 

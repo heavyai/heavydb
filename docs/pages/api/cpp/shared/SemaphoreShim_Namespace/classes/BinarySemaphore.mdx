@@ -1,0 +1,86 @@
+---
+title: SemaphoreShim_Namespace::BinarySemaphore
+description: "@type BinarySemaphore"
+---
+
+@type `BinarySemaphore`
+
+Utility type that implemnts behavior of a blocking binary semaphore, with an optional timeout. May be removed in favor of the C++20 std::binary_semaphore as soon as we can upgrade to gcc 11.
+
+```cpp showLineNumbers={false}
+#include <SemaphoreShim_Namespace/BinarySemaphore.h>
+```
+
+---
+
+## Methods
+
+### try_acquire [#tryacquire]
+
+<CodeBlock links={{"BinarySemaphore": "binarysemaphore"}}>
+```cpp showLineNumbers={false}
+void SemaphoreShim_Namespace::BinarySemaphore::try_acquire()
+```
+</CodeBlock>
+
+Blocks calling thread until it can acquire the semaphore, i.e.
+
+release is called by another thread.
+
+Note that this call will block indefinitely. If a timeout is required, use try_acquire_for()
+
+### try_acquire_for [#tryacquirefor]
+
+<CodeBlock links={{"BinarySemaphore": "binarysemaphore"}}>
+```cpp showLineNumbers={false}
+bool SemaphoreShim_Namespace::BinarySemaphore::try_acquire_for(
+    const size_t max_wait_in_ms
+)
+```
+</CodeBlock>
+
+Blocks calling thread until it can acquire the semaphore, i.e.
+
+release is called by another thread, or max_wait_in_ms duration passes, whichever occurs first
+
+Note that this function does not throw to maximize its performance in performance-critical scenarios. Instead, it returns true if the call completed successfully and false if it timed out.
+
+**Returns:** A boolean value that is set to true if the semaphore lock was able to be acquired successfully, or false if it timed out (wait duration exceeded max_wait_in_ms)
+
+### release [#release]
+
+<CodeBlock links={{"BinarySemaphore": "binarysemaphore"}}>
+```cpp showLineNumbers={false}
+void SemaphoreShim_Namespace::BinarySemaphore::release()
+```
+</CodeBlock>
+
+Sets internal is_ready variable to true, allowing another thread waiting for the semaphore to proceed.
+
+### reset [#reset]
+
+<CodeBlock links={{"BinarySemaphore": "binarysemaphore"}}>
+```cpp showLineNumbers={false}
+void SemaphoreShim_Namespace::BinarySemaphore::reset()
+```
+</CodeBlock>
+
+Resets the semaphore's ready condition to false.
+
+### set_ready [#setready]
+
+<CodeBlock links={{"BinarySemaphore": "binarysemaphore"}}>
+```cpp showLineNumbers={false}
+void SemaphoreShim_Namespace::BinarySemaphore::set_ready()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_ready_` | `bool` | |
+| `state_mutex_` | `std::mutex` | |
+| `condition_` | `std::condition_variable` | |

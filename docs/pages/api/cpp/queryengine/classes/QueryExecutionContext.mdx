@@ -1,0 +1,345 @@
+---
+title: QueryExecutionContext
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryExecutionContext.h>
+```
+
+**Inherits from:** `boost::noncopyable` (private)
+
+---
+
+## Constructors
+
+### QueryExecutionContext [#queryexecutioncontext]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "QueryMemoryDescriptor": "querymemorydescriptor", "Executor": "executor", "RowSetMemoryOwner": "rowsetmemoryowner", "RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+QueryExecutionContext::QueryExecutionContext(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const QueryMemoryDescriptor &,
+    const Executor *executor,
+    const ExecutorDeviceType device_type,
+    const ExecutorDispatchMode dispatch_mode,
+    const int device_id,
+    const shared::TableKey &outer_table_key,
+    const int64_t num_rows,
+    const std::vector<std::vector<const int8_t *>> &col_buffers,
+    const std::vector<std::vector<uint64_t>> &frag_offsets,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool output_columnar,
+    const bool sort_on_gpu,
+    const size_t thread_idx,
+    RenderInfo *
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getRowSet [#getrowset]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr QueryExecutionContext::getRowSet(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const QueryMemoryDescriptor &query_mem_desc
+) const
+```
+</CodeBlock>
+
+### groupBufferToResults [#groupbuffertoresults]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr QueryExecutionContext::groupBufferToResults(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### launchGpuCode [#launchgpucode]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationResult": "../structs/compilationresult", "FetchResultFragmentInfo": "../structs/fetchresultfragmentinfo", "RenderAllocatorMap": "renderallocatormap"}}>
+```cpp showLineNumbers={false}
+std::vector<int64_t *> QueryExecutionContext::launchGpuCode(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const CompilationResult &compilation_result,
+    const bool hoist_literals,
+    const std::vector<int8_t> &literal_buff,
+    std::vector<std::vector<const int8_t *>> col_buffers,
+    const FetchResultFragmentInfo &fragment_info,
+    const int32_t scan_limit,
+    Data_Namespace::DataMgr *data_mgr,
+    const unsigned block_size_x,
+    const unsigned grid_size_x,
+    const int device_id,
+    int32_t *error_code,
+    const uint32_t num_tables,
+    const bool allow_runtime_interrupt,
+    const std::vector<int8_t *> &join_hash_tables,
+    RenderAllocatorMap *render_allocator_map,
+    bool optimize_cuda_block_and_grid_sizes
+)
+```
+</CodeBlock>
+
+### launchCpuCode [#launchcpucode]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CpuCompilationContext": "cpucompilationcontext", "FetchResultFragmentInfo": "../structs/fetchresultfragmentinfo"}}>
+```cpp showLineNumbers={false}
+std::vector<int64_t *> QueryExecutionContext::launchCpuCode(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const CpuCompilationContext *fn_ptrs,
+    const bool hoist_literals,
+    const std::vector<int8_t> &literal_buff,
+    std::vector<std::vector<const int8_t *>> col_buffers,
+    const FetchResultFragmentInfo &fragment_info,
+    const int32_t scan_limit,
+    int32_t *error_code,
+    const uint32_t start_rowid,
+    const uint32_t num_tables,
+    const std::vector<int8_t *> &join_hash_tables,
+    const int64_t num_rows_to_process = -1
+)
+```
+</CodeBlock>
+
+### getAggInitValForIndex [#getagginitvalforindex]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+int64_t QueryExecutionContext::getAggInitValForIndex(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+### sizeofColBuffers [#sizeofcolbuffers]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+size_t QueryExecutionContext::sizeofColBuffers(
+    std::vector<std::vector<int8_t const *>> const &col_buffers
+) const
+```
+</CodeBlock>
+
+### copyColBuffersToDevice [#copycolbufferstodevice]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+void QueryExecutionContext::copyColBuffersToDevice(
+    int8_t *device_ptr,
+    std::vector<std::vector<int8_t const *>> const &col_buffers
+) const
+```
+</CodeBlock>
+
+### sizeofFlattened2dVec [#sizeofflattened2dvec]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+size_t QueryExecutionContext::sizeofFlattened2dVec(
+    uint32_t const expected_subvector_size,
+    std::vector<std::vector<T>> const &vec2d
+) const
+```
+</CodeBlock>
+
+### copyFlattened2dVecToDevice [#copyflattened2dvectodevice]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void QueryExecutionContext::copyFlattened2dVecToDevice(
+    int8_t *device_ptr,
+    uint32_t const expected_subvector_size,
+    std::vector<std::vector<T>> const &vec2d,
+    std::string_view tag
+) const
+```
+</CodeBlock>
+
+### sizeofInitAggVals [#sizeofinitaggvals]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+size_t QueryExecutionContext::sizeofInitAggVals(
+    bool const is_group_by,
+    std::vector<int64_t> const &init_agg_vals
+) const
+```
+</CodeBlock>
+
+### copyInitAggValsToDevice [#copyinitaggvalstodevice]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+void QueryExecutionContext::copyInitAggValsToDevice(
+    int8_t *device_ptr,
+    bool const is_group_by,
+    std::vector<int64_t> const &init_agg_vals
+) const
+```
+</CodeBlock>
+
+### sizeofJoinHashTables [#sizeofjoinhashtables]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+size_t QueryExecutionContext::sizeofJoinHashTables(
+    std::vector<int8_t *> const &join_hash_tables
+) const
+```
+</CodeBlock>
+
+### copyJoinHashTablesToDevice [#copyjoinhashtablestodevice]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+int8_t * QueryExecutionContext::copyJoinHashTablesToDevice(
+    int8_t *device_ptr,
+    std::vector<int8_t *> const &join_hash_tables
+) const
+```
+</CodeBlock>
+
+### sizeofLiterals [#sizeofliterals]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+size_t QueryExecutionContext::sizeofLiterals(
+    std::vector<int8_t> const &literal_buff
+) const
+```
+</CodeBlock>
+
+### copyCountDistinctBitmapLiteralsToDevice [#copycountdistinctbitmapliteralstodevice]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+size_t QueryExecutionContext::copyCountDistinctBitmapLiteralsToDevice(
+    int8_t *device_ptr
+) const
+```
+</CodeBlock>
+
+### copyAggModeLiteralsToDevice [#copyaggmodeliteralstodevice]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+size_t QueryExecutionContext::copyAggModeLiteralsToDevice(
+    int8_t *device_ptr
+) const
+```
+</CodeBlock>
+
+### copyLiteralsToDevice [#copyliteralstodevice]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+int8_t * QueryExecutionContext::copyLiteralsToDevice(
+    int8_t *device_ptr,
+    std::vector<int8_t> const &literal_buff
+) const
+```
+</CodeBlock>
+
+### copyValueToDevice [#copyvaluetodevice]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void QueryExecutionContext::copyValueToDevice(
+    int8_t *device_ptr,
+    T const value,
+    std::string_view tag
+) const
+```
+</CodeBlock>
+
+### sizeofVector [#sizeofvector]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+size_t QueryExecutionContext::sizeofVector(
+    std::vector<T> const &vec
+) const
+```
+</CodeBlock>
+
+### copyVectorToDevice [#copyvectortodevice]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void QueryExecutionContext::copyVectorToDevice(
+    int8_t *device_ptr,
+    std::vector<T> const &vec,
+    std::string_view tag
+) const
+```
+</CodeBlock>
+
+### prepareKernelParams [#preparekernelparams]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext", "FetchResultFragmentInfo": "../structs/fetchresultfragmentinfo", "KernelParamsLog": "../structs/kernelparamslog"}}>
+```cpp showLineNumbers={false}
+std::pair<QueryExecutionContext::KernelParams, KernelParamsLog> QueryExecutionContext::prepareKernelParams(
+    const std::vector<std::vector<const int8_t *>> &col_buffers,
+    const std::vector<int8_t> &literal_buff,
+    const FetchResultFragmentInfo &fragment_info,
+    const int32_t scan_limit,
+    const std::vector<int64_t> &init_agg_vals,
+    const std::vector<int32_t> &error_codes,
+    const uint32_t num_tables,
+    const std::vector<int8_t *> &join_hash_tables,
+    const bool hoist_literals,
+    const bool is_group_by
+) const
+```
+</CodeBlock>
+
+### groupBufferToDeinterleavedResults [#groupbuffertodeinterleavedresults]
+
+<CodeBlock links={{"QueryExecutionContext": "queryexecutioncontext"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `KernelParamSizes` | `std::array< size_t, size_t(heavyai::KernelParam::N_)>` |
+| `KernelParams` | `std::array< int8_t *, size_t(heavyai::KernelParam::N_)>` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `device_allocator_` | `DeviceAllocator *` | |
+| `query_mem_desc_` | `QueryMemoryDescriptor` | |
+| `executor_` | `const Executor *` | |
+| `device_type_` | `const ExecutorDeviceType` | |
+| `dispatch_mode_` | `const ExecutorDispatchMode` | |
+| `row_set_mem_owner_` | `std::shared_ptr< RowSetMemoryOwner >` | |
+| `output_columnar_` | `const bool` | |
+| `query_buffers_` | `std::unique_ptr< QueryMemoryInitializer >` | |
+| `estimator_result_set_` | `std::unique_ptr< ResultSet >` | |

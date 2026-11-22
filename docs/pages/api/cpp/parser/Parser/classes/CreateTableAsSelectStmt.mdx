@@ -1,0 +1,116 @@
+---
+title: Parser::CreateTableAsSelectStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::InsertIntoTableAsSelectStmt` (public)
+
+---
+
+## Constructors
+
+### CreateTableAsSelectStmt [#createtableasselectstmt]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"CreateTableAsSelectStmt": "createtableasselectstmt"}}>
+```cpp showLineNumbers={false}
+Parser::CreateTableAsSelectStmt::CreateTableAsSelectStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"CreateTableAsSelectStmt": "createtableasselectstmt", "NameValueAssign": "namevalueassign"}}>
+```cpp showLineNumbers={false}
+Parser::CreateTableAsSelectStmt::CreateTableAsSelectStmt(
+    const std::string *table_name,
+    const std::string *select_query,
+    const bool is_temporary,
+    const bool if_not_exists,
+    std::list<NameValueAssign *> *s
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"CreateTableAsSelectStmt": "createtableasselectstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateTableAsSelectStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### populateData [#populatedata]
+
+<CodeBlock links={{"CreateTableAsSelectStmt": "createtableasselectstmt", "InsertIntoTableAsSelectStmt": "insertintotableasselectstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateTableAsSelectStmt::populateData(
+    QueryStateProxy,
+    const TableDescriptor *td,
+    bool validate_table,
+    bool for_CTAS = false
+)
+```
+</CodeBlock>
+
+### get_table [#gettable]
+
+<CodeBlock links={{"CreateTableAsSelectStmt": "createtableasselectstmt", "InsertIntoTableAsSelectStmt": "insertintotableasselectstmt"}}>
+```cpp showLineNumbers={false}
+std::string & Parser::CreateTableAsSelectStmt::get_table()
+```
+</CodeBlock>
+
+### get_select_query [#getselectquery]
+
+<CodeBlock links={{"CreateTableAsSelectStmt": "createtableasselectstmt", "InsertIntoTableAsSelectStmt": "insertintotableasselectstmt"}}>
+```cpp showLineNumbers={false}
+std::string & Parser::CreateTableAsSelectStmt::get_select_query()
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"CreateTableAsSelectStmt": "createtableasselectstmt", "ColumnDef": "columndef", "InsertIntoTableAsSelectStmt": "insertintotableasselectstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DDLStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_temporary_` | `bool` | |
+| `if_not_exists_` | `bool` | |
+| `storage_options_` | `std::list< std::unique_ptr< NameValueAssign > >` | |
+| `insert_connector_` | `std::unique_ptr< QueryConnector >` | |
+| `column_list_` | `std::vector< std::unique_ptr< std::string > >` | |
+| `table_name_` | `std::string` | |
+| `select_query_` | `std::string` | |

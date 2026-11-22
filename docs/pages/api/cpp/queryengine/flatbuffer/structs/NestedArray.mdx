@@ -1,0 +1,203 @@
+---
+title: flatbuffer::NestedArray
+description: ""
+---
+
+<CodeBlock id="NestedArray" links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+template <typename ItemType>
+struct NestedArray
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <flatbuffer/heavydbTypes.h>
+```
+
+**Template parameters**
+
+<ParamField path="ItemType" type="typename">
+</ParamField>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+NestedArray<ItemType> & flatbuffer::NestedArray<ItemType>::operator=(
+    const NestedArray<ItemType> &other
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### size [#size]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+size_t flatbuffer::NestedArray<ItemType>::size() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with index)">
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+size_t flatbuffer::NestedArray<ItemType>::size(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getValuesBuffer [#getvaluesbuffer]
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<ItemType>::getValuesBuffer(
+    ItemType *&values,
+    int64_t &nof_values,
+    bool &is_null,
+    bool require_1d_item = true
+) const
+```
+</CodeBlock>
+
+### getRawBuffer [#getrawbuffer]
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<ItemType>::getRawBuffer(
+    int8_t *&values,
+    int64_t &nof_values,
+    size_t &value_size,
+    bool &is_null,
+    bool require_1d_item = true
+) const
+```
+</CodeBlock>
+
+### getValue [#getvalue]
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+ItemType & flatbuffer::NestedArray<ItemType>::getValue(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+const ItemType flatbuffer::NestedArray<ItemType>::operator[](
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### getItem [#getitem]
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+const ItemType flatbuffer::NestedArray<ItemType>::getItem(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+bool flatbuffer::NestedArray<ItemType>::isNull() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with index)">
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+bool flatbuffer::NestedArray<ItemType>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### extend [#extend]
+
+<Tabs>
+<Tab title="Single item">
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::NestedArray<ItemType>::extend(
+    const int8_t *data,
+    const int32_t size,
+    bool assign = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<ItemType>::extend(
+    const NestedArray<ItemType> &other,
+    bool assign = false
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator+= [#operator_plus_assign]
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+NestedArray<ItemType> & flatbuffer::NestedArray<ItemType>::operator+=(
+    const NestedArray<ItemType> &other
+)
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfoLite * flatbuffer::NestedArray<ItemType>::getTypeInfo() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `flatbuffer_` | `int8_t *` | |
+| `index_` | `int64_t` | |
+| `n_` | `size_t` | |

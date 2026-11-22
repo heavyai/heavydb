@@ -1,0 +1,97 @@
+---
+title: generate_series__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t generate_series__cpu_template(
+    TableFunctionManager &mgr,
+    const T start,
+    const T stop,
+    const K step,
+    Column<T> &series_output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t generate_series__cpu_template(
+    TableFunctionManager &mgr,
+    const T start,
+    const T stop,
+    Column<T> &series_output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template int32_t generate_series__cpu_template(
+    TableFunctionManager &,
+    int64_t,
+    int64_t,
+    int64_t,
+    Column<int64_t> &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Timestamp": "../structs/timestamp", "DayTimeInterval": "../structs/daytimeinterval", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template int32_t generate_series__cpu_template(
+    TableFunctionManager &,
+    Timestamp,
+    Timestamp,
+    DayTimeInterval,
+    Column<Timestamp> &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Timestamp": "../structs/timestamp", "YearMonthTimeInterval": "../structs/yearmonthtimeinterval", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template int32_t generate_series__cpu_template(
+    TableFunctionManager &,
+    Timestamp,
+    Timestamp,
+    YearMonthTimeInterval,
+    Column<Timestamp> &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template int32_t generate_series__cpu_template(
+    TableFunctionManager &,
+    int64_t,
+    int64_t,
+    Column<int64_t> &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

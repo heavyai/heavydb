@@ -1,0 +1,81 @@
+---
+title: Parser::TableRef
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Node` (public)
+
+---
+
+## Constructors
+
+### TableRef [#tableref]
+
+<Tabs>
+<Tab title="From raw pointer">
+
+<Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"TableRef": "tableref"}}>
+```cpp showLineNumbers={false}
+Parser::TableRef::TableRef(
+    std::string *t
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableRef": "tableref"}}>
+```cpp showLineNumbers={false}
+Parser::TableRef::TableRef(
+    std::string *t,
+    std::string *r
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_table_name [#gettablename]
+
+<CodeBlock links={{"TableRef": "tableref"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::TableRef::get_table_name() const
+```
+</CodeBlock>
+
+### get_range_var [#getrangevar]
+
+<CodeBlock links={{"TableRef": "tableref"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::TableRef::get_range_var() const
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"TableRef": "tableref"}}>
+```cpp showLineNumbers={false}
+std::string Parser::TableRef::to_string() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_name_` | `std::unique_ptr< std::string >` | |
+| `range_var_` | `std::unique_ptr< std::string >` | |

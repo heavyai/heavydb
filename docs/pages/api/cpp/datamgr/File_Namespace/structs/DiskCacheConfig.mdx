@@ -1,0 +1,80 @@
+---
+title: File_Namespace::DiskCacheConfig
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <File_Namespace/CachingFileMgr.h>
+```
+
+---
+
+## Methods
+
+### isEnabledForMutableTables [#isenabledformutabletables]
+
+<CodeBlock links={{"DiskCacheConfig": "diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::DiskCacheConfig::isEnabledForMutableTables() const
+```
+</CodeBlock>
+
+### isEnabledForFSI [#isenabledforfsi]
+
+<CodeBlock links={{"DiskCacheConfig": "diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::DiskCacheConfig::isEnabledForFSI() const
+```
+</CodeBlock>
+
+### isEnabled [#isenabled]
+
+<CodeBlock links={{"DiskCacheConfig": "diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::DiskCacheConfig::isEnabled() const
+```
+</CodeBlock>
+
+### dump [#dump]
+
+<CodeBlock links={{"DiskCacheConfig": "diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::DiskCacheConfig::dump() const
+```
+</CodeBlock>
+
+### levelAsString [#levelasstring]
+
+<CodeBlock links={{"DiskCacheConfig": "diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::DiskCacheConfig::levelAsString() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getDefaultPath [#getdefaultpath]
+
+<CodeBlock links={{"DiskCacheConfig": "diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+static std::string File_Namespace::DiskCacheConfig::getDefaultPath(
+    const std::string &base_path
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `DEFAULT_MAX_SIZE` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+| `path` | `std::string` | |
+| `enabled_level` | `DiskCacheLevel` | |
+| `num_reader_threads` | `size_t` | |
+| `size_limit` | `size_t` | |
+| `page_size` | `size_t` | |
+| `meta_page_size` | `size_t` | |

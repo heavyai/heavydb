@@ -1,0 +1,22 @@
+---
+title: tf_merge_building_polygons__cpu_template
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template <typename G>
+NEVER_INLINE HOST int32_t tf_merge_building_polygons__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<G> &polys,
+    const Column<float> &base_elevations,
+    const Column<float> &heights,
+    const Column<int32_t> &group_ids,
+    Column<GeoMultiPolygon> &mpolys_out,
+    Column<float> &base_elevations_out,
+    Column<float> &roof_elevations_out,
+    Column<Array<float>> &heights_out,
+    Column<int32_t> &group_ids_out
+)
+```
+</CodeBlock>

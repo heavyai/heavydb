@@ -1,0 +1,21 @@
+---
+title: write_baseline_hash_slot_for_semi_join
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+DEVICE int write_baseline_hash_slot_for_semi_join(
+    const int32_t val,
+    int8_t *hash_buff,
+    const int64_t entry_count,
+    const T *key,
+    const size_t key_component_count,
+    const bool with_val_slot,
+    const int32_t invalid_slot_val,
+    const size_t key_size_in_bytes,
+    const size_t hash_entry_size
+)
+```
+</CodeBlock>

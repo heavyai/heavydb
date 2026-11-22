@@ -1,0 +1,52 @@
+---
+title: Serializer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Serializer.h>
+```
+
+---
+
+## Static methods
+
+### serializeRelAlgDag [#serializerelalgdag]
+
+<CodeBlock links={{"Serializer": "serializer", "RelAlgDag": "../classes/relalgdag"}}>
+```cpp showLineNumbers={false}
+std::string Serializer::serializeRelAlgDag(
+    const RelAlgDag &rel_alg_dag
+)
+```
+</CodeBlock>
+
+Serializes a complete [RelAlgDag](../classes/relalgdag) into a string.
+
+Serialization is only supported before query execution
+
+**Parameters**
+
+<ParamField path="rel_alg_dag" type="const RelAlgDag &">
+The [RelAlgDag](../classes/relalgdag) instance to serialize.
+</ParamField>
+
+### deserializeRelAlgDag [#deserializerelalgdag]
+
+<CodeBlock links={{"Serializer": "serializer", "RelAlgDag": "../classes/relalgdag"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<RelAlgDag> Serializer::deserializeRelAlgDag(
+    const std::string &serialized_dag_str
+)
+```
+</CodeBlock>
+
+Deserializes a [RelAlgDag](../classes/relalgdag), completing a full rebuild of the Dag.
+
+This is only supported before query execution.
+
+**Parameters**
+
+<ParamField path="serialized_dag_str" type="const std::string &">
+The [RelAlgDag](../classes/relalgdag) serialization string, output from the about serializeRelAlgDag() method.
+</ParamField>

@@ -1,0 +1,83 @@
+---
+title: TargetExprCodegen
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetExprBuilder.h>
+```
+
+---
+
+## Constructors
+
+### TargetExprCodegen [#targetexprcodegen]
+
+<CodeBlock links={{"TargetExprCodegen": "targetexprcodegen"}}>
+```cpp showLineNumbers={false}
+TargetExprCodegen::TargetExprCodegen(
+    const Analyzer::Expr *target_expr,
+    TargetInfo &target_info,
+    const int32_t base_slot_index,
+    const size_t target_idx,
+    const bool is_group_by
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegen [#codegen]
+
+<CodeBlock links={{"TargetExprCodegen": "targetexprcodegen", "GroupByAndAggregate": "../classes/groupbyandaggregate", "Executor": "../classes/executor", "QueryMemoryDescriptor": "../classes/querymemorydescriptor", "CompilationOptions": "compilationoptions", "GpuSharedMemoryContext": "../classes/gpusharedmemorycontext", "DiamondCodegen": "diamondcodegen"}}>
+```cpp showLineNumbers={false}
+void TargetExprCodegen::codegen(
+    GroupByAndAggregate *group_by_and_agg,
+    Executor *executor,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    const GpuSharedMemoryContext &gpu_smem_context,
+    const std::tuple<llvm::Value *, llvm::Value *> &agg_out_ptr_w_idx,
+    const std::vector<llvm::Value *> &agg_out_vec,
+    llvm::Value *output_buffer_byte_stream,
+    llvm::Value *out_row_idx,
+    llvm::Value *varlen_output_buffer,
+    DiamondCodegen &diamond_codegen,
+    DiamondCodegen *sample_cfg = nullptr
+) const
+```
+</CodeBlock>
+
+### codegenAggregate [#codegenaggregate]
+
+<CodeBlock links={{"TargetExprCodegen": "targetexprcodegen", "GroupByAndAggregate": "../classes/groupbyandaggregate", "Executor": "../classes/executor", "QueryMemoryDescriptor": "../classes/querymemorydescriptor", "CompilationOptions": "compilationoptions"}}>
+```cpp showLineNumbers={false}
+void TargetExprCodegen::codegenAggregate(
+    GroupByAndAggregate *group_by_and_agg,
+    Executor *executor,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    const std::vector<llvm::Value *> &target_lvs,
+    const std::tuple<llvm::Value *, llvm::Value *> &agg_out_ptr_w_idx,
+    const std::vector<llvm::Value *> &agg_out_vec,
+    llvm::Value *output_buffer_byte_stream,
+    llvm::Value *out_row_idx,
+    llvm::Value *varlen_output_buffer,
+    int32_t slot_index
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `target_expr` | `const Analyzer::Expr *` | |
+| `target_info` | `TargetInfo` | |
+| `base_slot_index` | `int32_t` | |
+| `target_idx` | `size_t` | |
+| `is_group_by` | `bool` | |

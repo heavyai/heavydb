@@ -1,0 +1,78 @@
+---
+title: AnnotateInternalFunctionsPass
+description: "Annotates internal functions with function attributes designating the function as one which does not modify memory, does not throw, does not synchronize state with other functions/parts of the program, and is guaranteed to return."
+---
+
+Annotates internal functions with function attributes designating the function as one which does not modify memory, does not throw, does not synchronize state with other functions/parts of the program, and is guaranteed to return.
+
+This allows the LLVM optimizer to more aggressively remove / reorder these functions and is particularly important for dead code elimination.
+
+```cpp showLineNumbers={false}
+#include <AnnotateInternalFunctionsPass.h>
+```
+
+**Inherits from:** `llvm::CallGraphSCCPass` (public)
+
+---
+
+## Constructors
+
+### AnnotateInternalFunctionsPass [#annotateinternalfunctionspass]
+
+<CodeBlock links={{"AnnotateInternalFunctionsPass": "annotateinternalfunctionspass"}}>
+```cpp showLineNumbers={false}
+AnnotateInternalFunctionsPass::AnnotateInternalFunctionsPass()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### runOnSCC [#runonscc]
+
+<CodeBlock links={{"AnnotateInternalFunctionsPass": "annotateinternalfunctionspass"}}>
+```cpp showLineNumbers={false}
+bool AnnotateInternalFunctionsPass::runOnSCC(
+    llvm::CallGraphSCC &SCC
+) override
+```
+</CodeBlock>
+
+### getPassName [#getpassname]
+
+<CodeBlock links={{"AnnotateInternalFunctionsPass": "annotateinternalfunctionspass"}}>
+```cpp showLineNumbers={false}
+llvm::StringRef AnnotateInternalFunctionsPass::getPassName() const override
+```
+</CodeBlock>
+
+### isInternalStatelessFunction [#isinternalstatelessfunction]
+
+<CodeBlock links={{"AnnotateInternalFunctionsPass": "annotateinternalfunctionspass"}}>
+```cpp showLineNumbers={false}
+static bool AnnotateInternalFunctionsPass::isInternalStatelessFunction(
+    const llvm::StringRef &func_name
+)
+```
+</CodeBlock>
+
+### isInternalMathFunction [#isinternalmathfunction]
+
+<CodeBlock links={{"AnnotateInternalFunctionsPass": "annotateinternalfunctionspass"}}>
+```cpp showLineNumbers={false}
+static bool AnnotateInternalFunctionsPass::isInternalMathFunction(
+    const llvm::StringRef &func_name
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ID` <Badge intent="note" minimal>static</Badge> | `char` | |
+| `extension_functions` <Badge intent="note" minimal>static</Badge> | `const std::set< std::string >` | |
+| `math_builtins` <Badge intent="note" minimal>static</Badge> | `const std::set< std::string >` | |

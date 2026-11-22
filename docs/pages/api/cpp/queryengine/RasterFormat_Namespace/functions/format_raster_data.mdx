@@ -1,0 +1,23 @@
+---
+title: RasterFormat_Namespace::format_raster_data
+description: ""
+---
+
+<CodeBlock links={{"Column": "../../structs/column", "ColumnList": "../../structs/columnlist", "CpuTimer": "../../classes/cputimer", "RasterInfo": "../structs/rasterinfo"}}>
+```cpp showLineNumbers={false}
+template <typename PixelType, typename ColorType, typename OutputType>
+TEMPLATE_NOINLINE std::pair<std::vector<OutputType>, RasterInfo> RasterFormat_Namespace::format_raster_data(
+    const Column<PixelType> &raster_x,
+    const Column<PixelType> &raster_y,
+    const ColumnList<ColorType> &raster_channels,
+    const PixelType x_input_units_per_pixel,
+    const PixelType y_input_units_per_pixel,
+    const float max_color_val,
+    const int64_t x_pixels_per_tile,
+    const int64_t y_pixels_per_tile,
+    const int64_t tile_boundary_halo_pixels,
+    const int64_t target_batch_size_multiple,
+    std::shared_ptr<CpuTimer> timer
+)
+```
+</CodeBlock>

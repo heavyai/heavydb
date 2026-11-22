@@ -1,0 +1,14 @@
+---
+title: "operator&"
+description: ""
+---
+
+<CodeBlock links={{"EnableBitmaskOps": "../structs/enablebitmaskops"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+std::enable_if_t<EnableBitmaskOps<T>::enable, T> constexpr operator&(
+    T lhs,
+    T rhs
+)
+```
+</CodeBlock>

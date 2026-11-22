@@ -1,0 +1,586 @@
+---
+title: QueryMemoryInitializer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryMemoryInitializer.h>
+```
+
+---
+
+## Constructors
+
+### QueryMemoryInitializer [#querymemoryinitializer]
+
+<Tabs>
+<Tab title="Copy (with ra exe unit and dispatch mode and output columnar and sort on gpu and outer table key and render allocator map and render info and gpu allocator and thread idx)">
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "QueryMemoryDescriptor": "querymemorydescriptor", "RenderAllocatorMap": "renderallocatormap", "RenderInfo": "renderinfo", "RowSetMemoryOwner": "rowsetmemoryowner", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+QueryMemoryInitializer::QueryMemoryInitializer(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const int device_id,
+    const ExecutorDeviceType device_type,
+    const ExecutorDispatchMode dispatch_mode,
+    const bool output_columnar,
+    const bool sort_on_gpu,
+    const shared::TableKey &outer_table_key,
+    const int64_t num_rows,
+    const std::vector<std::vector<const int8_t *>> &col_buffers,
+    const std::vector<std::vector<uint64_t>> &frag_offsets,
+    RenderAllocatorMap *render_allocator_map,
+    RenderInfo *render_info,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    DeviceAllocator *gpu_allocator,
+    const size_t thread_idx,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with exe unit and device allocator)">
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "TableFunctionExecutionUnit": "../structs/tablefunctionexecutionunit", "QueryMemoryDescriptor": "querymemorydescriptor", "RowSetMemoryOwner": "rowsetmemoryowner", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+QueryMemoryInitializer::QueryMemoryInitializer(
+    const TableFunctionExecutionUnit &exe_unit,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const int device_id,
+    const ExecutorDeviceType device_type,
+    const int64_t num_rows,
+    const std::vector<std::vector<const int8_t *>> &col_buffers,
+    const std::vector<std::vector<uint64_t>> &frag_offsets,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    DeviceAllocator *device_allocator,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getCountDistinctBitmapDevicePtr [#getcountdistinctbitmapdeviceptr]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+const auto QueryMemoryInitializer::getCountDistinctBitmapDevicePtr() const
+```
+</CodeBlock>
+
+### getCountDistinctBitmapHostPtr [#getcountdistinctbitmaphostptr]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+const auto QueryMemoryInitializer::getCountDistinctBitmapHostPtr() const
+```
+</CodeBlock>
+
+### getCountDistinctBitmapBytes [#getcountdistinctbitmapbytes]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+const auto QueryMemoryInitializer::getCountDistinctBitmapBytes() const
+```
+</CodeBlock>
+
+### getAggModeHashTablesGpu [#getaggmodehashtablesgpu]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+std::vector<int8_t> QueryMemoryInitializer::getAggModeHashTablesGpu() const
+```
+</CodeBlock>
+
+### getNumAggModeHashTablesGpu [#getnumaggmodehashtablesgpu]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryInitializer::getNumAggModeHashTablesGpu() const
+```
+</CodeBlock>
+
+### getVarlenOutputHostPtr [#getvarlenoutputhostptr]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+const auto QueryMemoryInitializer::getVarlenOutputHostPtr() const
+```
+</CodeBlock>
+
+### getVarlenOutputPtr [#getvarlenoutputptr]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+const auto QueryMemoryInitializer::getVarlenOutputPtr() const
+```
+</CodeBlock>
+
+### getResultSet [#getresultset]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ResultSet * QueryMemoryInitializer::getResultSet(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+### getResultSetOwned [#getresultsetowned]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ResultSet> QueryMemoryInitializer::getResultSetOwned(
+    const size_t index
+)
+```
+</CodeBlock>
+
+### resetResultSet [#resetresultset]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::resetResultSet(
+    const size_t index
+)
+```
+</CodeBlock>
+
+### getAggInitValForIndex [#getagginitvalforindex]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+int64_t QueryMemoryInitializer::getAggInitValForIndex(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+### getGroupByBuffersPtr [#getgroupbybuffersptr]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+const auto QueryMemoryInitializer::getGroupByBuffersPtr()
+```
+</CodeBlock>
+
+### getGroupByBuffersSize [#getgroupbybufferssize]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+const auto QueryMemoryInitializer::getGroupByBuffersSize() const
+```
+</CodeBlock>
+
+### getNumBuffers [#getnumbuffers]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+const auto QueryMemoryInitializer::getNumBuffers() const
+```
+</CodeBlock>
+
+### setupTableFunctionGpuBuffers [#setuptablefunctiongpubuffers]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "GpuGroupByBuffers": "../structs/gpugroupbybuffers"}}>
+```cpp showLineNumbers={false}
+GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const int device_id,
+    const unsigned block_size_x,
+    const unsigned grid_size_x,
+    const bool zero_initialize_buffers
+)
+```
+</CodeBlock>
+
+### copyFromTableFunctionGpuBuffers [#copyfromtablefunctiongpubuffers]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "GpuGroupByBuffers": "../structs/gpugroupbybuffers"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
+    DeviceAllocator *device_allocator,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const size_t entry_count,
+    const GpuGroupByBuffers &gpu_group_by_buffers,
+    const int device_id,
+    const unsigned block_size_x,
+    const unsigned grid_size_x
+)
+```
+</CodeBlock>
+
+### copyGroupByBuffersFromGpu [#copygroupbybuffersfromgpu]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "GpuGroupByBuffers": "../structs/gpugroupbybuffers", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
+    DeviceAllocator &device_allocator,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const size_t entry_count,
+    const GpuGroupByBuffers &gpu_group_by_buffers,
+    const RelAlgExecutionUnit *ra_exe_unit,
+    const unsigned block_size_x,
+    const unsigned grid_size_x,
+    const int device_id,
+    const bool prepend_index_buffer
+) const
+```
+</CodeBlock>
+
+### copyFromDeviceForAggMode [#copyfromdeviceforaggmode]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::copyFromDeviceForAggMode()
+```
+</CodeBlock>
+
+### initGroupByBuffer [#initgroupbybuffer]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "QueryMemoryDescriptor": "querymemorydescriptor", "TargetAggOpsMetadata": "#targetaggopsmetadata", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::initGroupByBuffer(
+    int64_t *buffer,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const QueryMemoryDescriptor &query_mem_desc,
+    TargetAggOpsMetadata &agg_expr_metadata,
+    const ExecutorDeviceType device_type,
+    const bool output_columnar,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### initRowGroups [#initrowgroups]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "TargetAggOpsMetadata": "#targetaggopsmetadata", "Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::initRowGroups(
+    const QueryMemoryDescriptor &query_mem_desc,
+    int64_t *groups_buffer,
+    const std::vector<int64_t> &init_vals,
+    TargetAggOpsMetadata &agg_expr_metadata,
+    const int32_t groups_buffer_entry_count,
+    const size_t warp_size,
+    const Executor *executor,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+### initColumnarGroups [#initcolumnargroups]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::initColumnarGroups(
+    const QueryMemoryDescriptor &query_mem_desc,
+    int64_t *groups_buffer,
+    const std::vector<int64_t> &init_vals,
+    const Executor *executor,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+### initColumnsPerRow [#initcolumnsperrow]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "TargetAggOpsMetadata": "#targetaggopsmetadata"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::initColumnsPerRow(
+    const QueryMemoryDescriptor &query_mem_desc,
+    int8_t *row_ptr,
+    const std::vector<int64_t> &init_vals,
+    const TargetAggOpsMetadata &agg_op_metadata
+)
+```
+</CodeBlock>
+
+### allocateCountDistinctGpuMem [#allocatecountdistinctgpumem]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::allocateCountDistinctGpuMem(
+    const QueryMemoryDescriptor &query_mem_desc
+)
+```
+</CodeBlock>
+
+### calculateCountDistinctBufferSize [#calculatecountdistinctbuffersize]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+std::vector<int64_t> QueryMemoryInitializer::calculateCountDistinctBufferSize(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const RelAlgExecutionUnit &ra_exe_unit
+) const
+```
+</CodeBlock>
+
+### fastAllocateCountDistinctBuffers [#fastallocatecountdistinctbuffers]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::fastAllocateCountDistinctBuffers(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+### allocateCountDistinctBitmap [#allocatecountdistinctbitmap]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+int64_t QueryMemoryInitializer::allocateCountDistinctBitmap(
+    const size_t bitmap_byte_sz
+)
+```
+</CodeBlock>
+
+### allocateCountDistinctSet [#allocatecountdistinctset]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+int64_t QueryMemoryInitializer::allocateCountDistinctSet()
+```
+</CodeBlock>
+
+### initializeModeIndexSet [#initializemodeindexset]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+QueryMemoryInitializer::ModeIndexSet QueryMemoryInitializer::initializeModeIndexSet(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+### allocateModeMem [#allocatemodemem]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::allocateModeMem(
+    ExecutorDeviceType,
+    const QueryMemoryDescriptor &,
+    const Executor *,
+    int
+)
+```
+</CodeBlock>
+
+### allocateAggMode [#allocateaggmode]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+int64_t QueryMemoryInitializer::allocateAggMode()
+```
+</CodeBlock>
+
+### allocateModeBuffer [#allocatemodebuffer]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::allocateModeBuffer(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+### initializeQuantileParams [#initializequantileparams]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+std::vector<QueryMemoryInitializer::QuantileParam> QueryMemoryInitializer::initializeQuantileParams(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+### allocateTDigestsBuffer [#allocatetdigestsbuffer]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::allocateTDigestsBuffer(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+### prepareTopNHeapsDevBuffer [#preparetopnheapsdevbuffer]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "GpuGroupByBuffers": "../structs/gpugroupbybuffers"}}>
+```cpp showLineNumbers={false}
+GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const int8_t *init_agg_vals_dev_ptr,
+    const size_t n,
+    const int device_id,
+    const unsigned block_size_x,
+    const unsigned grid_size_x,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+### createAndInitializeGroupByBufferGpu [#createandinitializegroupbybuffergpu]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "QueryMemoryDescriptor": "querymemorydescriptor", "RenderAllocator": "renderallocator", "GpuGroupByBuffers": "../structs/gpugroupbybuffers"}}>
+```cpp showLineNumbers={false}
+GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const int8_t *init_agg_vals_dev_ptr,
+    const int device_id,
+    CUstream cuda_stream,
+    const ExecutorDispatchMode dispatch_mode,
+    const unsigned block_size_x,
+    const unsigned grid_size_x,
+    const int8_t warp_size,
+    const bool can_sort_on_gpu,
+    const bool output_columnar,
+    RenderAllocator *render_allocator
+)
+```
+</CodeBlock>
+
+### computeNumberOfBuffers [#computenumberofbuffers]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+size_t QueryMemoryInitializer::computeNumberOfBuffers(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const ExecutorDeviceType device_type,
+    const Executor *executor
+) const
+```
+</CodeBlock>
+
+### compactProjectionBuffersCpu [#compactprojectionbufferscpu]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::compactProjectionBuffersCpu(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const size_t projection_count
+)
+```
+</CodeBlock>
+
+### compactProjectionBuffersGpu [#compactprojectionbuffersgpu]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "GpuGroupByBuffers": "../structs/gpugroupbybuffers"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::compactProjectionBuffersGpu(
+    const QueryMemoryDescriptor &query_mem_desc,
+    DeviceAllocator *device_allocator,
+    const GpuGroupByBuffers &gpu_group_by_buffers,
+    const size_t projection_count,
+    const int device_id
+)
+```
+</CodeBlock>
+
+### applyStreamingTopNOffsetCpu [#applystreamingtopnoffsetcpu]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::applyStreamingTopNOffsetCpu(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+### applyStreamingTopNOffsetGpu [#applystreamingtopnoffsetgpu]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "QueryMemoryDescriptor": "querymemorydescriptor", "GpuGroupByBuffers": "../structs/gpugroupbybuffers", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
+    Data_Namespace::DataMgr *data_mgr,
+    CudaAllocator *cuda_allocator,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const GpuGroupByBuffers &gpu_group_by_buffers,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const unsigned total_thread_count,
+    const int device_id,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+### getVarlenOutputInfo [#getvarlenoutputinfo]
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer", "VarlenOutputInfo": "../structs/varlenoutputinfo"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<VarlenOutputInfo> QueryMemoryInitializer::getVarlenOutputInfo()
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ModeIndexSet` | `robin_hood::unordered_set< size_t >` |
+| `QuantileParam` | `std::optional< double >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `num_rows_` | `const int64_t` | |
+| `row_set_mem_owner_` | `std::shared_ptr< RowSetMemoryOwner >` | |
+| `result_sets_` | `std::vector< std::unique_ptr< ResultSet > >` | |
+| `init_agg_vals_` | `std::vector< int64_t >` | |
+| `num_buffers_` | `size_t` | |
+| `group_by_buffers_` | `std::vector< int64_t * >` | |
+| `varlen_output_info_` | `std::shared_ptr< VarlenOutputInfo >` | |
+| `varlen_output_buffer_` | `CUdeviceptr` | |
+| `varlen_output_buffer_host_ptr_` | `int8_t *` | |
+| `agg_mode_hash_tables_gpu_` | `AggModeHashTablesGpu` | |
+| `agg_mode_hash_tables_cpu_` | `std::vector< AggMode * >` | |
+| `count_distinct_bitmap_device_mem_ptr_` | `CUdeviceptr` | |
+| `count_distinct_bitmap_mem_size_` | `size_t` | |
+| `count_distinct_bitmap_host_crt_ptr_` | `int8_t *` | |
+| `count_distinct_bitmap_host_mem_ptr_` | `int8_t *` | |
+| `device_allocator_` | `DeviceAllocator *` | |
+| `temporary_buffers_` | `std::vector< Data_Namespace::AbstractBuffer * >` | |
+| `thread_idx_` | `const size_t` | |
+
+---
+
+## Inner classes
+
+### TargetAggOpsMetadata
+
+<CodeBlock links={{"QueryMemoryInitializer": "querymemoryinitializer"}}>
+```cpp showLineNumbers={false}
+struct QueryMemoryInitializer::TargetAggOpsMetadata
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `has_count_distinct` | `bool` | |
+| `has_mode` | `bool` | |
+| `has_tdigest` | `bool` | |
+| `count_distinct_buf_size` | `std::vector< int64_t >` | |
+| `mode_index_set` | `ModeIndexSet` | |
+| `quantile_params` | `std::vector< QuantileParam >` | |

@@ -95,7 +95,7 @@ Builds a product Docker image from a pre-existing tarball without recompiling.
 
 ### `build / build all`
 
-Runs component builds + `build heavydb` [+ docs] in one step.
+Runs component builds + `build heavydb` [+ docs validation] in one step.
 `build` excludes HeavyIQ; `build all` includes it.
 
 Accepts all options from `build heavydb` plus:
@@ -111,13 +111,13 @@ Accepts all options from `build heavydb` plus:
 
 ### `build docs`
 
-Builds Sphinx HTML docs; optionally runs Doxygen if available on the host.
+Validates the Fern documentation site (`fern check`).
 
 | Option | Default | Description |
 |---|---|---|
-| `--output-dir=<path>` | `build/` | Build dir (also the docs destination) |
+| `--regenerate-api` | off | Regenerate C++ API reference pages first (`fern docs md generate --local`, requires Docker) |
 
-**Output:** `build/docs/html/`
+**Output:** none (validation only). Preview with `(cd fern && fern docs dev)`.
 
 ---
 

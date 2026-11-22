@@ -1,0 +1,29 @@
+---
+title: ST_Distance_MultiPolygon_MultiPolygon
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+EXTENSION_NOINLINE double ST_Distance_MultiPolygon_MultiPolygon(
+    int8_t *mpoly1_coords,
+    int64_t mpoly1_coords_size,
+    int32_t *mpoly1_ring_sizes,
+    int64_t mpoly1_num_rings,
+    int32_t *mpoly1_poly_sizes,
+    int64_t mpoly1_num_polys,
+    int8_t *mpoly2_coords,
+    int64_t mpoly2_coords_size,
+    int32_t *mpoly2_ring_sizes,
+    int64_t mpoly2_num_rings,
+    int32_t *mpoly2_poly_sizes,
+    int64_t mpoly2_num_polys,
+    int32_t ic1,
+    int32_t isr1,
+    int32_t ic2,
+    int32_t isr2,
+    int32_t osr,
+    double threshold
+)
+```
+</CodeBlock>

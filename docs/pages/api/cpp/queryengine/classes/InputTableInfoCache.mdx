@@ -1,0 +1,65 @@
+---
+title: InputTableInfoCache
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <InputMetadata.h>
+```
+
+---
+
+## Constructors
+
+### InputTableInfoCache [#inputtableinfocache]
+
+<CodeBlock links={{"InputTableInfoCache": "inputtableinfocache", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+InputTableInfoCache::InputTableInfoCache(
+    Executor *executor
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getTableInfo [#gettableinfo]
+
+<CodeBlock links={{"InputTableInfoCache": "inputtableinfocache"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::TableInfo InputTableInfoCache::getTableInfo(
+    const shared::TableKey &table_key
+)
+```
+</CodeBlock>
+
+### updateTableInfo [#updatetableinfo]
+
+<CodeBlock links={{"InputTableInfoCache": "inputtableinfocache"}}>
+```cpp showLineNumbers={false}
+void InputTableInfoCache::updateTableInfo(
+    const shared::TableKey &table_key,
+    const Fragmenter_Namespace::TableInfo &table_info,
+    const std::set<int> &device_ids_to_use
+)
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"InputTableInfoCache": "inputtableinfocache"}}>
+```cpp showLineNumbers={false}
+void InputTableInfoCache::clear()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cache_` | `std::unordered_map< shared::TableKey, Fragmenter_Namespace::TableInfo >` | |
+| `executor_` | `Executor *` | |

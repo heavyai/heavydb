@@ -1,0 +1,35 @@
+---
+title: pluck_ptrs
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+std::vector<const T *> pluck_ptrs(
+    const std::vector<std::vector<T>> &data,
+    const int64_t start_idx,
+    const int64_t end_idx
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+std::vector<const T *> pluck_ptrs(
+    const std::vector<T *> &data,
+    const int64_t start_idx,
+    const int64_t end_idx
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

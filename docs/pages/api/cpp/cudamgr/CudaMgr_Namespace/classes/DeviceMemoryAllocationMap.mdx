@@ -1,0 +1,159 @@
+---
+title: CudaMgr_Namespace::DeviceMemoryAllocationMap
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CudaMgr_Namespace/DeviceMemoryAllocationMap.h>
+```
+
+---
+
+## Constructors
+
+### DeviceMemoryAllocationMap [#devicememoryallocationmap]
+
+<CodeBlock links={{"DeviceMemoryAllocationMap": "devicememoryallocationmap"}}>
+```cpp showLineNumbers={false}
+CudaMgr_Namespace::DeviceMemoryAllocationMap::DeviceMemoryAllocationMap()
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~DeviceMemoryAllocationMap
+
+<CodeBlock links={{"DeviceMemoryAllocationMap": "devicememoryallocationmap"}}>
+```cpp showLineNumbers={false}
+CudaMgr_Namespace::DeviceMemoryAllocationMap::~DeviceMemoryAllocationMap() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getMap [#getmap]
+
+<CodeBlock links={{"DeviceMemoryAllocationMap": "devicememoryallocationmap"}}>
+```cpp showLineNumbers={false}
+const DeviceMemoryAllocationMap::Map & CudaMgr_Namespace::DeviceMemoryAllocationMap::getMap() const
+```
+</CodeBlock>
+
+### mapEmpty [#mapempty]
+
+<CodeBlock links={{"DeviceMemoryAllocationMap": "devicememoryallocationmap"}}>
+```cpp showLineNumbers={false}
+const bool CudaMgr_Namespace::DeviceMemoryAllocationMap::mapEmpty() const
+```
+</CodeBlock>
+
+### addAllocation [#addallocation]
+
+<CodeBlock links={{"DeviceMemoryAllocationMap": "devicememoryallocationmap"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::DeviceMemoryAllocationMap::addAllocation(
+    const DevicePtr device_ptr,
+    const uint64_t size,
+    const uint64_t handle,
+    const heavyai::UUID uuid,
+    const int device_num,
+    const bool is_slab
+)
+```
+</CodeBlock>
+
+### removeAllocation [#removeallocation]
+
+<CodeBlock links={{"DeviceMemoryAllocationMap": "devicememoryallocationmap", "Allocation": "#allocation"}}>
+```cpp showLineNumbers={false}
+DeviceMemoryAllocationMap::Allocation CudaMgr_Namespace::DeviceMemoryAllocationMap::removeAllocation(
+    const DevicePtr device_ptr
+)
+```
+</CodeBlock>
+
+### getAllocation [#getallocation]
+
+<CodeBlock links={{"DeviceMemoryAllocationMap": "devicememoryallocationmap", "Allocation": "#allocation"}}>
+```cpp showLineNumbers={false}
+std::pair<DeviceMemoryAllocationMap::DevicePtr, DeviceMemoryAllocationMap::Allocation> CudaMgr_Namespace::DeviceMemoryAllocationMap::getAllocation(
+    const DevicePtr device_ptr
+)
+```
+</CodeBlock>
+
+### registerMapChangedCB [#registermapchangedcb]
+
+<CodeBlock links={{"DeviceMemoryAllocationMap": "devicememoryallocationmap"}}>
+```cpp showLineNumbers={false}
+const DeviceMemoryAllocationMap::MapChangedCBID CudaMgr_Namespace::DeviceMemoryAllocationMap::registerMapChangedCB(
+    MapChangedCB cb
+)
+```
+</CodeBlock>
+
+### unregisterMapChangedCB [#unregistermapchangedcb]
+
+<CodeBlock links={{"DeviceMemoryAllocationMap": "devicememoryallocationmap"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::DeviceMemoryAllocationMap::unregisterMapChangedCB(
+    const MapChangedCBID cbid
+)
+```
+</CodeBlock>
+
+### notifyMapChanged [#notifymapchanged]
+
+<CodeBlock links={{"DeviceMemoryAllocationMap": "devicememoryallocationmap"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::DeviceMemoryAllocationMap::notifyMapChanged(
+    const heavyai::UUID device_uuid,
+    const bool is_slab
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `DevicePtr` | `uint64_t` |
+| `Map` | `std::map< DevicePtr, Allocation >` |
+| `MapChangedCBID` | `uint32_t` |
+| `MapChangedCB` | `std::function< void(const heavyai::UUID, const bool)>` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `map_` | `Map` | |
+| `last_map_changed_cbid_` | `MapChangedCBID` | |
+| `map_changed_cbs_` | `std::unordered_map< MapChangedCBID, MapChangedCB >` | |
+
+---
+
+## Inner classes
+
+### Allocation
+
+<CodeBlock links={{"DeviceMemoryAllocationMap": "devicememoryallocationmap"}}>
+```cpp showLineNumbers={false}
+struct CudaMgr_Namespace::DeviceMemoryAllocationMap::Allocation
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `size` | `uint64_t` | |
+| `handle` | `uint64_t` | |
+| `device_uuid` | `heavyai::UUID` | |
+| `device_num` | `int` | |
+| `is_slab` | `bool` | |

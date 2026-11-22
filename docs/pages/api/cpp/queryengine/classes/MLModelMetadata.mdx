@@ -1,0 +1,168 @@
+---
+title: MLModelMetadata
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <MLModelMetadata.h>
+```
+
+---
+
+## Constructors
+
+### MLModelMetadata [#mlmodelmetadata]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+MLModelMetadata::MLModelMetadata(
+    const std::string &model_name,
+    const MLModelType model_type,
+    const std::string &model_type_str,
+    const int64_t num_logical_features,
+    const int64_t num_features,
+    const int64_t num_categorical_features,
+    const int64_t num_numeric_features,
+    const std::string &model_metadata_json
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### extractModelMetadata [#extractmodelmetadata]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+void MLModelMetadata::extractModelMetadata(
+    const std::string &model_metadata_json,
+    const int64_t num_logical_features
+)
+```
+</CodeBlock>
+
+### getModelName [#getmodelname]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+const std::string & MLModelMetadata::getModelName() const
+```
+</CodeBlock>
+
+### getModelType [#getmodeltype]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+const MLModelType MLModelMetadata::getModelType() const
+```
+</CodeBlock>
+
+### getModelTypeStr [#getmodeltypestr]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+const std::string & MLModelMetadata::getModelTypeStr() const
+```
+</CodeBlock>
+
+### getNumLogicalFeatures [#getnumlogicalfeatures]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+int64_t MLModelMetadata::getNumLogicalFeatures() const
+```
+</CodeBlock>
+
+### getNumFeatures [#getnumfeatures]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+int64_t MLModelMetadata::getNumFeatures() const
+```
+</CodeBlock>
+
+### getNumCategoricalFeatures [#getnumcategoricalfeatures]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+int64_t MLModelMetadata::getNumCategoricalFeatures() const
+```
+</CodeBlock>
+
+### getNumNumericFeatures [#getnumnumericfeatures]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+int64_t MLModelMetadata::getNumNumericFeatures() const
+```
+</CodeBlock>
+
+### getPredicted [#getpredicted]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+const std::string & MLModelMetadata::getPredicted() const
+```
+</CodeBlock>
+
+### getFeatures [#getfeatures]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & MLModelMetadata::getFeatures() const
+```
+</CodeBlock>
+
+### getTrainingQuery [#gettrainingquery]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+const std::string & MLModelMetadata::getTrainingQuery() const
+```
+</CodeBlock>
+
+### getDataSplitTrainFraction [#getdatasplittrainfraction]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+double MLModelMetadata::getDataSplitTrainFraction() const
+```
+</CodeBlock>
+
+### getDataSplitEvalFraction [#getdatasplitevalfraction]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+double MLModelMetadata::getDataSplitEvalFraction() const
+```
+</CodeBlock>
+
+### getFeaturePermutations [#getfeaturepermutations]
+
+<CodeBlock links={{"MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+const std::vector<int64_t> & MLModelMetadata::getFeaturePermutations() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `model_name_` | `const std::string` | |
+| `model_type_` | `const MLModelType` | |
+| `model_type_str_` | `const std::string` | |
+| `num_logical_features_` | `const int64_t` | |
+| `num_features_` | `const int64_t` | |
+| `num_categorical_features_` | `const int64_t` | |
+| `num_numeric_features_` | `const int64_t` | |
+| `predicted_` | `std::string` | |
+| `features_` | `std::vector< std::string >` | |
+| `training_query_` | `std::string` | |
+| `data_split_train_fraction_` | `double` | |
+| `data_split_eval_fraction_` | `double` | |
+| `feature_permutations_` | `std::vector< int64_t >` | |

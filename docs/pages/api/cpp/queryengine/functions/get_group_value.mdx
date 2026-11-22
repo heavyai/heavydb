@@ -1,0 +1,39 @@
+---
+title: get_group_value
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t * get_group_value(
+    int64_t *groups_buffer,
+    const uint32_t groups_buffer_entry_count,
+    const int64_t *key,
+    const uint32_t key_count,
+    const uint32_t key_width,
+    const uint32_t row_size_quad
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT int64_t * get_group_value(
+    int64_t *groups_buffer,
+    const uint32_t groups_buffer_entry_count,
+    const int64_t *key,
+    const uint32_t key_count,
+    const uint32_t key_width,
+    const uint32_t row_size_quad
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

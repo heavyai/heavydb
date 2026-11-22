@@ -1,0 +1,2737 @@
+---
+title: Executor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Execute.h>
+```
+
+---
+
+## Constructors
+
+### Executor [#executor]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+Executor::Executor(
+    const ExecutorId id,
+    Data_Namespace::DataMgr *data_mgr,
+    const size_t block_size_x,
+    const size_t grid_size_x,
+    const size_t max_gpu_slab_size,
+    const size_t max_cpu_slab_size,
+    const std::string &debug_dir,
+    const std::string &debug_file
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### dumpCache [#dumpcache]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::string Executor::dumpCache() const
+```
+</CodeBlock>
+
+### reset [#reset]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::reset(
+    bool discard_runtime_modules_only = false
+)
+```
+</CodeBlock>
+
+### get_rt_module [#getrtmodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const std::unique_ptr<llvm::Module> & Executor::get_rt_module() const
+```
+</CodeBlock>
+
+### get_udf_module [#getudfmodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const std::unique_ptr<llvm::Module> & Executor::get_udf_module(
+    bool is_gpu = false
+) const
+```
+</CodeBlock>
+
+### get_rt_udf_module [#getrtudfmodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const std::unique_ptr<llvm::Module> & Executor::get_rt_udf_module(
+    bool is_gpu = false
+) const
+```
+</CodeBlock>
+
+### get_geos_module [#getgeosmodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const std::unique_ptr<llvm::Module> & Executor::get_geos_module() const
+```
+</CodeBlock>
+
+### get_h3_module [#geth3module]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const std::unique_ptr<llvm::Module> & Executor::get_h3_module() const
+```
+</CodeBlock>
+
+### get_libdevice_module [#getlibdevicemodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const std::unique_ptr<llvm::Module> & Executor::get_libdevice_module() const
+```
+</CodeBlock>
+
+### has_rt_module [#hasrtmodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::has_rt_module() const
+```
+</CodeBlock>
+
+### has_udf_module [#hasudfmodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::has_udf_module(
+    bool is_gpu = false
+) const
+```
+</CodeBlock>
+
+### has_rt_udf_module [#hasrtudfmodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::has_rt_udf_module(
+    bool is_gpu = false
+) const
+```
+</CodeBlock>
+
+### has_geos_module [#hasgeosmodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::has_geos_module() const
+```
+</CodeBlock>
+
+### has_h3_module [#hash3module]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::has_h3_module() const
+```
+</CodeBlock>
+
+### has_libdevice_module [#haslibdevicemodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::has_libdevice_module() const
+```
+</CodeBlock>
+
+### getTemporaryTables [#gettemporarytables]
+
+<Tabs>
+<Tab title="Mutable">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const TemporaryTables * Executor::getTemporaryTables()
+```
+</CodeBlock>
+
+Returns pointer to the intermediate tables vector currently stored by this executor.
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const TemporaryTables * Executor::getTemporaryTables() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getStringDictionaryProxy [#getstringdictionaryproxy]
+
+<Tabs>
+<Tab title="Const">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy * Executor::getStringDictionaryProxy(
+    const shared::StringDictKey &dict_key,
+    const bool with_generation
+) const
+```
+</CodeBlock>
+
+Returns a string dictionary proxy using the currently active row set memory owner.
+
+</Tab>
+<Tab title="Const (with row set mem owner)">
+
+<CodeBlock links={{"Executor": "executor", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy * Executor::getStringDictionaryProxy(
+    const shared::StringDictKey &dict_key,
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool with_generation
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getStringProxyTranslationMap [#getstringproxytranslationmap]
+
+<CodeBlock links={{"Executor": "executor", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryProxy::IdMap * Executor::getStringProxyTranslationMap(
+    const shared::StringDictKey &source_dict_key,
+    const shared::StringDictKey &dest_dict_key,
+    const RowSetMemoryOwner::StringTranslationType translation_type,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool with_generation
+) const
+```
+</CodeBlock>
+
+### getJoinIntersectionStringProxyTranslationMap [#getjoinintersectionstringproxytranslationmap]
+
+<CodeBlock links={{"Executor": "executor", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryProxy::IdMap * Executor::getJoinIntersectionStringProxyTranslationMap(
+    const StringDictionaryProxy *source_proxy,
+    StringDictionaryProxy *dest_proxy,
+    const std::vector<StringOps_Namespace::StringOpInfo> &source_string_op_infos,
+    const std::vector<StringOps_Namespace::StringOpInfo> &dest_source_string_op_infos,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner
+) const
+```
+</CodeBlock>
+
+### getStringProxyNumericTranslationMap [#getstringproxynumerictranslationmap]
+
+<CodeBlock links={{"Executor": "executor", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryProxy::TranslationMap<Datum> * Executor::getStringProxyNumericTranslationMap(
+    const shared::StringDictKey &source_dict_key,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool with_generation
+) const
+```
+</CodeBlock>
+
+### isCPUOnly [#iscpuonly]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::isCPUOnly() const
+```
+</CodeBlock>
+
+### containsLeftDeepOuterJoin [#containsleftdeepouterjoin]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::containsLeftDeepOuterJoin() const
+```
+</CodeBlock>
+
+### getColumnDescriptor [#getcolumndescriptor]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * Executor::getColumnDescriptor(
+    const Analyzer::ColumnVar *
+) const
+```
+</CodeBlock>
+
+### getPhysicalColumnDescriptor [#getphysicalcolumndescriptor]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * Executor::getPhysicalColumnDescriptor(
+    const Analyzer::ColumnVar *,
+    int
+) const
+```
+</CodeBlock>
+
+### getDataMgr [#getdatamgr]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::DataMgr * Executor::getDataMgr() const
+```
+</CodeBlock>
+
+### getRowSetMemoryOwner [#getrowsetmemoryowner]
+
+<CodeBlock links={{"Executor": "executor", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+const std::shared_ptr<RowSetMemoryOwner> Executor::getRowSetMemoryOwner() const
+```
+</CodeBlock>
+
+### getTableInfo [#gettableinfo]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::TableInfo Executor::getTableInfo(
+    const shared::TableKey &table_key
+) const
+```
+</CodeBlock>
+
+### getTableGeneration [#gettablegeneration]
+
+<CodeBlock links={{"Executor": "executor", "TableGeneration": "../structs/tablegeneration"}}>
+```cpp showLineNumbers={false}
+const TableGeneration & Executor::getTableGeneration(
+    const shared::TableKey &table_key
+) const
+```
+</CodeBlock>
+
+### getColRange [#getcolrange]
+
+<CodeBlock links={{"Executor": "executor", "PhysicalInput": "../structs/physicalinput", "ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange Executor::getColRange(
+    const PhysicalInput &
+) const
+```
+</CodeBlock>
+
+### getNumBytesForFetchedRow [#getnumbytesforfetchedrow]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+size_t Executor::getNumBytesForFetchedRow(
+    const std::set<shared::TableKey> &table_keys_to_fetch
+) const
+```
+</CodeBlock>
+
+### getColumnByteWidthMap [#getcolumnbytewidthmap]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::map<shared::ColumnKey, size_t> Executor::getColumnByteWidthMap(
+    const std::set<shared::TableKey> &table_ids_to_fetch,
+    const bool include_lazy_fetched_cols
+) const
+```
+</CodeBlock>
+
+### getChunkRequestInfo [#getchunkrequestinfo]
+
+<CodeBlock links={{"Executor": "executor", "InputDescriptor": "inputdescriptor", "InputTableInfo": "../structs/inputtableinfo", "ChunkRequestInfo": "../executorresourcemgrnamespace/structs/chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ChunkRequestInfo Executor::getChunkRequestInfo(
+    const ExecutorDeviceType device_type,
+    const std::vector<InputDescriptor> &input_descs,
+    const std::vector<InputTableInfo> &query_infos,
+    const std::vector<std::pair<int32_t, FragmentsList>> &device_fragment_lists
+) const
+```
+</CodeBlock>
+
+Determines a unique list of chunks and their associated byte sizes for a given query plan.
+
+Called by Executor::launchKernelsViaResourceMgr
+
+Note that we currently need the kernel's fragment lists generated in Executor::createKernels (which calls [QueryFragmentDescriptor::buildFragmentKernelMap](queryfragmentdescriptor#buildfragmentkernelmap)), but would be nice to hoist that logic out so that we could call this earlier, i.e. before compilation such that we don't waste compilation cycles in an attempt to run a query on GPU, only to see there are insufficient resources for it and it must be kicked to CPU
+
+Note this method currently has two key limitations:
+
+1. Only accounts for chunks in the lhs table if a join is involved.
+2. Conservatively estimates that column widths for intermediate results are always 8 bytes, when in some cases they may have a lower byte width.
+
+**Returns:** [ExecutorResourceMgr_Namespace::ChunkRequestInfo](../executorresourcemgrnamespace/structs/chunkrequestinfo) - contains various info used by ExecutorResourceMgr to gate (and soon optimize scheduling of) query step resource requests.
+
+**Parameters**
+
+<ParamField path="device_type" type="const ExecutorDeviceType">
+- Specifies whether the query needs CPU or GPU buffer pool memory
+</ParamField>
+
+<ParamField path="input_descs" type="const std::vector<InputDescriptor> &">
+- Tables needed by the query
+</ParamField>
+
+### hasLazyFetchColumns [#haslazyfetchcolumns]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::hasLazyFetchColumns(
+    const std::vector<Analyzer::Expr *> &target_exprs
+) const
+```
+</CodeBlock>
+
+### getColLazyFetchInfo [#getcollazyfetchinfo]
+
+<CodeBlock links={{"Executor": "executor", "ColumnLazyFetchInfo": "../structs/columnlazyfetchinfo"}}>
+```cpp showLineNumbers={false}
+std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
+    const std::vector<Analyzer::Expr *> &target_exprs
+) const
+```
+</CodeBlock>
+
+### unregisterActiveModule [#unregisteractivemodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::unregisterActiveModule(
+    int device_id
+) const
+```
+</CodeBlock>
+
+### interrupt [#interrupt]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::interrupt(
+    const QuerySessionId &query_session = "",
+    const QuerySessionId &interrupt_session = ""
+)
+```
+</CodeBlock>
+
+### resetInterrupt [#resetinterrupt]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::resetInterrupt()
+```
+</CodeBlock>
+
+### enableRuntimeQueryInterrupt [#enableruntimequeryinterrupt]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::enableRuntimeQueryInterrupt(
+    const double runtime_query_check_freq,
+    const unsigned pending_query_check_freq
+) const
+```
+</CodeBlock>
+
+### warpSize [#warpsize]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+int8_t Executor::warpSize() const
+```
+</CodeBlock>
+
+### gridSize [#gridsize]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+unsigned Executor::gridSize() const
+```
+</CodeBlock>
+
+### setGridSize [#setgridsize]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::setGridSize(
+    unsigned grid_size
+)
+```
+</CodeBlock>
+
+### resetGridSize [#resetgridsize]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::resetGridSize()
+```
+</CodeBlock>
+
+### numBlocksPerMP [#numblockspermp]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+unsigned Executor::numBlocksPerMP() const
+```
+</CodeBlock>
+
+### blockSize [#blocksize]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+unsigned Executor::blockSize() const
+```
+</CodeBlock>
+
+### setBlockSize [#setblocksize]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::setBlockSize(
+    unsigned block_size
+)
+```
+</CodeBlock>
+
+### resetBlockSize [#resetblocksize]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::resetBlockSize()
+```
+</CodeBlock>
+
+### maxGpuSlabSize [#maxgpuslabsize]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+size_t Executor::maxGpuSlabSize() const
+```
+</CodeBlock>
+
+### maxCpuSlabSize [#maxcpuslabsize]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+size_t Executor::maxCpuSlabSize() const
+```
+</CodeBlock>
+
+### executeWorkUnit [#executeworkunit]
+
+<CodeBlock links={{"Executor": "executor", "InputTableInfo": "../structs/inputtableinfo", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr Executor::executeWorkUnit(
+    size_t &max_groups_buffer_entry_guess,
+    const bool is_agg,
+    const std::vector<InputTableInfo> &,
+    const RelAlgExecutionUnit &,
+    const CompilationOptions &,
+    const ExecutionOptions &options,
+    RenderInfo *render_info,
+    const bool has_cardinality_estimation,
+    ColumnCacheMap &column_cache
+)
+```
+</CodeBlock>
+
+### executeUpdate [#executeupdate]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "InputTableInfo": "../structs/inputtableinfo", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RowSetMemoryOwner": "rowsetmemoryowner", "TableUpdateMetadata": "../structs/tableupdatemetadata"}}>
+```cpp showLineNumbers={false}
+TableUpdateMetadata Executor::executeUpdate(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<InputTableInfo> &table_infos,
+    const TableDescriptor *updated_table_desc,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    const Catalog_Namespace::Catalog &cat,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const UpdateLogForFragment::Callback &cb,
+    const bool is_agg
+)
+```
+</CodeBlock>
+
+### addTransientStringLiterals [#addtransientstringliterals]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void Executor::addTransientStringLiterals(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::shared_ptr<RowSetMemoryOwner> &row_set_mem_owner
+)
+```
+</CodeBlock>
+
+### buildTemporaryStringDictionaryIfNecessary [#buildtemporarystringdictionaryifnecessary]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::buildTemporaryStringDictionaryIfNecessary(
+    const Analyzer::Expr *expr
+)
+```
+</CodeBlock>
+
+### clearDevicesToUse [#cleardevicestouse]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::clearDevicesToUse()
+```
+</CodeBlock>
+
+### fixupAvailableDevicesToProcessForCpuQuery [#fixupavailabledevicestoprocessforcpuquery]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::fixupAvailableDevicesToProcessForCpuQuery()
+```
+</CodeBlock>
+
+### isDevicesToUseInitialized [#isdevicestouseinitialized]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::isDevicesToUseInitialized() const
+```
+</CodeBlock>
+
+### determineAvailableDevicesToProcessQuery [#determineavailabledevicestoprocessquery]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgNode": "relalgnode", "InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+void Executor::determineAvailableDevicesToProcessQuery(
+    const RelAlgNode *query_step_root_node,
+    std::vector<InputTableInfo> const &input_table_info,
+    size_t const query_step_idx,
+    ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+### getAvailableDevicesToProcessQuery [#getavailabledevicestoprocessquery]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::set<int> const  & Executor::getAvailableDevicesToProcessQuery() const
+```
+</CodeBlock>
+
+### mockDeviceIdSelectionLogicToOnlyUseSingleDevice [#mockdeviceidselectionlogictoonlyusesingledevice]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::mockDeviceIdSelectionLogicToOnlyUseSingleDevice()
+```
+</CodeBlock>
+
+### logSystemCPUMemoryStatus [#logsystemcpumemorystatus]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::logSystemCPUMemoryStatus(
+    std::string const &tag,
+    size_t const thread_idx
+) const
+```
+</CodeBlock>
+
+### logSystemGPUMemoryStatus [#logsystemgpumemorystatus]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::logSystemGPUMemoryStatus(
+    std::string const &tag,
+    size_t const thread_idx
+) const
+```
+</CodeBlock>
+
+### setupCaching [#setupcaching]
+
+<CodeBlock links={{"Executor": "executor", "PhysicalInput": "../structs/physicalinput"}}>
+```cpp showLineNumbers={false}
+void Executor::setupCaching(
+    const std::unordered_set<PhysicalInput> &phys_inputs,
+    const std::unordered_set<shared::TableKey> &phys_table_keys
+)
+```
+</CodeBlock>
+
+### setColRangeCache [#setcolrangecache]
+
+<CodeBlock links={{"Executor": "executor", "AggregatedColRange": "aggregatedcolrange"}}>
+```cpp showLineNumbers={false}
+void Executor::setColRangeCache(
+    const AggregatedColRange &aggregated_col_range
+)
+```
+</CodeBlock>
+
+### getExecutorId [#getexecutorid]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+ExecutorId Executor::getExecutorId() const
+```
+</CodeBlock>
+
+### getCurrentQuerySession [#getcurrentquerysession]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+QuerySessionId & Executor::getCurrentQuerySession(
+    heavyai::shared_lock<heavyai::shared_mutex> &read_lock
+)
+```
+</CodeBlock>
+
+### getQuerySessionStatus [#getquerysessionstatus]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+QuerySessionStatus::QueryStatus Executor::getQuerySessionStatus(
+    const QuerySessionId &candidate_query_session,
+    heavyai::shared_lock<heavyai::shared_mutex> &read_lock
+)
+```
+</CodeBlock>
+
+### checkCurrentQuerySession [#checkcurrentquerysession]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::checkCurrentQuerySession(
+    const std::string &candidate_query_session,
+    heavyai::shared_lock<heavyai::shared_mutex> &read_lock
+)
+```
+</CodeBlock>
+
+### invalidateRunningQuerySession [#invalidaterunningquerysession]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::invalidateRunningQuerySession(
+    heavyai::unique_lock<heavyai::shared_mutex> &write_lock
+)
+```
+</CodeBlock>
+
+### addToQuerySessionList [#addtoquerysessionlist]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::addToQuerySessionList(
+    const QuerySessionId &query_session,
+    const std::string &query_str,
+    const std::string &submitted,
+    const size_t executor_id,
+    const QuerySessionStatus::QueryStatus query_status,
+    heavyai::unique_lock<heavyai::shared_mutex> &write_lock
+)
+```
+</CodeBlock>
+
+### removeFromQuerySessionList [#removefromquerysessionlist]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::removeFromQuerySessionList(
+    const QuerySessionId &query_session,
+    const std::string &submitted_time_str,
+    heavyai::unique_lock<heavyai::shared_mutex> &write_lock
+)
+```
+</CodeBlock>
+
+### setQuerySessionAsInterrupted [#setquerysessionasinterrupted]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::setQuerySessionAsInterrupted(
+    const QuerySessionId &query_session,
+    heavyai::unique_lock<heavyai::shared_mutex> &write_lock
+)
+```
+</CodeBlock>
+
+### checkIsQuerySessionInterrupted [#checkisquerysessioninterrupted]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::checkIsQuerySessionInterrupted(
+    const std::string &query_session,
+    heavyai::shared_lock<heavyai::shared_mutex> &read_lock
+)
+```
+</CodeBlock>
+
+### checkIsQuerySessionEnrolled [#checkisquerysessionenrolled]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::checkIsQuerySessionEnrolled(
+    const QuerySessionId &query_session,
+    heavyai::shared_lock<heavyai::shared_mutex> &read_lock
+)
+```
+</CodeBlock>
+
+### updateQuerySessionStatusWithLock [#updatequerysessionstatuswithlock]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::updateQuerySessionStatusWithLock(
+    const QuerySessionId &query_session,
+    const std::string &submitted_time_str,
+    const QuerySessionStatus::QueryStatus updated_query_status,
+    heavyai::unique_lock<heavyai::shared_mutex> &write_lock
+)
+```
+</CodeBlock>
+
+### updateQuerySessionExecutorAssignment [#updatequerysessionexecutorassignment]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::updateQuerySessionExecutorAssignment(
+    const QuerySessionId &query_session,
+    const std::string &submitted_time_str,
+    const size_t executor_id,
+    heavyai::unique_lock<heavyai::shared_mutex> &write_lock
+)
+```
+</CodeBlock>
+
+### getQuerySessionInfo [#getquerysessioninfo]
+
+<CodeBlock links={{"Executor": "executor", "QuerySessionStatus": "querysessionstatus"}}>
+```cpp showLineNumbers={false}
+std::vector<QuerySessionStatus> Executor::getQuerySessionInfo(
+    const QuerySessionId &query_session,
+    heavyai::shared_lock<heavyai::shared_mutex> &read_lock
+)
+```
+</CodeBlock>
+
+### getSessionLock [#getsessionlock]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+heavyai::shared_mutex & Executor::getSessionLock()
+```
+</CodeBlock>
+
+### attachExecutorToQuerySession [#attachexecutortoquerysession]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+CurrentQueryStatus Executor::attachExecutorToQuerySession(
+    const QuerySessionId &query_session_id,
+    const std::string &query_str,
+    const std::string &query_submitted_time
+)
+```
+</CodeBlock>
+
+### checkPendingQueryStatus [#checkpendingquerystatus]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::checkPendingQueryStatus(
+    const QuerySessionId &query_session
+)
+```
+</CodeBlock>
+
+### clearQuerySessionStatus [#clearquerysessionstatus]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::clearQuerySessionStatus(
+    const QuerySessionId &query_session,
+    const std::string &submitted_time_str
+)
+```
+</CodeBlock>
+
+### updateQuerySessionStatus [#updatequerysessionstatus]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::updateQuerySessionStatus(
+    const QuerySessionId &query_session,
+    const std::string &submitted_time_str,
+    const QuerySessionStatus::QueryStatus new_query_status
+)
+```
+</CodeBlock>
+
+### enrollQuerySession [#enrollquerysession]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::enrollQuerySession(
+    const QuerySessionId &query_session,
+    const std::string &query_str,
+    const std::string &submitted_time_str,
+    const size_t executor_id,
+    const QuerySessionStatus::QueryStatus query_session_status
+)
+```
+</CodeBlock>
+
+### getNumCurentSessionsEnrolled [#getnumcurentsessionsenrolled]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+size_t Executor::getNumCurentSessionsEnrolled() const
+```
+</CodeBlock>
+
+### getExecutorIdsRunningQuery [#getexecutoridsrunningquery]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const std::vector<size_t> Executor::getExecutorIdsRunningQuery(
+    const QuerySessionId &interrupt_session
+) const
+```
+</CodeBlock>
+
+### checkNonKernelTimeInterrupted [#checknonkerneltimeinterrupted]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::checkNonKernelTimeInterrupted() const
+```
+</CodeBlock>
+
+### registerExtractedQueryPlanDag [#registerextractedqueryplandag]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::registerExtractedQueryPlanDag(
+    const QueryPlanDAG &query_plan_dag
+)
+```
+</CodeBlock>
+
+### getLatestQueryPlanDagExtracted [#getlatestqueryplandagextracted]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const QueryPlanDAG Executor::getLatestQueryPlanDagExtracted() const
+```
+</CodeBlock>
+
+### addToCardinalityCache [#addtocardinalitycache]
+
+<CodeBlock links={{"Executor": "executor", "CardinalityCacheKey": "../structs/cardinalitycachekey"}}>
+```cpp showLineNumbers={false}
+void Executor::addToCardinalityCache(
+    const CardinalityCacheKey &cache_key,
+    const size_t cache_value
+)
+```
+</CodeBlock>
+
+### getCachedCardinality [#getcachedcardinality]
+
+<CodeBlock links={{"Executor": "executor", "CardinalityCacheKey": "../structs/cardinalitycachekey"}}>
+```cpp showLineNumbers={false}
+Executor::CachedCardinality Executor::getCachedCardinality(
+    const CardinalityCacheKey &cache_key
+)
+```
+</CodeBlock>
+
+### getNumCachedCardinality [#getnumcachedcardinality]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+size_t Executor::getNumCachedCardinality() const
+```
+</CodeBlock>
+
+### getDataRecyclerLock [#getdatarecyclerlock]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+heavyai::shared_mutex & Executor::getDataRecyclerLock()
+```
+</CodeBlock>
+
+### getQueryPlanDagCache [#getqueryplandagcache]
+
+<CodeBlock links={{"Executor": "executor", "QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+QueryPlanDagCache & Executor::getQueryPlanDagCache()
+```
+</CodeBlock>
+
+### getResultSetRecyclerHolder [#getresultsetrecyclerholder]
+
+<CodeBlock links={{"Executor": "executor", "ResultSetRecyclerHolder": "resultsetrecyclerholder"}}>
+```cpp showLineNumbers={false}
+ResultSetRecyclerHolder & Executor::getResultSetRecyclerHolder()
+```
+</CodeBlock>
+
+### getCgenStatePtr [#getcgenstateptr]
+
+<CodeBlock links={{"Executor": "executor", "CgenState": "../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+CgenState * Executor::getCgenStatePtr() const
+```
+</CodeBlock>
+
+### getPlanStatePtr [#getplanstateptr]
+
+<CodeBlock links={{"Executor": "executor", "PlanState": "../structs/planstate"}}>
+```cpp showLineNumbers={false}
+PlanState * Executor::getPlanStatePtr() const
+```
+</CodeBlock>
+
+### getContext [#getcontext]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+llvm::LLVMContext & Executor::getContext()
+```
+</CodeBlock>
+
+### update_extension_modules [#updateextensionmodules]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::update_extension_modules(
+    bool update_runtime_modules_only = false
+)
+```
+</CodeBlock>
+
+### initializeCudaAllocator [#initializecudaallocator]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::initializeCudaAllocator()
+```
+</CodeBlock>
+
+### getCudaAllocator [#getcudaallocator]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+CudaAllocator * Executor::getCudaAllocator(
+    int device_id
+) const
+```
+</CodeBlock>
+
+### getCudaAllocatorShared [#getcudaallocatorshared]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CudaAllocator> Executor::getCudaAllocatorShared(
+    int device_id
+) const
+```
+</CodeBlock>
+
+### getCudaStream [#getcudastream]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+CUstream Executor::getCudaStream(
+    int device_id
+) const
+```
+</CodeBlock>
+
+### clearCudaAllocator [#clearcudaallocator]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::clearCudaAllocator()
+```
+</CodeBlock>
+
+### clearMetaInfoCache [#clearmetainfocache]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::clearMetaInfoCache()
+```
+</CodeBlock>
+
+### codegenWindowFunction [#codegenwindowfunction]
+
+<CodeBlock links={{"Executor": "executor", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::codegenWindowFunction(
+    const size_t target_index,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenConditionalAggregateCondValSelector [#codegenconditionalaggregatecondvalselector]
+
+<CodeBlock links={{"Executor": "executor", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::codegenConditionalAggregateCondValSelector(
+    llvm::Value *cond_lv,
+    SQLAgg const aggKind,
+    CompilationOptions const &co
+) const
+```
+</CodeBlock>
+
+### codegenWindowFunctionAggregate [#codegenwindowfunctionaggregate]
+
+<CodeBlock links={{"Executor": "executor", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::codegenWindowFunctionAggregate(
+    CodeGenerator *code_generator,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenWindowResetStateControlFlow [#codegenwindowresetstatecontrolflow]
+
+<CodeBlock links={{"Executor": "executor", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::pair<llvm::BasicBlock *, llvm::Value *> Executor::codegenWindowResetStateControlFlow(
+    CodeGenerator *code_generator,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenWindowFunctionStateInit [#codegenwindowfunctionstateinit]
+
+<CodeBlock links={{"Executor": "executor", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+void Executor::codegenWindowFunctionStateInit(
+    CodeGenerator *code_generator,
+    const CompilationOptions &co,
+    llvm::Value *aggregate_state
+)
+```
+</CodeBlock>
+
+### codegenWindowFunctionAggregateCalls [#codegenwindowfunctionaggregatecalls]
+
+<CodeBlock links={{"Executor": "executor", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::codegenWindowFunctionAggregateCalls(
+    llvm::Value *aggregate_state,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenWindowNavigationFunctionOnFrame [#codegenwindownavigationfunctiononframe]
+
+<CodeBlock links={{"Executor": "executor", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::codegenWindowNavigationFunctionOnFrame(
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenCurrentPartitionIndex [#codegencurrentpartitionindex]
+
+<CodeBlock links={{"Executor": "executor", "WindowFunctionContext": "windowfunctioncontext", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::codegenCurrentPartitionIndex(
+    const WindowFunctionContext *window_func_context,
+    CodeGenerator *code_generator,
+    const CompilationOptions &co,
+    llvm::Value *current_row_pos_lv
+)
+```
+</CodeBlock>
+
+### codegenFrameBoundExpr [#codegenframeboundexpr]
+
+<CodeBlock links={{"Executor": "executor", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::codegenFrameBoundExpr(
+    const Analyzer::WindowFunction *window_func,
+    const Analyzer::WindowFrame *frame_bound,
+    CodeGenerator &code_generator,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenFrameBound [#codegenframebound]
+
+<CodeBlock links={{"Executor": "executor", "WindowFrameBoundFuncLLVMArgs": "../windowfunctionctx/structs/windowframeboundfuncllvmargs"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::codegenFrameBound(
+    bool for_start_bound,
+    bool for_range_mode,
+    bool for_window_frame_naviation,
+    const Analyzer::WindowFrame *frame_bound,
+    bool is_timestamp_type_frame,
+    llvm::Value *order_key_null_val,
+    const WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs &args
+)
+```
+</CodeBlock>
+
+### codegenLoadOrderKeyBufPtr [#codegenloadorderkeybufptr]
+
+<CodeBlock links={{"Executor": "executor", "WindowFunctionContext": "windowfunctioncontext", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::pair<std::string, llvm::Value *> Executor::codegenLoadOrderKeyBufPtr(
+    WindowFunctionContext *window_func_context,
+    CodeGenerator *code_generator,
+    const CompilationOptions &co
+) const
+```
+</CodeBlock>
+
+### codegenFrameNullRange [#codegenframenullrange]
+
+<CodeBlock links={{"Executor": "executor", "WindowFunctionContext": "windowfunctioncontext", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::pair<llvm::Value *, llvm::Value *> Executor::codegenFrameNullRange(
+    WindowFunctionContext *window_func_context,
+    CodeGenerator *code_generator,
+    const CompilationOptions &co,
+    llvm::Value *partition_index_lv
+) const
+```
+</CodeBlock>
+
+### codegenLoadPartitionBuffers [#codegenloadpartitionbuffers]
+
+<CodeBlock links={{"Executor": "executor", "WindowFunctionContext": "windowfunctioncontext", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions", "WindowPartitionBufferLLVMArgs": "../windowfunctionctx/structs/windowpartitionbufferllvmargs"}}>
+```cpp showLineNumbers={false}
+WindowFunctionCtx::WindowPartitionBufferLLVMArgs Executor::codegenLoadPartitionBuffers(
+    WindowFunctionContext *window_func_context,
+    CodeGenerator *code_generator,
+    const CompilationOptions &co,
+    llvm::Value *partition_index_lv
+) const
+```
+</CodeBlock>
+
+### codegenWindowFrameBounds [#codegenwindowframebounds]
+
+<CodeBlock links={{"Executor": "executor", "WindowFunctionContext": "windowfunctioncontext", "WindowFrameBoundFuncLLVMArgs": "../windowfunctionctx/structs/windowframeboundfuncllvmargs", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::pair<llvm::Value *, llvm::Value *> Executor::codegenWindowFrameBounds(
+    WindowFunctionContext *window_func_context,
+    const Analyzer::WindowFrame *frame_start_bound,
+    const Analyzer::WindowFrame *frame_end_bound,
+    llvm::Value *order_key_col_null_val_lv,
+    WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs &args,
+    CodeGenerator &code_generator
+)
+```
+</CodeBlock>
+
+### codegenFrameBoundRange [#codegenframeboundrange]
+
+<CodeBlock links={{"Executor": "executor", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::pair<llvm::Value *, llvm::Value *> Executor::codegenFrameBoundRange(
+    const Analyzer::WindowFunction *window_func,
+    CodeGenerator &code_generator,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### prepareRowModeFuncArgs [#preparerowmodefuncargs]
+
+<CodeBlock links={{"Executor": "executor", "WindowFrameBoundFuncLLVMArgs": "../windowfunctionctx/structs/windowframeboundfuncllvmargs"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> Executor::prepareRowModeFuncArgs(
+    bool for_start_bound,
+    SqlWindowFrameBoundType bound_type,
+    const WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs &args
+) const
+```
+</CodeBlock>
+
+### prepareRangeModeFuncArgs [#preparerangemodefuncargs]
+
+<CodeBlock links={{"Executor": "executor", "WindowFrameBoundFuncLLVMArgs": "../windowfunctionctx/structs/windowframeboundfuncllvmargs"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> Executor::prepareRangeModeFuncArgs(
+    bool for_start_bound,
+    const Analyzer::WindowFrame *frame_bound,
+    bool is_timestamp_type_frame,
+    llvm::Value *order_key_null_val,
+    const WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs &frame_args
+) const
+```
+</CodeBlock>
+
+### getOrderKeyTypeName [#getorderkeytypename]
+
+<CodeBlock links={{"Executor": "executor", "WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const std::string Executor::getOrderKeyTypeName(
+    WindowFunctionContext *window_func_context
+) const
+```
+</CodeBlock>
+
+### codegenLoadCurrentValueFromColBuf [#codegenloadcurrentvaluefromcolbuf]
+
+<CodeBlock links={{"Executor": "executor", "WindowFunctionContext": "windowfunctioncontext", "CodeGenerator": "codegenerator", "WindowFrameBoundFuncLLVMArgs": "../windowfunctionctx/structs/windowframeboundfuncllvmargs"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::codegenLoadCurrentValueFromColBuf(
+    WindowFunctionContext *window_func_context,
+    CodeGenerator &code_generator,
+    WindowFunctionCtx::WindowFrameBoundFuncLLVMArgs &args
+) const
+```
+</CodeBlock>
+
+### getOrderKeySize [#getorderkeysize]
+
+<CodeBlock links={{"Executor": "executor", "WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+size_t Executor::getOrderKeySize(
+    WindowFunctionContext *window_func_context
+) const
+```
+</CodeBlock>
+
+### getFirstOrderColTypeInfo [#getfirstordercoltypeinfo]
+
+<CodeBlock links={{"Executor": "executor", "WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo Executor::getFirstOrderColTypeInfo(
+    WindowFunctionContext *window_func_context
+) const
+```
+</CodeBlock>
+
+### getFramingFuncName [#getframingfuncname]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::string Executor::getFramingFuncName(
+    const std::string &bound_type,
+    const std::string &order_col_type,
+    const std::string &op_type,
+    bool for_timestamp_type
+) const
+```
+</CodeBlock>
+
+### codegenWindowAvgEpilogue [#codegenwindowavgepilogue]
+
+<CodeBlock links={{"Executor": "executor", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+void Executor::codegenWindowAvgEpilogue(
+    CodeGenerator *code_generator,
+    const CompilationOptions &co,
+    llvm::Value *crt_val,
+    llvm::Value *window_func_null_val
+)
+```
+</CodeBlock>
+
+### codegenAggregateWindowState [#codegenaggregatewindowstate]
+
+<CodeBlock links={{"Executor": "executor", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::codegenAggregateWindowState(
+    CodeGenerator *code_generator,
+    const CompilationOptions &co,
+    llvm::Value *aggregate_state
+)
+```
+</CodeBlock>
+
+### aggregateWindowStatePtr [#aggregatewindowstateptr]
+
+<CodeBlock links={{"Executor": "executor", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::aggregateWindowStatePtr(
+    CodeGenerator *code_generator,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### cudaMgr [#cudamgr]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+CudaMgr_Namespace::CudaMgr * Executor::cudaMgr() const
+```
+</CodeBlock>
+
+### needFetchAllFragments [#needfetchallfragments]
+
+<CodeBlock links={{"Executor": "executor", "InputColDescriptor": "inputcoldescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+bool Executor::needFetchAllFragments(
+    const InputColDescriptor &col_desc,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const FragmentsList &selected_fragments
+) const
+```
+</CodeBlock>
+
+### needLinearizeAllFragments [#needlinearizeallfragments]
+
+<CodeBlock links={{"Executor": "executor", "InputColDescriptor": "inputcoldescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+bool Executor::needLinearizeAllFragments(
+    const ColumnDescriptor *cd,
+    const InputColDescriptor &inner_col_desc,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const FragmentsList &selected_fragments,
+    const Data_Namespace::MemoryLevel memory_level
+) const
+```
+</CodeBlock>
+
+### executeWorkUnitPerFragment [#executeworkunitperfragment]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "InputTableInfo": "../structs/inputtableinfo", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+void Executor::executeWorkUnitPerFragment(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const InputTableInfo &table_info,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    const Catalog_Namespace::Catalog &cat,
+    PerFragmentCallBack &cb,
+    const std::set<size_t> &fragment_indexes_param
+)
+```
+</CodeBlock>
+
+Compiles and dispatches a work unit per fragment processing results with the per fragment callback.
+
+Currently used for computing metrics over fragments (metadata).
+
+### executeExplain [#executeexplain]
+
+<CodeBlock links={{"Executor": "executor", "QueryCompilationDescriptor": "querycompilationdescriptor"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr Executor::executeExplain(
+    const QueryCompilationDescriptor &
+)
+```
+</CodeBlock>
+
+### executeTableFunction [#executetablefunction]
+
+<CodeBlock links={{"Executor": "executor", "TableFunctionExecutionUnit": "../structs/tablefunctionexecutionunit", "InputTableInfo": "../structs/inputtableinfo", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr Executor::executeTableFunction(
+    const TableFunctionExecutionUnit exe_unit,
+    const std::vector<InputTableInfo> &table_infos,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    gfx::GfxContext *gfx_context
+)
+```
+</CodeBlock>
+
+Compiles and dispatches a table function; that is, a function that takes as input one or more columns and returns a [ResultSet](resultset), which can be parsed by subsequent execution steps.
+
+### getDeviceTypeForTargets [#getdevicetypefortargets]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+ExecutorDeviceType Executor::getDeviceTypeForTargets(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const ExecutorDeviceType requested_device_type
+)
+```
+</CodeBlock>
+
+### collectAllDeviceResults [#collectalldeviceresults]
+
+<CodeBlock links={{"Executor": "executor", "SharedKernelContext": "sharedkernelcontext", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "QueryMemoryDescriptor": "querymemorydescriptor", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr Executor::collectAllDeviceResults(
+    SharedKernelContext &shared_context,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const ExecutorDeviceType device_type,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner
+)
+```
+</CodeBlock>
+
+### collectAllDeviceShardedTopResults [#collectalldeviceshardedtopresults]
+
+<CodeBlock links={{"Executor": "executor", "SharedKernelContext": "sharedkernelcontext", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr Executor::collectAllDeviceShardedTopResults(
+    SharedKernelContext &shared_context,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const ExecutorDeviceType device_type
+) const
+```
+</CodeBlock>
+
+### getInnerTabIdToJoinCond [#getinnertabidtojoincond]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::unordered_map<shared::TableKey, const Analyzer::BinOper *> Executor::getInnerTabIdToJoinCond() const
+```
+</CodeBlock>
+
+### createKernels [#createkernels]
+
+<CodeBlock links={{"Executor": "executor", "SharedKernelContext": "sharedkernelcontext", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "ColumnFetcher": "columnfetcher", "InputTableInfo": "../structs/inputtableinfo", "ExecutionOptions": "../structs/executionoptions", "QueryCompilationDescriptor": "querycompilationdescriptor", "QueryMemoryDescriptor": "querymemorydescriptor", "RenderInfo": "renderinfo", "ExecutionKernel": "executionkernel"}}>
+```cpp showLineNumbers={false}
+std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
+    SharedKernelContext &shared_context,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    ColumnFetcher &column_fetcher,
+    const std::vector<InputTableInfo> &table_infos,
+    const ExecutionOptions &eo,
+    const bool is_agg,
+    const bool allow_single_frag_table_opt,
+    const QueryCompilationDescriptor &query_comp_desc,
+    const QueryMemoryDescriptor &query_mem_desc,
+    RenderInfo *render_info
+)
+```
+</CodeBlock>
+
+Determines execution dispatch mode and required fragments for a given query step, then creates kernels to execute the query and returns them for launch.
+
+### launchKernelsImpl [#launchkernelsimpl]
+
+<CodeBlock links={{"Executor": "executor", "SharedKernelContext": "sharedkernelcontext", "ExecutionKernel": "executionkernel"}}>
+```cpp showLineNumbers={false}
+void Executor::launchKernelsImpl(
+    SharedKernelContext &shared_context,
+    std::vector<std::unique_ptr<ExecutionKernel>> &&kernels,
+    const ExecutorDeviceType device_type,
+    const size_t requested_num_threads
+)
+```
+</CodeBlock>
+
+Launches execution kernels created by `createKernels` asynchronously using a thread pool.
+
+### launchKernelsLocked [#launchkernelslocked]
+
+<CodeBlock links={{"Executor": "executor", "SharedKernelContext": "sharedkernelcontext", "ExecutionKernel": "executionkernel"}}>
+```cpp showLineNumbers={false}
+void Executor::launchKernelsLocked(
+    SharedKernelContext &shared_context,
+    std::vector<std::unique_ptr<ExecutionKernel>> &&kernels,
+    const ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+### launchKernelsViaResourceMgr [#launchkernelsviaresourcemgr]
+
+<CodeBlock links={{"Executor": "executor", "SharedKernelContext": "sharedkernelcontext", "ExecutionKernel": "executionkernel", "InputDescriptor": "inputdescriptor", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void Executor::launchKernelsViaResourceMgr(
+    SharedKernelContext &shared_context,
+    std::vector<std::unique_ptr<ExecutionKernel>> &&kernels,
+    const ExecutorDeviceType device_type,
+    const std::vector<InputDescriptor> &input_descs,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const size_t available_cpus
+)
+```
+</CodeBlock>
+
+Launches a vector of kernels for a given query step, gated/scheduled by ExecutorResourceMgr.
+
+This function first calculates the neccessary CPU, GPU, result set memory and buffer pool memory neccessary for the query, which it then requests from ExecutorResourceMgr. The query thread will be conditionally put into a wait state until there are enough resources to execute the query, which might or might not be concurrently with other query steps, depending on the resource grant policies in place and the resources needed by this thread's query step and all other in-flight queries requesting resources. After the thread is given the green light by ExecutorResourceMgr, it then calls launchKernelsImpl which does the actual work of launching the kernels.
+
+**Parameters**
+
+<ParamField path="shared_context" type="SharedKernelContext &">
+- Used to obtain [InputTableInfo](../structs/inputtableinfo) vector (query_infos) used for input chunk calculation
+</ParamField>
+
+<ParamField path="kernels" type="std::vector<std::unique_ptr<ExecutionKernel>> &&">
+- Vector of kernels that will be launched, one per fragment for CPU execution, but can be multi-fragment (one per device) for GPU execution
+</ParamField>
+
+<ParamField path="device_type" type="const ExecutorDeviceType">
+- Specifies whether the query step should run on CPU or GPU
+</ParamField>
+
+<ParamField path="input_descs" type="const std::vector<InputDescriptor> &">
+- Neccessary to get the input table and column ids for a query for input chunk calculation
+</ParamField>
+
+<ParamField path="query_mem_desc" type="const QueryMemoryDescriptor &">
+- Neccessary to get result set size per kernel
+</ParamField>
+
+### getTableFragmentIndices [#gettablefragmentindices]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+std::vector<size_t> Executor::getTableFragmentIndices(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const ExecutorDeviceType device_type,
+    const size_t table_idx,
+    const size_t outer_frag_idx,
+    std::map<shared::TableKey, const TableFragments *> &selected_tables_fragments,
+    const std::unordered_map<shared::TableKey, const Analyzer::BinOper *> &inner_table_id_to_join_condition
+)
+```
+</CodeBlock>
+
+### skipFragmentPair [#skipfragmentpair]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+bool Executor::skipFragmentPair(
+    const Fragmenter_Namespace::FragmentInfo &outer_fragment_info,
+    const Fragmenter_Namespace::FragmentInfo &inner_fragment_info,
+    const int inner_table_id,
+    const std::unordered_map<shared::TableKey, const Analyzer::BinOper *> &inner_table_id_to_join_condition,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+### fetchChunks [#fetchchunks]
+
+<CodeBlock links={{"Executor": "executor", "ColumnFetcher": "columnfetcher", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "FetchResult": "../structs/fetchresult"}}>
+```cpp showLineNumbers={false}
+FetchResult Executor::fetchChunks(
+    const ColumnFetcher &,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const int device_id,
+    const Data_Namespace::MemoryLevel,
+    const std::map<shared::TableKey, const TableFragments *> &,
+    const FragmentsList &selected_fragments,
+    std::list<ChunkIter> &,
+    std::list<std::shared_ptr<Chunk_NS::Chunk>> &,
+    DeviceAllocator *device_allocator,
+    const size_t thread_idx,
+    const bool allow_runtime_interrupt
+)
+```
+</CodeBlock>
+
+### fetchUnionChunks [#fetchunionchunks]
+
+<CodeBlock links={{"Executor": "executor", "ColumnFetcher": "columnfetcher", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "FetchResult": "../structs/fetchresult"}}>
+```cpp showLineNumbers={false}
+FetchResult Executor::fetchUnionChunks(
+    const ColumnFetcher &,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const int device_id,
+    const Data_Namespace::MemoryLevel,
+    const std::map<shared::TableKey, const TableFragments *> &,
+    const FragmentsList &selected_fragments,
+    std::list<ChunkIter> &,
+    std::list<std::shared_ptr<Chunk_NS::Chunk>> &,
+    DeviceAllocator *device_allocator,
+    const size_t thread_idx,
+    const bool allow_runtime_interrupt
+)
+```
+</CodeBlock>
+
+### getAllFragmentInfo [#getallfragmentinfo]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CartesianProduct": "cartesianproduct", "InputDescriptor": "inputdescriptor", "FetchResultFragmentInfo": "../structs/fetchresultfragmentinfo"}}>
+```cpp showLineNumbers={false}
+FetchResultFragmentInfo Executor::getAllFragmentInfo(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const CartesianProduct<std::vector<std::vector<size_t>>> &frag_ids_crossjoin,
+    const std::vector<InputDescriptor> &input_descs,
+    const std::map<shared::TableKey, const TableFragments *> &all_tables_fragments
+)
+```
+</CodeBlock>
+
+### buildSelectedFragsMapping [#buildselectedfragsmapping]
+
+<CodeBlock links={{"Executor": "executor", "InputColDescriptor": "inputcoldescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+void Executor::buildSelectedFragsMapping(
+    std::vector<std::vector<size_t>> &selected_fragments_crossjoin,
+    std::vector<size_t> &local_col_to_frag_pos,
+    const std::list<std::shared_ptr<const InputColDescriptor>> &col_global_ids,
+    const FragmentsList &selected_fragments,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+### buildSelectedFragsMappingForUnion [#buildselectedfragsmappingforunion]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+void Executor::buildSelectedFragsMappingForUnion(
+    std::vector<std::vector<size_t>> &selected_fragments_crossjoin,
+    const FragmentsList &selected_fragments,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+### getFragmentCount [#getfragmentcount]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+std::vector<size_t> Executor::getFragmentCount(
+    const FragmentsList &selected_fragments,
+    const size_t scan_idx,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+### executePlanWithGroupBy [#executeplanwithgroupby]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationResult": "../structs/compilationresult", "QueryExecutionContext": "queryexecutioncontext", "FetchResultFragmentInfo": "../structs/fetchresultfragmentinfo", "RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+int32_t Executor::executePlanWithGroupBy(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const CompilationResult &,
+    const bool hoist_literals,
+    ResultSetPtr *results,
+    const ExecutorDeviceType device_type,
+    std::vector<std::vector<const int8_t *>> &col_buffers,
+    const std::vector<size_t> outer_tab_frag_ids,
+    QueryExecutionContext *,
+    const FetchResultFragmentInfo &fragment_info,
+    Data_Namespace::DataMgr *,
+    const int device_id,
+    const shared::TableKey &outer_table_key,
+    const int64_t limit,
+    const uint32_t start_rowid,
+    const uint32_t num_tables,
+    const bool allow_runtime_interrupt,
+    RenderInfo *render_info,
+    const bool optimize_cuda_block_and_grid_sizes,
+    const int64_t rows_to_process = -1
+)
+```
+</CodeBlock>
+
+### executePlanWithoutGroupBy [#executeplanwithoutgroupby]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationResult": "../structs/compilationresult", "QueryExecutionContext": "queryexecutioncontext", "FetchResultFragmentInfo": "../structs/fetchresultfragmentinfo", "RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+int32_t Executor::executePlanWithoutGroupBy(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const CompilationResult &,
+    const bool hoist_literals,
+    ResultSetPtr *results,
+    const std::vector<Analyzer::Expr *> &target_exprs,
+    const ExecutorDeviceType device_type,
+    std::vector<std::vector<const int8_t *>> &col_buffers,
+    QueryExecutionContext *query_exe_context,
+    const FetchResultFragmentInfo &fragment_info,
+    Data_Namespace::DataMgr *data_mgr,
+    const int device_id,
+    const uint32_t start_rowid,
+    const uint32_t num_tables,
+    const bool allow_runtime_interrupt,
+    RenderInfo *render_info,
+    const bool optimize_cuda_block_and_grid_sizes,
+    const int64_t rows_to_process = -1
+)
+```
+</CodeBlock>
+
+### resultsUnion [#resultsunion]
+
+<CodeBlock links={{"Executor": "executor", "SharedKernelContext": "sharedkernelcontext", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr Executor::resultsUnion(
+    SharedKernelContext &shared_context,
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+### getJoinHashTablePtrs [#getjoinhashtableptrs]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::vector<int8_t *> Executor::getJoinHashTablePtrs(
+    const ExecutorDeviceType device_type,
+    const int device_id
+)
+```
+</CodeBlock>
+
+### reduceMultiDeviceResults [#reducemultideviceresults]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "RowSetMemoryOwner": "rowsetmemoryowner", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr Executor::reduceMultiDeviceResults(
+    const RelAlgExecutionUnit &,
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> &all_fragment_results,
+    std::shared_ptr<RowSetMemoryOwner>,
+    const QueryMemoryDescriptor &
+) const
+```
+</CodeBlock>
+
+### getUniqueThreadSharedResultSets [#getuniquethreadsharedresultsets]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> Executor::getUniqueThreadSharedResultSets(
+    const std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> &results_per_device
+) const
+```
+</CodeBlock>
+
+### reduceMultiDeviceResultSets [#reducemultideviceresultsets]
+
+<CodeBlock links={{"Executor": "executor", "RowSetMemoryOwner": "rowsetmemoryowner", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr Executor::reduceMultiDeviceResultSets(
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> &all_fragment_results,
+    std::shared_ptr<RowSetMemoryOwner>,
+    const QueryMemoryDescriptor &
+) const
+```
+</CodeBlock>
+
+### reduceSpeculativeTopN [#reducespeculativetopn]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "RowSetMemoryOwner": "rowsetmemoryowner", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr Executor::reduceSpeculativeTopN(
+    const RelAlgExecutionUnit &,
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> &all_fragment_results,
+    std::shared_ptr<RowSetMemoryOwner>,
+    const QueryMemoryDescriptor &
+) const
+```
+</CodeBlock>
+
+### executeWorkUnitImpl [#executeworkunitimpl]
+
+<CodeBlock links={{"Executor": "executor", "InputTableInfo": "../structs/inputtableinfo", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RowSetMemoryOwner": "rowsetmemoryowner", "RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr Executor::executeWorkUnitImpl(
+    size_t &max_groups_buffer_entry_guess,
+    const bool is_agg,
+    const bool allow_single_frag_table_opt,
+    const std::vector<InputTableInfo> &,
+    const RelAlgExecutionUnit &,
+    const CompilationOptions &,
+    const ExecutionOptions &options,
+    std::shared_ptr<RowSetMemoryOwner>,
+    RenderInfo *render_info,
+    const bool has_cardinality_estimation,
+    ColumnCacheMap &column_cache
+)
+```
+</CodeBlock>
+
+### inlineHoistedLiterals [#inlinehoistedliterals]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> Executor::inlineHoistedLiterals()
+```
+</CodeBlock>
+
+### AutoTrackBuffersInRuntimeIR [#autotrackbuffersinruntimeir]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::AutoTrackBuffersInRuntimeIR()
+```
+</CodeBlock>
+
+### compileWorkUnit [#compileworkunit]
+
+<CodeBlock links={{"Executor": "executor", "InputTableInfo": "../structs/inputtableinfo", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RowSetMemoryOwner": "rowsetmemoryowner", "RenderInfo": "renderinfo", "CompilationResult": "../structs/compilationresult", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+std::tuple<CompilationResult, std::unique_ptr<QueryMemoryDescriptor>> Executor::compileWorkUnit(
+    const std::vector<InputTableInfo> &query_infos,
+    const PlanState::DeletedColumnsMap &deleted_cols_map,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    const CudaMgr_Namespace::CudaMgr *cuda_mgr,
+    const bool allow_lazy_fetch,
+    std::shared_ptr<RowSetMemoryOwner>,
+    const size_t max_groups_buffer_entry_count,
+    const int8_t crt_min_byte_width,
+    const bool has_cardinality_estimation,
+    ColumnCacheMap &column_cache,
+    RenderInfo *render_info = nullptr
+)
+```
+</CodeBlock>
+
+### codegenSkipDeletedOuterTableRow [#codegenskipdeletedoutertablerow]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::BasicBlock * Executor::codegenSkipDeletedOuterTableRow(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### buildJoinLoops [#buildjoinloops]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "InputTableInfo": "../structs/inputtableinfo", "JoinLoop": "joinloop"}}>
+```cpp showLineNumbers={false}
+std::vector<JoinLoop> Executor::buildJoinLoops(
+    RelAlgExecutionUnit &ra_exe_unit,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    const std::vector<InputTableInfo> &query_infos,
+    ColumnCacheMap &column_cache
+)
+```
+</CodeBlock>
+
+### buildHoistLeftHandSideFiltersCb [#buildhoistlefthandsidefilterscb]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+JoinLoop::HoistedFiltersCallback Executor::buildHoistLeftHandSideFiltersCb(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const size_t level_idx,
+    const shared::TableKey &inner_table_key,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### buildIsDeletedCb [#buildisdeletedcb]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::function<llvm::Value *(
+    const std::vector<llvm::Value *> &,
+    llvm::Value *
+)
+```
+</CodeBlock>
+
+### buildCurrentLevelHashTable [#buildcurrentlevelhashtable]
+
+<CodeBlock links={{"Executor": "executor", "JoinCondition": "../structs/joincondition", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationOptions": "../structs/compilationoptions", "InputTableInfo": "../structs/inputtableinfo", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
+    const JoinCondition &current_level_join_conditions,
+    size_t level_idx,
+    RelAlgExecutionUnit &ra_exe_unit,
+    const CompilationOptions &co,
+    const std::vector<InputTableInfo> &query_infos,
+    ColumnCacheMap &column_cache,
+    std::vector<std::string> &fail_reasons
+)
+```
+</CodeBlock>
+
+### redeclareFilterFunction [#redeclarefilterfunction]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::redeclareFilterFunction()
+```
+</CodeBlock>
+
+### addJoinLoopIterator [#addjoinloopiterator]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::addJoinLoopIterator(
+    const std::vector<llvm::Value *> &prev_iters,
+    const size_t level_idx
+)
+```
+</CodeBlock>
+
+### codegenJoinLoops [#codegenjoinloops]
+
+<CodeBlock links={{"Executor": "executor", "JoinLoop": "joinloop", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+void Executor::codegenJoinLoops(
+    const std::vector<JoinLoop> &join_loops,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    GroupByAndAggregate &group_by_and_aggregate,
+    llvm::Function *query_func,
+    llvm::BasicBlock *entry_bb,
+    QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo
+)
+```
+</CodeBlock>
+
+### compileBody [#compilebody]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor", "CompilationOptions": "../structs/compilationoptions", "GpuSharedMemoryContext": "gpusharedmemorycontext"}}>
+```cpp showLineNumbers={false}
+bool Executor::compileBody(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    GroupByAndAggregate &group_by_and_aggregate,
+    QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    const GpuSharedMemoryContext &gpu_smem_context = {}
+)
+```
+</CodeBlock>
+
+### createErrorCheckControlFlow [#createerrorcheckcontrolflow]
+
+<CodeBlock links={{"Executor": "executor", "JoinLoop": "joinloop", "InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+void Executor::createErrorCheckControlFlow(
+    llvm::Function *query_func,
+    bool run_with_dynamic_watchdog,
+    bool run_with_allowing_runtime_interrupt,
+    const std::vector<JoinLoop> &join_loops,
+    ExecutorDeviceType device_type,
+    const std::vector<InputTableInfo> &input_table_infos
+)
+```
+</CodeBlock>
+
+### insertErrorCodeChecker [#inserterrorcodechecker]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::insertErrorCodeChecker(
+    llvm::Function *query_func,
+    unsigned const error_code_idx,
+    bool hoist_literals,
+    bool allow_runtime_query_interrupt
+)
+```
+</CodeBlock>
+
+### preloadFragOffsets [#preloadfragoffsets]
+
+<CodeBlock links={{"Executor": "executor", "InputDescriptor": "inputdescriptor", "InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+void Executor::preloadFragOffsets(
+    const std::vector<InputDescriptor> &input_descs,
+    const std::vector<InputTableInfo> &query_infos
+)
+```
+</CodeBlock>
+
+### buildHashTableForQualifier [#buildhashtableforqualifier]
+
+<CodeBlock links={{"Executor": "executor", "InputTableInfo": "../structs/inputtableinfo", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
+    const std::shared_ptr<Analyzer::BinOper> &qual_bin_oper,
+    const std::vector<InputTableInfo> &query_infos,
+    const MemoryLevel memory_level,
+    const JoinType join_type,
+    const HashType preferred_hash_type,
+    ColumnCacheMap &column_cache,
+    const HashTableBuildDagMap &hashtable_build_dag_map,
+    const RegisteredQueryHint &query_hint,
+    const TableIdToNodeMap &table_id_to_node_map
+)
+```
+</CodeBlock>
+
+### nukeOldState [#nukeoldstate]
+
+<CodeBlock links={{"Executor": "executor", "InputTableInfo": "../structs/inputtableinfo", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+void Executor::nukeOldState(
+    const bool allow_lazy_fetch,
+    const std::vector<InputTableInfo> &query_infos,
+    const PlanState::DeletedColumnsMap &deleted_cols_map,
+    const RelAlgExecutionUnit *ra_exe_unit
+)
+```
+</CodeBlock>
+
+### optimizeAndCodegenCPU [#optimizeandcodegencpu]
+
+<CodeBlock links={{"Executor": "executor", "CompilationOptions": "../structs/compilationoptions", "CompilationContext": "compilationcontext"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
+    llvm::Function *,
+    llvm::Function *,
+    const std::unordered_set<llvm::Function *> &,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### optimizeAndCodegenGPU [#optimizeandcodegengpu]
+
+<CodeBlock links={{"Executor": "executor", "CompilationOptions": "../structs/compilationoptions", "CompilationContext": "compilationcontext"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
+    llvm::Function *,
+    llvm::Function *,
+    std::unordered_set<llvm::Function *> &,
+    const bool no_inline,
+    const CudaMgr_Namespace::CudaMgr *cuda_mgr,
+    const bool is_gpu_smem_used,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### generatePTX [#generateptx]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::string Executor::generatePTX(
+    const std::string &
+) const
+```
+</CodeBlock>
+
+### initializeNVPTXBackend [#initializenvptxbackend]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::initializeNVPTXBackend() const
+```
+</CodeBlock>
+
+### deviceCycles [#devicecycles]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+int64_t Executor::deviceCycles(
+    int milliseconds
+) const
+```
+</CodeBlock>
+
+### groupByColumnCodegen [#groupbycolumncodegen]
+
+<CodeBlock links={{"Executor": "executor", "CompilationOptions": "../structs/compilationoptions", "DiamondCodegen": "../structs/diamondcodegen"}}>
+```cpp showLineNumbers={false}
+Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
+    Analyzer::Expr *group_by_col,
+    const size_t col_width,
+    const CompilationOptions &,
+    const bool translate_null_val,
+    const int64_t translated_null_val,
+    DiamondCodegen &,
+    std::stack<llvm::BasicBlock *> &,
+    const bool thread_mem_shared
+)
+```
+</CodeBlock>
+
+### castToFP [#casttofp]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::castToFP(
+    llvm::Value *,
+    SQLTypeInfo const &from_ti,
+    SQLTypeInfo const &to_ti
+)
+```
+</CodeBlock>
+
+### castToIntPtrTyIn [#casttointptrtyin]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+llvm::Value * Executor::castToIntPtrTyIn(
+    llvm::Value *val,
+    const size_t bit_width
+)
+```
+</CodeBlock>
+
+### addDeletedColumn [#adddeletedcolumn]
+
+<CodeBlock links={{"Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDeletedColumn(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### isFragmentFullyDeleted [#isfragmentfullydeleted]
+
+<CodeBlock links={{"Executor": "executor", "InputDescriptor": "inputdescriptor"}}>
+```cpp showLineNumbers={false}
+bool Executor::isFragmentFullyDeleted(
+    const InputDescriptor &table_desc,
+    const Fragmenter_Namespace::FragmentInfo &fragment
+)
+```
+</CodeBlock>
+
+### canSkipFragmentForFpQual [#canskipfragmentforfpqual]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+FragmentSkipStatus Executor::canSkipFragmentForFpQual(
+    const Analyzer::BinOper *comp_expr,
+    const Analyzer::ColumnVar *lhs_col,
+    const Fragmenter_Namespace::FragmentInfo &fragment,
+    const Analyzer::Constant *rhs_const
+) const
+```
+</CodeBlock>
+
+### skipFragment [#skipfragment]
+
+<CodeBlock links={{"Executor": "executor", "InputDescriptor": "inputdescriptor"}}>
+```cpp showLineNumbers={false}
+std::pair<bool, int64_t> Executor::skipFragment(
+    const InputDescriptor &table_desc,
+    const Fragmenter_Namespace::FragmentInfo &frag_info,
+    const std::list<std::shared_ptr<Analyzer::Expr>> &simple_quals,
+    const std::vector<uint64_t> &frag_offsets,
+    const size_t frag_idx
+)
+```
+</CodeBlock>
+
+### skipFragmentInnerJoins [#skipfragmentinnerjoins]
+
+<CodeBlock links={{"Executor": "executor", "InputDescriptor": "inputdescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(
+    const InputDescriptor &table_desc,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const Fragmenter_Namespace::FragmentInfo &fragment,
+    const std::vector<uint64_t> &frag_offsets,
+    const size_t frag_idx
+)
+```
+</CodeBlock>
+
+### computeColRangesCache [#computecolrangescache]
+
+<CodeBlock links={{"Executor": "executor", "PhysicalInput": "../structs/physicalinput", "AggregatedColRange": "aggregatedcolrange"}}>
+```cpp showLineNumbers={false}
+AggregatedColRange Executor::computeColRangesCache(
+    const std::unordered_set<PhysicalInput> &phys_inputs
+)
+```
+</CodeBlock>
+
+### computeStringDictionaryGenerations [#computestringdictionarygenerations]
+
+<CodeBlock links={{"Executor": "executor", "PhysicalInput": "../structs/physicalinput", "StringDictionaryGenerations": "stringdictionarygenerations"}}>
+```cpp showLineNumbers={false}
+StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
+    const std::unordered_set<PhysicalInput> &phys_inputs
+)
+```
+</CodeBlock>
+
+### computeTableGenerations [#computetablegenerations]
+
+<CodeBlock links={{"Executor": "executor", "TableGenerations": "tablegenerations"}}>
+```cpp showLineNumbers={false}
+TableGenerations Executor::computeTableGenerations(
+    const std::unordered_set<shared::TableKey> &phys_table_keys
+)
+```
+</CodeBlock>
+
+### serializeLiterals [#serializeliterals]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::vector<int8_t> Executor::serializeLiterals(
+    const std::unordered_map<int, CgenState::LiteralValues> &literals,
+    const int device_id
+)
+```
+</CodeBlock>
+
+Serialize variants from CgenState::LiteralValues into a std::vector&lt;int8_t&gt;.
+
+The returned std::vector&lt;int8_t&gt; has two consecutive sections:
+
+- Header: One entry for each literal (lit) whose size is given by LiteralBytes&#123;&#125;.
+If lit is a fundamental type, then store the value directly.
+If lit is a std::pair&lt;std::string, shared::StringDictKey&gt; store the string id.
+If lit is any other variable length type, store a packed offset and length. All values are aligned according to their size. For example if only a double is followed by an int32_t then they are simply stored consecutively. If they are reversed then the double must be aligned to an 8-byte offset, leaving a gap of 4 bytes in between them.
+   - If lit is a fundamental type, then store the value directly.
+   - If lit is a std::pair&lt;std::string, shared::StringDictKey&gt; store the string id.
+   - If lit is any other variable length type, store a packed offset and length. All values are aligned according to their size. [For](for) example if only a double is followed by an int32_t then they are simply stored consecutively. If they are reversed then the double must be aligned to an 8-byte offset, leaving a gap of 4 bytes in between them.
+- Variable Content: Each variable length lit represented by an offset and length in the Header are stored at the given byte offset in the std::vector&lt;int8_t&gt; and is of the given length (number of elements, not size in bytes - except for the std::pair&lt;std::vector&lt;int8_t&gt;,int&gt; type which stores size in bytes for some reason).
+
+### get_extension_module [#getextensionmodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const std::unique_ptr<llvm::Module> & Executor::get_extension_module(
+    ExtModuleKinds kind
+) const
+```
+</CodeBlock>
+
+### has_extension_module [#hasextensionmodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+bool Executor::has_extension_module(
+    ExtModuleKinds kind
+) const
+```
+</CodeBlock>
+
+### getActiveKernelModule [#getactivekernelmodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::unordered_map<int, void *> const  & Executor::getActiveKernelModule()
+```
+</CodeBlock>
+
+### acquireExecuteMutex [#acquireexecutemutex]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+ExecutorMutexHolder Executor::acquireExecuteMutex()
+```
+</CodeBlock>
+
+### align [#align]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+static size_t Executor::align(
+    const size_t off_in,
+    const size_t alignment
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### clearExternalCaches [#clearexternalcaches]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+static void Executor::clearExternalCaches(
+    bool for_update,
+    const TableDescriptor *td,
+    const int current_db_id
+)
+```
+</CodeBlock>
+
+### registerExtensionFunctions [#registerextensionfunctions]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+template <typename F>
+static void Executor::registerExtensionFunctions(
+    F register_extension_functions
+)
+```
+</CodeBlock>
+
+### getExecutor [#getexecutor]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Executor> Executor::getExecutor(
+    const ExecutorId id,
+    const std::string &debug_dir = "",
+    const std::string &debug_file = "",
+    const SystemParameters &system_parameters = SystemParameters()
+)
+```
+</CodeBlock>
+
+### nukeCacheOfExecutors [#nukecacheofexecutors]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+static void Executor::nukeCacheOfExecutors()
+```
+</CodeBlock>
+
+### clearMemory [#clearmemory]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::clearMemory(
+    const Data_Namespace::MemoryLevel memory_level
+)
+```
+</CodeBlock>
+
+### getArenaBlockSize [#getarenablocksize]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+size_t Executor::getArenaBlockSize()
+```
+</CodeBlock>
+
+### addUdfIrToModule [#addudfirtomodule]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::addUdfIrToModule(
+    const std::string &udf_ir_filename,
+    const bool is_cuda_ir
+)
+```
+</CodeBlock>
+
+### initialize_extension_module_sources [#initializeextensionmodulesources]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::initialize_extension_module_sources()
+```
+</CodeBlock>
+
+### reduceResults [#reduceresults]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::pair<int64_t, int32_t> Executor::reduceResults(
+    const SQLAgg agg,
+    const SQLTypeInfo &ti,
+    const int64_t agg_init_val,
+    const int8_t out_byte_width,
+    const int64_t *out_vec,
+    const size_t out_vec_sz,
+    const bool is_group_by,
+    const bool float_argument_input
+)
+```
+</CodeBlock>
+
+### clearCardinalityCache [#clearcardinalitycache]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::clearCardinalityCache()
+```
+</CodeBlock>
+
+### invalidateCardinalityCacheForTable [#invalidatecardinalitycachefortable]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::invalidateCardinalityCacheForTable(
+    const shared::TableKey &table_key
+)
+```
+</CodeBlock>
+
+### update_after_registration [#updateafterregistration]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+static void Executor::update_after_registration(
+    bool update_runtime_modules_only = false
+)
+```
+</CodeBlock>
+
+### init_resource_mgr [#initresourcemgr]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::init_resource_mgr(
+    const size_t num_cpu_slots,
+    const size_t num_gpu_slots,
+    const size_t cpu_result_mem,
+    const bool use_cpu_mem_pool_for_output_buffers,
+    const size_t cpu_buffer_pool_mem,
+    const size_t gpu_buffer_pool_mem,
+    const double per_query_max_cpu_slots_ratio,
+    const double per_query_max_cpu_result_mem_ratio,
+    const bool allow_cpu_kernel_concurrency,
+    const bool allow_cpu_gpu_kernel_concurrency,
+    const bool allow_cpu_slot_oversubscription_concurrency,
+    const bool allow_cpu_result_mem_oversubscription,
+    const double max_available_resource_use_ratio
+)
+```
+</CodeBlock>
+
+### pause_executor_queue [#pauseexecutorqueue]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::pause_executor_queue()
+```
+</CodeBlock>
+
+### resume_executor_queue [#resumeexecutorqueue]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::resume_executor_queue()
+```
+</CodeBlock>
+
+### get_executor_resource_pool_total_resource_quantity [#getexecutorresourcepooltotalresourcequantity]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+size_t Executor::get_executor_resource_pool_total_resource_quantity(
+    const ExecutorResourceMgr_Namespace::ResourceType resource_type
+)
+```
+</CodeBlock>
+
+### get_executor_resource_pool_info [#getexecutorresourcepoolinfo]
+
+<CodeBlock links={{"Executor": "executor", "ResourcePoolInfo": "../executorresourcemgrnamespace/structs/resourcepoolinfo"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ResourcePoolInfo Executor::get_executor_resource_pool_info()
+```
+</CodeBlock>
+
+### set_executor_resource_pool_resource [#setexecutorresourcepoolresource]
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void Executor::set_executor_resource_pool_resource(
+    const ExecutorResourceMgr_Namespace::ResourceType resource_type,
+    const size_t resource_quantity
+)
+```
+</CodeBlock>
+
+### get_concurrent_resource_grant_policy [#getconcurrentresourcegrantpolicy]
+
+<CodeBlock links={{"Executor": "executor", "ConcurrentResourceGrantPolicy": "../executorresourcemgrnamespace/structs/concurrentresourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+const ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy Executor::get_concurrent_resource_grant_policy(
+    const ExecutorResourceMgr_Namespace::ResourceType resource_type
+)
+```
+</CodeBlock>
+
+### set_concurrent_resource_grant_policy [#setconcurrentresourcegrantpolicy]
+
+<CodeBlock links={{"Executor": "executor", "ConcurrentResourceGrantPolicy": "../executorresourcemgrnamespace/structs/concurrentresourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+void Executor::set_concurrent_resource_grant_policy(
+    const ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy &concurrent_resource_grant_policy
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ExecutorId` | `size_t` |
+| `CachedCardinality` | `std::pair< bool, size_t >` |
+| `PerFragmentCallBack` | `std::function< void(ResultSetPtr, const Fragmenter_Namespace::FragmentInfo &)>` |
+
+### ExtModuleKinds
+
+| Name | Value | Description |
+|---|---|---|
+| `template_module` | | |
+| `udf_cpu_module` | | |
+| `udf_gpu_module` | | |
+| `rt_udf_cpu_module` | | |
+| `rt_udf_gpu_module` | | |
+| `rt_geos_module` | | |
+| `rt_libdevice_module` | | |
+| `rt_h3_module` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `UNITARY_EXECUTOR_ID` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `ExecutorId` | |
+| `INVALID_EXECUTOR_ID` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `ExecutorId` | |
+| `extension_module_sources` <Badge intent="note" minimal>static</Badge> | `std::map< ExtModuleKinds, std::string >` | |
+| `register_runtime_extension_functions_mutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+| `kernel_mutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+| `auto_cpu_mem_bytes` <Badge intent="note" minimal>static</Badge> | `const size_t` | |
+| `executor_resource_mgr_` <Badge intent="note" minimal>static</Badge> | `std::shared_ptr< ExecutorResourceMgr_Namespace::ExecutorResourceMgr >` | |
+| `executor_id_` | `const ExecutorId` | |
+| `context_` | `std::unique_ptr< llvm::LLVMContext >` | |
+| `cgen_state_` | `std::unique_ptr< CgenState >` | |
+| `extension_modules_` | `std::map< ExtModuleKinds, std::unique_ptr< llvm::Module > >` | |
+| `plan_state_` | `std::unique_ptr< PlanState >` | |
+| `row_set_mem_owner_` | `std::shared_ptr< RowSetMemoryOwner >` | |
+| `gpu_exec_mutex_` | `std::mutex` | |
+| `gpu_active_kernel_module_` | `std::unordered_map< int, void * >` | |
+| `interrupted_` | `std::atomic< bool >` | |
+| `str_dict_mutex_` | `std::mutex` | |
+| `nvptx_target_machine_` | `std::unique_ptr< llvm::TargetMachine >` | |
+| `block_size_x_` | `unsigned` | |
+| `grid_size_x_` | `unsigned` | |
+| `max_cpu_slab_size_` | `const size_t` | |
+| `max_gpu_slab_size_` | `const size_t` | |
+| `debug_dir_` | `const std::string` | |
+| `debug_file_` | `const std::string` | |
+| `data_mgr_` | `Data_Namespace::DataMgr *` | |
+| `cuda_allocators_` | `std::unordered_map< int, std::shared_ptr< CudaAllocator > >` | |
+| `cuda_streams_` | `std::unordered_map< int, CUstream >` | |
+| `device_ids_to_use_` | `std::set< int >` | |
+| `visited_rel_nodes_` | `std::unordered_set< size_t >` | |
+| `temporary_tables_` | `const TemporaryTables *` | |
+| `table_id_to_node_map_` | `TableIdToNodeMap` | |
+| `kernel_queue_time_ms_` | `int64_t` | |
+| `compilation_queue_time_ms_` | `int64_t` | |
+| `window_project_node_context_owned_` | `std::unique_ptr< WindowProjectNodeContext >` | |
+| `active_window_function_` | `WindowFunctionContext *` | |
+| `input_table_info_cache_` | `InputTableInfoCache` | |
+| `agg_col_range_cache_` | `AggregatedColRange` | |
+| `table_generations_` | `TableGenerations` | |
+| `current_query_session_` | `QuerySessionId` | |
+| `max_gpu_count` <Badge intent="note" minimal>static</Badge> | `const int` | |
+| `auto_num_threads` <Badge intent="note" minimal>static</Badge> | `const size_t` | |
+| `gpu_active_modules_mutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+| `last_selected_device_id_` <Badge intent="note" minimal>static</Badge> | `int` | |
+| `last_selected_device_id_mutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+| `executor_session_mutex_` <Badge intent="note" minimal>static</Badge> | `heavyai::shared_mutex` | |
+| `queries_interrupt_flag_` <Badge intent="note" minimal>static</Badge> | `InterruptFlagMap` | |
+| `queries_session_map_` <Badge intent="note" minimal>static</Badge> | `QuerySessionMap` | |
+| `executors_` <Badge intent="note" minimal>static</Badge> | `std::map< int, std::shared_ptr< Executor > >` | |
+| `execute_mutex_` <Badge intent="note" minimal>static</Badge> | `heavyai::shared_mutex` | |
+| `executors_cache_mutex_` <Badge intent="note" minimal>static</Badge> | `heavyai::shared_mutex` | |
+| `query_plan_dag_cache_` <Badge intent="note" minimal>static</Badge> | `QueryPlanDagCache` | |
+| `recycler_mutex_` <Badge intent="note" minimal>static</Badge> | `heavyai::shared_mutex` | |
+| `cardinality_cache_` <Badge intent="note" minimal>static</Badge> | `std::unordered_map< CardinalityCacheKey, size_t >` | |
+| `resultset_recycler_holder_` <Badge intent="note" minimal>static</Badge> | `ResultSetRecyclerHolder` | |
+| `latest_query_plan_extracted_` <Badge intent="note" minimal>static</Badge> | `QueryPlanDAG` | |
+| `compilation_mutex_` | `std::mutex` | |
+
+---
+
+## Inner classes
+
+### JoinHashTableOrError
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+struct Executor::JoinHashTableOrError
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `hash_table` | `std::shared_ptr< HashJoin >` | |
+| `fail_reason` | `std::string` | |
+
+### GroupColLLVMValue
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+struct Executor::GroupColLLVMValue
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `translated_value` | `llvm::Value *` | |
+| `original_value` | `llvm::Value *` | |
+
+### CgenStateManager
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+class Executor::CgenStateManager
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_` | `Executor &` | |
+| `lock_queue_clock_` | `std::chrono::steady_clock::time_point` | |
+| `lock_` | `std::lock_guard< std::mutex >` | |
+| `cgen_state_` | `std::unique_ptr< CgenState >` | |
+
+### FetchCacheAnchor
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+class Executor::FetchCacheAnchor
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `cgen_state_` | `CgenState *` | |
+| `saved_fetch_cache` | `std::unordered_map< size_t, std::vector< llvm::Value * > >` | |
+
+### ExecutorMutexHolder
+
+<CodeBlock links={{"Executor": "executor"}}>
+```cpp showLineNumbers={false}
+struct Executor::ExecutorMutexHolder
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `shared_lock` | `heavyai::shared_lock< heavyai::shared_mutex >` | |
+| `unique_lock` | `heavyai::unique_lock< heavyai::shared_mutex >` | |

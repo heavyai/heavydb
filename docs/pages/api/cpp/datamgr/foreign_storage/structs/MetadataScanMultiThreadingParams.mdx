@@ -1,0 +1,30 @@
+---
+title: foreign_storage::MetadataScanMultiThreadingParams
+description: "Data structure used to hold shared objects needed for inter-thread synchronization or objects containing data that is updated by multiple threads while scanning files for metadata."
+---
+
+Data structure used to hold shared objects needed for inter-thread synchronization or objects containing data that is updated by multiple threads while scanning files for metadata.
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/AbstractTextFileDataWrapper.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `pending_requests` | `std::queue< ParseBufferRequest >` | |
+| `deferred_requests` | `std::queue< ParseBufferRequest >` | |
+| `pending_requests_mutex` | `std::mutex` | |
+| `deferred_requests_mutex` | `std::mutex` | |
+| `pending_requests_condition` | `std::condition_variable` | |
+| `request_pool` | `std::queue< ParseBufferRequest >` | |
+| `request_pool_mutex` | `std::mutex` | |
+| `request_pool_condition` | `std::condition_variable` | |
+| `continue_processing` | `bool` | |
+| `chunk_encoder_buffers` | `std::map< ChunkKey, std::unique_ptr< ForeignStorageBuffer > >` | |
+| `cached_chunks` | `std::map< ChunkKey, Chunk_NS::Chunk >` | |
+| `chunk_encoder_buffers_mutex` | `std::mutex` | |
+| `disable_cache` | `bool` | |

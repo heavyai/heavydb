@@ -1,0 +1,65 @@
+---
+title: Parser::InsertStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DMLStmt` (public)
+
+---
+
+## Constructors
+
+### InsertStmt [#insertstmt]
+
+<CodeBlock links={{"InsertStmt": "insertstmt"}}>
+```cpp showLineNumbers={false}
+Parser::InsertStmt::InsertStmt(
+    std::string *t,
+    std::list<std::string *> *c
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_table [#gettable]
+
+<CodeBlock links={{"InsertStmt": "insertstmt"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::InsertStmt::get_table() const
+```
+</CodeBlock>
+
+### get_column_list [#getcolumnlist]
+
+<CodeBlock links={{"InsertStmt": "insertstmt"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<std::string>> & Parser::InsertStmt::get_column_list() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"InsertStmt": "insertstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::InsertStmt::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |
+| `column_list_` | `std::list< std::unique_ptr< std::string > >` | |

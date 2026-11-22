@@ -1,0 +1,16 @@
+---
+title: writeBackCellArrayScalar
+description: ""
+---
+
+<CodeBlock links={{"FlatBufferManager": "../structs/flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <typename scalar_type, typename value_type>
+void writeBackCellArrayScalar(
+    FlatBufferManager &m,
+    const size_t row_idx,
+    const TargetValue &col_val,
+    std::mutex *write_mutex
+)
+```
+</CodeBlock>

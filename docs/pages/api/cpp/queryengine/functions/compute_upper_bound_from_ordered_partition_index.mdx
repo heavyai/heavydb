@@ -1,0 +1,21 @@
+---
+title: compute_upper_bound_from_ordered_partition_index
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename TARGET_VAL_TYPE, typename COL_TYPE, typename NULL_TYPE>
+int64_t compute_upper_bound_from_ordered_partition_index(
+    const int64_t num_elems,
+    const TARGET_VAL_TYPE target_val,
+    const COL_TYPE *col_buf,
+    const int32_t *partition_rowid_buf,
+    const int64_t *ordered_index_buf,
+    const NULL_TYPE null_val,
+    const bool nulls_first,
+    const int64_t null_start_offset,
+    const int64_t null_end_offset
+)
+```
+</CodeBlock>

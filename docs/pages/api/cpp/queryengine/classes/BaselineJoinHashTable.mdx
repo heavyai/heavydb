@@ -1,0 +1,911 @@
+---
+title: BaselineJoinHashTable
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <BaselineJoinHashTable.h>
+```
+
+**Inherits from:** `HashJoin` (public)
+
+---
+
+## Constructors
+
+### BaselineJoinHashTable [#baselinejoinhashtable]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "InputTableInfo": "../structs/inputtableinfo", "Executor": "executor", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+BaselineJoinHashTable::BaselineJoinHashTable(
+    const std::shared_ptr<Analyzer::BinOper> condition,
+    const JoinType join_type,
+    const std::vector<InputTableInfo> &query_infos,
+    const Data_Namespace::MemoryLevel memory_level,
+    ColumnCacheMap &column_cache,
+    Executor *executor,
+    const std::vector<InnerOuter> &inner_outer_pairs,
+    const std::vector<InnerOuterStringOpInfos> &col_pairs_string_op_infos,
+    const std::set<int> &device_ids,
+    const RegisteredQueryHint &query_hints,
+    const HashTableBuildDagMap &hashtable_build_dag_map,
+    const TableIdToNodeMap &table_id_to_node_map
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~BaselineJoinHashTable
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+virtual BaselineJoinHashTable::~BaselineJoinHashTable()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### toString [#tostring]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::string BaselineJoinHashTable::toString(
+    const ExecutorDeviceType device_type,
+    const int device_id = 0,
+    bool raw = false
+) const override
+```
+</CodeBlock>
+
+### toSet [#toset]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "DecodedJoinHashBufferEntry": "../structs/decodedjoinhashbufferentry"}}>
+```cpp showLineNumbers={false}
+std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::toSet(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const override
+```
+</CodeBlock>
+
+### codegenSlot [#codegenslot]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * BaselineJoinHashTable::codegenSlot(
+    const CompilationOptions &,
+    const size_t
+) override
+```
+</CodeBlock>
+
+### codegenMatchingSet [#codegenmatchingset]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "CompilationOptions": "../structs/compilationoptions", "HashJoinMatchingSet": "../structs/hashjoinmatchingset"}}>
+```cpp showLineNumbers={false}
+HashJoinMatchingSet BaselineJoinHashTable::codegenMatchingSet(
+    const CompilationOptions &,
+    const size_t
+) override
+```
+</CodeBlock>
+
+### getInnerTableId [#getinnertableid]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+shared::TableKey BaselineJoinHashTable::getInnerTableId() const noexcept override
+```
+</CodeBlock>
+
+### getInnerTableRteIdx [#getinnertablerteidx]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+int BaselineJoinHashTable::getInnerTableRteIdx() const noexcept override
+```
+</CodeBlock>
+
+### getHashType [#gethashtype]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+HashType BaselineJoinHashTable::getHashType() const noexcept override
+```
+</CodeBlock>
+
+### getMemoryLevel [#getmemorylevel]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::MemoryLevel BaselineJoinHashTable::getMemoryLevel() const noexcept override
+```
+</CodeBlock>
+
+### offsetBufferOff [#offsetbufferoff]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t BaselineJoinHashTable::offsetBufferOff() const noexcept override
+```
+</CodeBlock>
+
+### countBufferOff [#countbufferoff]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t BaselineJoinHashTable::countBufferOff() const noexcept override
+```
+</CodeBlock>
+
+### payloadBufferOff [#payloadbufferoff]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t BaselineJoinHashTable::payloadBufferOff() const noexcept override
+```
+</CodeBlock>
+
+### getHashJoinType [#gethashjointype]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::string BaselineJoinHashTable::getHashJoinType() const
+```
+</CodeBlock>
+
+### getRegisteredQueryHint [#getregisteredqueryhint]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+const RegisteredQueryHint & BaselineJoinHashTable::getRegisteredQueryHint()
+```
+</CodeBlock>
+
+### toStringFlat64 [#tostringflat64]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::string BaselineJoinHashTable::toStringFlat64(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### toStringFlat32 [#tostringflat32]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::string BaselineJoinHashTable::toStringFlat32(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### fetchJoinColumn [#fetchjoincolumn]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "Executor": "executor", "JoinColumn": "../structs/joincolumn", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+JoinColumn BaselineJoinHashTable::fetchJoinColumn(
+    const Analyzer::ColumnVar *hash_col,
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragment_info,
+    const Data_Namespace::MemoryLevel effective_memory_level,
+    const int device_id,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>> &chunks_owner,
+    DeviceAllocator *dev_buff_owner,
+    std::vector<std::shared_ptr<void>> &malloc_owner,
+    Executor *executor,
+    ColumnCacheMap *column_cache
+)
+```
+</CodeBlock>
+
+fetchJoinColumn() calls ColumnFetcher::makeJoinColumn(), then copies the [JoinColumn](../structs/joincolumn)'s col_chunks_buff memory onto the GPU if required by the effective_memory_level parameter. The dev_buff_owner parameter will manage the GPU memory.
+
+### getJoinHashBufferSize [#getjoinhashbuffersize]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+size_t BaselineJoinHashTable::getJoinHashBufferSize(
+    const ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+size_t BaselineJoinHashTable::getJoinHashBufferSize(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getJoinHashBuffer [#getjoinhashbuffer]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+int8_t * BaselineJoinHashTable::getJoinHashBuffer(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### freeHashBufferMemory [#freehashbuffermemory]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void BaselineJoinHashTable::freeHashBufferMemory()
+```
+</CodeBlock>
+
+### getHashTableForDevice [#gethashtablefordevice]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashTable": "hashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashTable> BaselineJoinHashTable::getHashTableForDevice(
+    int device_id
+) const
+```
+</CodeBlock>
+
+### replaceHashTableForDevice [#replacehashtablefordevice]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashTable": "hashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void BaselineJoinHashTable::replaceHashTableForDevice(
+    std::shared_ptr<HashTable> &&hash_table,
+    int device_id
+)
+```
+</CodeBlock>
+
+### getAnyHashTableForDevice [#getanyhashtablefordevice]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashTable": "hashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashTable> BaselineJoinHashTable::getAnyHashTableForDevice() const
+```
+</CodeBlock>
+
+### moveHashTableForDevice [#movehashtablefordevice]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashTable": "hashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void BaselineJoinHashTable::moveHashTableForDevice(
+    std::shared_ptr<HashTable> &&hash_table,
+    int device_id
+)
+```
+</CodeBlock>
+
+### putHashTableForDevice [#puthashtablefordevice]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashTable": "hashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void BaselineJoinHashTable::putHashTableForDevice(
+    std::shared_ptr<HashTable> hash_table,
+    int device_id
+)
+```
+</CodeBlock>
+
+### clearHashTableForDevice [#clearhashtablefordevice]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void BaselineJoinHashTable::clearHashTableForDevice()
+```
+</CodeBlock>
+
+### getComponentBufferSize [#getcomponentbuffersize]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t BaselineJoinHashTable::getComponentBufferSize() const noexcept override
+```
+</CodeBlock>
+
+### getKeyBufferSize [#getkeybuffersize]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t BaselineJoinHashTable::getKeyBufferSize() const noexcept
+```
+</CodeBlock>
+
+### reifyWithLayout [#reifywithlayout]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+void BaselineJoinHashTable::reifyWithLayout(
+    const HashType layout
+)
+```
+</CodeBlock>
+
+### fetchColumnsForDevice [#fetchcolumnsfordevice]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice"}}>
+```cpp showLineNumbers={false}
+ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDevice(
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragments,
+    const int device_id,
+    DeviceAllocator *dev_buff_owner
+)
+```
+</CodeBlock>
+
+### approximateTupleCount [#approximatetuplecount]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
+    const std::unordered_map<int, ColumnsForDevice> &
+) const
+```
+</CodeBlock>
+
+### getKeyComponentWidth [#getkeycomponentwidth]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t BaselineJoinHashTable::getKeyComponentWidth() const
+```
+</CodeBlock>
+
+### getKeyComponentCount [#getkeycomponentcount]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t BaselineJoinHashTable::getKeyComponentCount() const
+```
+</CodeBlock>
+
+### codegenKey [#codegenkey]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * BaselineJoinHashTable::codegenKey(
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### shardCount [#shardcount]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t BaselineJoinHashTable::shardCount() const
+```
+</CodeBlock>
+
+### getEffectiveMemoryLevel [#geteffectivememorylevel]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::MemoryLevel BaselineJoinHashTable::getEffectiveMemoryLevel(
+    const std::vector<InnerOuter> &inner_outer_pairs
+) const
+```
+</CodeBlock>
+
+### reify [#reify]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+void BaselineJoinHashTable::reify(
+    const HashType preferred_layout
+)
+```
+</CodeBlock>
+
+### copyCpuHashTableToGpu [#copycpuhashtabletogpu]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "BaselineHashTable": "baselinehashtable"}}>
+```cpp showLineNumbers={false}
+void BaselineJoinHashTable::copyCpuHashTableToGpu(
+    std::shared_ptr<BaselineHashTable> &cpu_hash_table,
+    const int device_id
+)
+```
+</CodeBlock>
+
+### reifyForDevice [#reifyfordevice]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice", "BaselineHashTableEntryInfo": "baselinehashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void BaselineJoinHashTable::reifyForDevice(
+    const ColumnsForDevice &columns_for_device,
+    const HashType layout,
+    const int device_id,
+    const BaselineHashTableEntryInfo hash_table_entry_info,
+    const logger::ThreadLocalIds parent_thread_local_ids
+)
+```
+</CodeBlock>
+
+### initHashTableForDevice [#inithashtablefordevice]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo", "JoinBucketInfo": "../structs/joinbucketinfo", "BaselineHashTableEntryInfo": "baselinehashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+int BaselineJoinHashTable::initHashTableForDevice(
+    const std::vector<JoinColumn> &join_columns,
+    const std::vector<JoinColumnTypeInfo> &join_column_types,
+    const std::vector<JoinBucketInfo> &join_buckets,
+    const HashType layout,
+    const Data_Namespace::MemoryLevel effective_memory_level,
+    const BaselineHashTableEntryInfo hash_table_entry_info,
+    const int device_id
+)
+```
+</CodeBlock>
+
+### hashPtr [#hashptr]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+llvm::Value * BaselineJoinHashTable::hashPtr(
+    const size_t index
+)
+```
+</CodeBlock>
+
+### initHashTableOnCpuFromCache [#inithashtableoncpufromcache]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashTable> BaselineJoinHashTable::initHashTableOnCpuFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### putHashTableOnCpuToCache [#puthashtableoncputocache]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+void BaselineJoinHashTable::putHashTableOnCpuToCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    std::shared_ptr<HashTable> hashtable_ptr,
+    DeviceIdentifier device_identifier,
+    size_t hashtable_building_time
+)
+```
+</CodeBlock>
+
+### isBitwiseEq [#isbitwiseeq]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+bool BaselineJoinHashTable::isBitwiseEq() const override
+```
+</CodeBlock>
+
+### genChunkKey [#genchunkkey]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+ChunkKey BaselineJoinHashTable::genChunkKey(
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragments
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getInstance [#getinstance]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "InputTableInfo": "../structs/inputtableinfo", "Executor": "executor", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
+    const std::shared_ptr<Analyzer::BinOper> condition,
+    const std::vector<InputTableInfo> &query_infos,
+    const Data_Namespace::MemoryLevel memory_level,
+    const JoinType join_type,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor,
+    const HashTableBuildDagMap &hashtable_build_dag_map,
+    const RegisteredQueryHint &query_hints,
+    const TableIdToNodeMap &table_id_to_node_map
+)
+```
+</CodeBlock>
+
+Make hash table from an in-flight SQL query's parse tree etc.
+
+### getShardCountForCondition [#getshardcountforcondition]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+size_t BaselineJoinHashTable::getShardCountForCondition(
+    const Analyzer::BinOper *condition,
+    const Executor *executor,
+    const std::vector<InnerOuter> &inner_outer_pairs
+)
+```
+</CodeBlock>
+
+### invalidateCache [#invalidatecache]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+static void BaselineJoinHashTable::invalidateCache()
+```
+</CodeBlock>
+
+### markCachedItemAsDirty [#markcacheditemasdirty]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+static void BaselineJoinHashTable::markCachedItemAsDirty(
+    size_t table_key
+)
+```
+</CodeBlock>
+
+### getHashTableCache [#gethashtablecache]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+static HashtableRecycler * BaselineJoinHashTable::getHashTableCache()
+```
+</CodeBlock>
+
+### getHashingSchemeCache [#gethashingschemecache]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashingSchemeRecycler": "hashingschemerecycler"}}>
+```cpp showLineNumbers={false}
+static HashingSchemeRecycler * BaselineJoinHashTable::getHashingSchemeCache()
+```
+</CodeBlock>
+
+### codegenMatchingSet [#codegenmatchingset]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "Executor": "executor", "HashJoinMatchingSet": "../structs/hashjoinmatchingset", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+HashJoinMatchingSet BaselineJoinHashTable::codegenMatchingSet(
+    const std::vector<llvm::Value *> &hash_join_idx_args_in,
+    const bool is_sharded,
+    const bool col_is_nullable,
+    const bool is_bw_eq,
+    const int64_t sub_buff_size,
+    Executor *executor,
+    const bool is_bucketized = false
+)
+```
+</CodeBlock>
+
+### getMaximumNumHashEntriesCanHold [#getmaximumnumhashentriescanhold]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+size_t BaselineJoinHashTable::getMaximumNumHashEntriesCanHold(
+    MemoryLevel memory_level,
+    const Executor *executor,
+    size_t rowid_size
+) noexcept
+```
+</CodeBlock>
+
+### generateTooManyHashEntriesErrMsg [#generatetoomanyhashentrieserrmsg]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+static std::string BaselineJoinHashTable::generateTooManyHashEntriesErrMsg(
+    size_t num_entries,
+    size_t threshold,
+    MemoryLevel memory_level
+)
+```
+</CodeBlock>
+
+### layoutRequiresAdditionalBuffers [#layoutrequiresadditionalbuffers]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+static bool BaselineJoinHashTable::layoutRequiresAdditionalBuffers(
+    HashType layout
+) noexcept
+```
+</CodeBlock>
+
+### getHashTypeString [#gethashtypestring]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+static std::string BaselineJoinHashTable::getHashTypeString(
+    HashType ht
+) noexcept
+```
+</CodeBlock>
+
+### codegenHashTableLoad [#codegenhashtableload]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+llvm::Value * BaselineJoinHashTable::codegenHashTableLoad(
+    const size_t table_idx,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### getSyntheticInstance [#getsyntheticinstance]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashJoin> BaselineJoinHashTable::getSyntheticInstance(
+    std::string_view table1,
+    std::string_view column1,
+    const Catalog_Namespace::Catalog &catalog1,
+    std::string_view table2,
+    std::string_view column2,
+    const Catalog_Namespace::Catalog &catalog2,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+Make hash table from named tables and columns (such as for testing).
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashJoin> BaselineJoinHashTable::getSyntheticInstance(
+    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+Make hash table from named tables and columns (such as for testing).
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::pair<std::string, std::shared_ptr<HashJoin>> BaselineJoinHashTable::getSyntheticInstance(
+    std::vector<std::shared_ptr<Analyzer::BinOper>>,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### canAccessHashTable [#canaccesshashtable]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+bool BaselineJoinHashTable::canAccessHashTable(
+    bool allow_hash_table_recycling,
+    bool invalid_cache_key,
+    JoinType join_type
+)
+```
+</CodeBlock>
+
+### normalizeColumnPair [#normalizecolumnpair]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::pair<InnerOuter, InnerOuterStringOpInfos> BaselineJoinHashTable::normalizeColumnPair(
+    const Analyzer::Expr *lhs,
+    const Analyzer::Expr *rhs,
+    const TemporaryTables *temporary_tables,
+    const bool is_bbox_intersect = false
+)
+```
+</CodeBlock>
+
+### getHashJoinColumn [#gethashjoincolumn]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+const T * BaselineJoinHashTable::getHashJoinColumn(
+    const Analyzer::Expr *expr
+)
+```
+</CodeBlock>
+
+### normalizeColumnPairs [#normalizecolumnpairs]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>> BaselineJoinHashTable::normalizeColumnPairs(
+    const Analyzer::BinOper *condition,
+    const TemporaryTables *temporary_tables
+)
+```
+</CodeBlock>
+
+### collectFragmentIds [#collectfragmentids]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::vector<int> BaselineJoinHashTable::collectFragmentIds(
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragments
+)
+```
+</CodeBlock>
+
+### getCompositeKeyInfo [#getcompositekeyinfo]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "Executor": "executor", "CompositeKeyInfo": "../structs/compositekeyinfo", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyInfo(
+    const std::vector<InnerOuter> &inner_outer_pairs,
+    const Executor *executor,
+    const std::vector<InnerOuterStringOpInfos> &inner_outer_string_op_infos_pairs = {}
+)
+```
+</CodeBlock>
+
+### translateCompositeStrDictProxies [#translatecompositestrdictproxies]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "CompositeKeyInfo": "../structs/compositekeyinfo", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::vector<const StringDictionaryProxy::IdMap *> BaselineJoinHashTable::translateCompositeStrDictProxies(
+    const CompositeKeyInfo &composite_key_info,
+    const std::vector<InnerOuterStringOpInfos> &string_op_infos_for_keys,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### getStrDictProxies [#getstrdictproxies]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::pair<const StringDictionaryProxy *, StringDictionaryProxy *> BaselineJoinHashTable::getStrDictProxies(
+    const InnerOuter &cols,
+    const Executor *executor,
+    const bool has_string_ops
+)
+```
+</CodeBlock>
+
+### translateInnerToOuterStrDictProxies [#translateinnertoouterstrdictproxies]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "ExpressionRange": "expressionrange", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryProxy::IdMap * BaselineJoinHashTable::translateInnerToOuterStrDictProxies(
+    const InnerOuter &cols,
+    const InnerOuterStringOpInfos &inner_outer_string_op_infos,
+    ExpressionRange &old_col_range,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### getInnerTableId [#getinnertableid]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+shared::TableKey BaselineJoinHashTable::getInnerTableId(
+    const std::vector<InnerOuter> &inner_outer_pairs
+)
+```
+</CodeBlock>
+
+### getAlternativeCacheKey [#getalternativecachekey]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "AlternativeCacheKeyForBaselineHashJoin": "#alternativecachekeyforbaselinehashjoin"}}>
+```cpp showLineNumbers={false}
+static QueryPlanHash BaselineJoinHashTable::getAlternativeCacheKey(
+    AlternativeCacheKeyForBaselineHashJoin &info
+)
+```
+</CodeBlock>
+
+### codegenColOrStringOper [#codegencolorstringoper]
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+llvm::Value * BaselineJoinHashTable::codegenColOrStringOper(
+    const Analyzer::Expr *col_or_string_oper,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos,
+    CodeGenerator &code_generator,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `condition_` | `const std::shared_ptr< Analyzer::BinOper >` | |
+| `join_type_` | `const JoinType` | |
+| `query_infos_` | `const std::vector< InputTableInfo > &` | |
+| `memory_level_` | `const Data_Namespace::MemoryLevel` | |
+| `executor_` | `Executor *` | |
+| `column_cache_` | `ColumnCacheMap &` | |
+| `cpu_hash_table_buff_mutex_` | `std::mutex` | |
+| `str_proxy_translation_mutex_` | `std::mutex` | |
+| `str_proxy_translation_maps_` | `std::vector< const StringDictionaryProxy::IdMap * >` | |
+| `inner_outer_pairs_` | `std::vector< InnerOuter >` | |
+| `inner_outer_string_op_infos_pairs_` | `std::vector< InnerOuterStringOpInfos >` | |
+| `device_ids_` | `const std::set< int >` | |
+| `query_hints_` | `RegisteredQueryHint` | |
+| `needs_dict_translation_` | `bool` | |
+| `layout_override_` | `std::optional< HashType >` | |
+| `hashtable_build_dag_map_` | `HashTableBuildDagMap` | |
+| `hashtable_cache_key_` | `std::unordered_map< int, QueryPlanHash >` | |
+| `hashtable_cache_meta_info_` | `HashtableCacheMetaInfo` | |
+| `table_keys_` | `std::unordered_set< size_t >` | |
+| `table_id_to_node_map_` | `const TableIdToNodeMap` | |
+| `rowid_size_` | `const size_t` | |
+| `hash_tables_mutex_` | `std::shared_mutex` | |
+| `hash_tables_for_device_` | `std::unordered_map< int, std::shared_ptr< HashTable > >` | |
+| `hash_table_cache_` <Badge intent="note" minimal>static</Badge> | `std::unique_ptr< HashtableRecycler >` | |
+| `hash_table_layout_cache_` <Badge intent="note" minimal>static</Badge> | `std::unique_ptr< HashingSchemeRecycler >` | |
+| `MAX_NUM_HASH_ENTRIES` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+
+---
+
+## Inner classes
+
+### AlternativeCacheKeyForBaselineHashJoin
+
+<CodeBlock links={{"BaselineJoinHashTable": "baselinejoinhashtable"}}>
+```cpp showLineNumbers={false}
+struct BaselineJoinHashTable::AlternativeCacheKeyForBaselineHashJoin
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `inner_outer_pairs` | `std::vector< InnerOuter >` | |
+| `inner_outer_string_op_infos_pairs` | `std::vector< InnerOuterStringOpInfos >` | |
+| `num_elements` | `const size_t` | |
+| `optype` | `const SQLOps` | |
+| `join_type` | `const JoinType` | |
+| `chunk_key` | `const ChunkKey` | |

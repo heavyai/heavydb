@@ -1,0 +1,35 @@
+---
+title: Geo::decompress_x_coord
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+DEVICE double Geo::decompress_x_coord(
+    const int8_t *data,
+    const int64_t index,
+    const bool is_geoint
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (with input srid and output srid)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+DEVICE double Geo::decompress_x_coord(
+    const int8_t *data,
+    const int64_t index,
+    const bool is_geoint,
+    const int32_t input_srid,
+    const int32_t output_srid
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,159 @@
+---
+title: spatial_type::PointAccessors
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <spatial_type/PointAccessors.h>
+```
+
+**Inherits from:** `spatial_type::Codegen` (public)
+
+---
+
+## Constructors
+
+### PointAccessors [#pointaccessors]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors"}}>
+```cpp showLineNumbers={false}
+spatial_type::PointAccessors::PointAccessors(
+    const Analyzer::GeoOperator *geo_operator
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### size [#size]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors"}}>
+```cpp showLineNumbers={false}
+size_t spatial_type::PointAccessors::size() const
+```
+</CodeBlock>
+
+### getNullType [#getnulltype]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo spatial_type::PointAccessors::getNullType() const
+```
+</CodeBlock>
+
+### codegenCmpEqNullptr [#codegencmpeqnullptr]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors"}}>
+```cpp showLineNumbers={false}
+llvm::Value * spatial_type::PointAccessors::codegenCmpEqNullptr(
+    llvm::IRBuilder<> &builder,
+    llvm::Value *arg_lv
+)
+```
+</CodeBlock>
+
+### codegenLoads [#codegenloads]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors", "CgenState": "../../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+std::tuple<std::vector<llvm::Value *>, llvm::Value *> spatial_type::PointAccessors::codegenLoads(
+    const std::vector<llvm::Value *> &arg_lvs,
+    const std::vector<llvm::Value *> &pos_lvs,
+    CgenState *cgen_state
+)
+```
+</CodeBlock>
+
+### codegen [#codegen]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors", "NullCheckCodegen": "../../classes/codegenerator#nullcheckcodegen", "CgenState": "../../structs/cgenstate", "CompilationOptions": "../../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> spatial_type::PointAccessors::codegen(
+    const std::vector<llvm::Value *> &args,
+    CodeGenerator::NullCheckCodegen *nullcheck_codegen,
+    CgenState *cgen_state,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### isNullable [#isnullable]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+auto spatial_type::PointAccessors::isNullable() const
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+auto spatial_type::PointAccessors::getTypeInfo() const
+```
+</CodeBlock>
+
+### getName [#getname]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+std::string spatial_type::PointAccessors::getName() const
+```
+</CodeBlock>
+
+### getNullCheckCodegen [#getnullcheckcodegen]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors", "CgenState": "../../structs/cgenstate", "Executor": "../../classes/executor", "NullCheckCodegen": "../../classes/codegenerator#nullcheckcodegen", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<CodeGenerator::NullCheckCodegen> spatial_type::PointAccessors::getNullCheckCodegen(
+    llvm::Value *null_lv,
+    CgenState *cgen_state,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### getOperand [#getoperand]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+const Analyzer::Expr * spatial_type::PointAccessors::getOperand(
+    const size_t index
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### init [#init]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<Codegen> spatial_type::PointAccessors::init(
+    const Analyzer::GeoOperator *geo_operator
+)
+```
+</CodeBlock>
+
+### pointIsNullFunctionName [#pointisnullfunctionname]
+
+<CodeBlock links={{"PointAccessors": "pointaccessors", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+char const  * spatial_type::PointAccessors::pointIsNullFunctionName(
+    SQLTypeInfo const &
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `operator_` | `const Analyzer::GeoOperator *` | |
+| `is_nullable_` | `bool` | |

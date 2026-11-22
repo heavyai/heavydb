@@ -1,0 +1,88 @@
+---
+title: TargetMetaInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetMetaInfo.h>
+```
+
+---
+
+## Constructors
+
+### TargetMetaInfo [#targetmetainfo]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+TargetMetaInfo::TargetMetaInfo(
+    const std::string &resname,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with physical ti)">
+
+<CodeBlock links={{"TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+TargetMetaInfo::TargetMetaInfo(
+    const std::string &resname,
+    const SQLTypeInfo &ti,
+    const SQLTypeInfo &physical_ti
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_resname [#getresname]
+
+<CodeBlock links={{"TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+const std::string & TargetMetaInfo::get_resname() const
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & TargetMetaInfo::get_type_info() const
+```
+</CodeBlock>
+
+### get_physical_type_info [#getphysicaltypeinfo]
+
+<CodeBlock links={{"TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & TargetMetaInfo::get_physical_type_info() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+std::string TargetMetaInfo::toString() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `resname_` | `std::string` | |
+| `ti_` | `SQLTypeInfo` | |
+| `physical_ti_` | `SQLTypeInfo` | |

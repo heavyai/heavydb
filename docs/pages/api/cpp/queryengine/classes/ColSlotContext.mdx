@@ -1,0 +1,399 @@
+---
+title: ColSlotContext
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ColSlotContext.h>
+```
+
+---
+
+## Constructors
+
+### ColSlotContext [#colslotcontext]
+
+<Tabs>
+<Tab title="Default">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+ColSlotContext::ColSlotContext()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with col expr list and col exprs to not project)">
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+ColSlotContext::ColSlotContext(
+    const std::vector<Analyzer::Expr *> &col_expr_list,
+    const std::vector<int64_t> &col_exprs_to_not_project
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with thrift col slot context)">
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+ColSlotContext::ColSlotContext(
+    const TColSlotContext &thrift_col_slot_context
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### setAllSlotsSize [#setallslotssize]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+void ColSlotContext::setAllSlotsSize(
+    const int8_t slot_width_size
+)
+```
+</CodeBlock>
+
+### setAllSlotsPaddedSize [#setallslotspaddedsize]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+void ColSlotContext::setAllSlotsPaddedSize(
+    const int8_t padded_size
+)
+```
+</CodeBlock>
+
+### setAllUnsetSlotsPaddedSize [#setallunsetslotspaddedsize]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+void ColSlotContext::setAllUnsetSlotsPaddedSize(
+    const int8_t padded_size
+)
+```
+</CodeBlock>
+
+### setAllSlotsPaddedSizeToLogicalSize [#setallslotspaddedsizetologicalsize]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+void ColSlotContext::setAllSlotsPaddedSizeToLogicalSize()
+```
+</CodeBlock>
+
+### validate [#validate]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+void ColSlotContext::validate() const
+```
+</CodeBlock>
+
+### getColCount [#getcolcount]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+size_t ColSlotContext::getColCount() const
+```
+</CodeBlock>
+
+### getSlotCount [#getslotcount]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+size_t ColSlotContext::getSlotCount() const
+```
+</CodeBlock>
+
+### getSlotInfo [#getslotinfo]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext", "SlotSize": "../structs/slotsize"}}>
+```cpp showLineNumbers={false}
+const SlotSize & ColSlotContext::getSlotInfo(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### setPaddedSlotWidthBytes [#setpaddedslotwidthbytes]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+void ColSlotContext::setPaddedSlotWidthBytes(
+    const size_t slot_idx,
+    const int8_t bytes
+)
+```
+</CodeBlock>
+
+### getSlotsForCol [#getslotsforcol]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+const std::vector<size_t> & ColSlotContext::getSlotsForCol(
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getAllSlotsPaddedSize [#getallslotspaddedsize]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+size_t ColSlotContext::getAllSlotsPaddedSize() const
+```
+</CodeBlock>
+
+### getAllSlotsAlignedPaddedSize [#getallslotsalignedpaddedsize]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+size_t ColSlotContext::getAllSlotsAlignedPaddedSize() const
+```
+</CodeBlock>
+
+### getAlignedPaddedSizeForRange [#getalignedpaddedsizeforrange]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+size_t ColSlotContext::getAlignedPaddedSizeForRange(
+    const size_t end
+) const
+```
+</CodeBlock>
+
+### getTotalBytesOfColumnarBuffers [#gettotalbytesofcolumnarbuffers]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+size_t ColSlotContext::getTotalBytesOfColumnarBuffers(
+    const size_t entry_count
+) const
+```
+</CodeBlock>
+
+### getMinPaddedByteSize [#getminpaddedbytesize]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+int8_t ColSlotContext::getMinPaddedByteSize(
+    const int8_t actual_min_byte_width
+) const
+```
+</CodeBlock>
+
+### getCompactByteWidth [#getcompactbytewidth]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+size_t ColSlotContext::getCompactByteWidth() const
+```
+</CodeBlock>
+
+### getColOnlyOffInBytes [#getcolonlyoffinbytes]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+size_t ColSlotContext::getColOnlyOffInBytes(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### empty [#empty]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+bool ColSlotContext::empty()
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+void ColSlotContext::clear()
+```
+</CodeBlock>
+
+### addColumn [#addcolumn]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+void ColSlotContext::addColumn(
+    const std::vector<std::tuple<int8_t, int8_t>> &slots_for_col
+)
+```
+</CodeBlock>
+
+### addColumnFlatBuffer [#addcolumnflatbuffer]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+void ColSlotContext::addColumnFlatBuffer(
+    const int64_t flatbuffer_size
+)
+```
+</CodeBlock>
+
+### getFlatBufferSize [#getflatbuffersize]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+int64_t ColSlotContext::getFlatBufferSize(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+bool ColSlotContext::operator==(
+    const ColSlotContext &that
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+bool ColSlotContext::operator!=(
+    const ColSlotContext &that
+) const
+```
+</CodeBlock>
+
+### alignPaddedSlots [#alignpaddedslots]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+void ColSlotContext::alignPaddedSlots(
+    const bool sort_on_gpu
+)
+```
+</CodeBlock>
+
+### varlenOutputElementSize [#varlenoutputelementsize]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+int64_t ColSlotContext::varlenOutputElementSize(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### hasVarlenOutput [#hasvarlenoutput]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+bool ColSlotContext::hasVarlenOutput() const
+```
+</CodeBlock>
+
+### slotIsVarlen [#slotisvarlen]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+bool ColSlotContext::slotIsVarlen(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### checkSlotUsesFlatBufferFormat [#checkslotusesflatbufferformat]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+bool ColSlotContext::checkSlotUsesFlatBufferFormat(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+std::string ColSlotContext::toString() const
+```
+</CodeBlock>
+
+### addSlotForColumn [#addslotforcolumn]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+void ColSlotContext::addSlotForColumn(
+    const int8_t logical_size,
+    const size_t column_idx
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+void ColSlotContext::addSlotForColumn(
+    const int8_t padded_size,
+    const int8_t logical_size,
+    const size_t column_idx
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Static methods
+
+### toThrift [#tothrift]
+
+<CodeBlock links={{"ColSlotContext": "colslotcontext"}}>
+```cpp showLineNumbers={false}
+TColSlotContext ColSlotContext::toThrift(
+    const ColSlotContext &col_slot_context
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ArraySize` | `int64_t` |
+| `SlotIndex` | `size_t` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `slot_sizes_` | `std::vector< SlotSize >` | |
+| `col_to_slot_map_` | `std::vector< std::vector< size_t > >` | |
+| `varlen_output_slot_map_` | `std::unordered_map< SlotIndex, ArraySize >` | |

@@ -1,0 +1,32 @@
+---
+title: GeoMultiLineStringTargetValue
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetValue.h>
+```
+
+---
+
+## Constructors
+
+### GeoMultiLineStringTargetValue [#geomultilinestringtargetvalue]
+
+<CodeBlock links={{"GeoMultiLineStringTargetValue": "geomultilinestringtargetvalue"}}>
+```cpp showLineNumbers={false}
+GeoMultiLineStringTargetValue::GeoMultiLineStringTargetValue(
+    const std::vector<double> &coords,
+    const std::vector<int32_t> &linestring_sizes
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `coords` | `std::shared_ptr< std::vector< double > >` | |
+| `linestring_sizes` | `std::shared_ptr< std::vector< int32_t > >` | |

@@ -1,0 +1,39 @@
+---
+title: threading_serial::task_group
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <threading_serial/threading_serial.h>
+```
+
+---
+
+## Methods
+
+### run [#run]
+
+<CodeBlock links={{"task_group": "taskgroup"}}>
+```cpp showLineNumbers={false}
+template <typename F>
+void threading_serial::task_group::run(
+    F &&f
+)
+```
+</CodeBlock>
+
+### cancel [#cancel]
+
+<CodeBlock links={{"task_group": "taskgroup"}}>
+```cpp showLineNumbers={false}
+void threading_serial::task_group::cancel()
+```
+</CodeBlock>
+
+### wait [#wait]
+
+<CodeBlock links={{"task_group": "taskgroup"}}>
+```cpp showLineNumbers={false}
+void threading_serial::task_group::wait()
+```
+</CodeBlock>

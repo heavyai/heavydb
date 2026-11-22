@@ -1,0 +1,16 @@
+---
+title: approximate_distinct_tuples_on_device
+description: ""
+---
+
+<CodeBlock links={{"GenericKeyHandler": "../structs/generickeyhandler"}}>
+```cpp showLineNumbers={false}
+void approximate_distinct_tuples_on_device(
+    uint8_t *hll_buffer,
+    const uint32_t b,
+    const GenericKeyHandler *key_handler,
+    const int64_t num_elems,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>

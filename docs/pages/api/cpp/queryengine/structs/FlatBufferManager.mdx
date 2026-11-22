@@ -1,0 +1,1189 @@
+---
+title: FlatBufferManager
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <FlatBuffer.h>
+```
+
+---
+
+## Methods
+
+### getBufferSize [#getbuffersize]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+int64_t FlatBufferManager::getBufferSize() const
+```
+</CodeBlock>
+
+### isNestedArray [#isnestedarray]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE bool FlatBufferManager::isNestedArray() const
+```
+</CodeBlock>
+
+### getValueSize [#getvaluesize]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE size_t FlatBufferManager::getValueSize() const
+```
+</CodeBlock>
+
+### getValuesBufferSize [#getvaluesbuffersize]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE size_t FlatBufferManager::getValuesBufferSize() const
+```
+</CodeBlock>
+
+### getValuesBuffer [#getvaluesbuffer]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const int8_t * FlatBufferManager::getValuesBuffer() const
+```
+</CodeBlock>
+
+### getValuesCount [#getvaluescount]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+size_t FlatBufferManager::getValuesCount() const
+```
+</CodeBlock>
+
+### format [#format]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE FlatBufferFormat FlatBufferManager::format() const
+```
+</CodeBlock>
+
+### itemsCount [#itemscount]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE int64_t FlatBufferManager::itemsCount() const
+```
+</CodeBlock>
+
+### valueByteSize [#valuebytesize]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE int64_t FlatBufferManager::valueByteSize() const
+```
+</CodeBlock>
+
+### dtypeSize [#dtypesize]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE int64_t FlatBufferManager::dtypeSize() const
+```
+</CodeBlock>
+
+### getBaseWorker [#getbaseworker]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "BaseWorker": "#baseworker"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE BaseWorker * FlatBufferManager::getBaseWorker()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "BaseWorker": "#baseworker"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const BaseWorker * FlatBufferManager::getBaseWorker() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getGeoPointWorker [#getgeopointworker]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "GeoPointWorker": "#geopointworker"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE GeoPointWorker * FlatBufferManager::getGeoPointWorker()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "GeoPointWorker": "#geopointworker"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const GeoPointWorker * FlatBufferManager::getGeoPointWorker() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getGeoPointMetadata [#getgeopointmetadata]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "GeoPoint": "#geopoint"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE GeoPoint * FlatBufferManager::getGeoPointMetadata()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "GeoPoint": "#geopoint"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const GeoPoint * FlatBufferManager::getGeoPointMetadata() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getNestedArrayWorker [#getnestedarrayworker]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "NestedArrayWorker": "#nestedarrayworker"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE NestedArrayWorker * FlatBufferManager::getNestedArrayWorker()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "NestedArrayWorker": "#nestedarrayworker"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const NestedArrayWorker * FlatBufferManager::getNestedArrayWorker() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getNestedArrayMetadata [#getnestedarraymetadata]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "NestedArray": "#nestedarray"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE NestedArray * FlatBufferManager::getNestedArrayMetadata()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "NestedArray": "#nestedarray"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const NestedArray * FlatBufferManager::getNestedArrayMetadata() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### initializeNestedArray [#initializenestedarray]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+Status FlatBufferManager::initializeNestedArray(
+    int64_t ndims,
+    int64_t total_items_count,
+    int64_t total_sizes_count,
+    int64_t total_values_count,
+    ValueType value_type,
+    const int8_t *null_value_ptr,
+    const int8_t *user_data_ptr,
+    size_t user_data_size
+)
+```
+</CodeBlock>
+
+### initialize [#initialize]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+void FlatBufferManager::initialize(
+    FlatBufferFormat format_id,
+    const int8_t *format_metadata_ptr
+)
+```
+</CodeBlock>
+
+### getNDims [#getndims]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE size_t FlatBufferManager::getNDims() const
+```
+</CodeBlock>
+
+### get_max_nof_values [#getmaxnofvalues]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+int64_t FlatBufferManager::get_max_nof_values() const
+```
+</CodeBlock>
+
+### get_storage_count [#getstoragecount]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE int64_t & FlatBufferManager::get_storage_count()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+const int64_t & FlatBufferManager::get_storage_count() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_values_buffer_size [#getvaluesbuffersize]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+int64_t FlatBufferManager::get_values_buffer_size() const
+```
+</CodeBlock>
+
+### get_values [#getvalues]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE int8_t * FlatBufferManager::get_values()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const int8_t * FlatBufferManager::get_values() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_user_data_buffer [#getuserdatabuffer]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE int8_t * FlatBufferManager::get_user_data_buffer()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const int8_t * FlatBufferManager::get_user_data_buffer() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_values_buffer [#getvaluesbuffer]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE int8_t * FlatBufferManager::get_values_buffer()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const int8_t * FlatBufferManager::get_values_buffer() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_sizes_buffer [#getsizesbuffer]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE sizes_t * FlatBufferManager::get_sizes_buffer()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const sizes_t * FlatBufferManager::get_sizes_buffer() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_values_offsets [#getvaluesoffsets]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE offsets_t * FlatBufferManager::get_values_offsets()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const offsets_t * FlatBufferManager::get_values_offsets() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_sizes_offsets [#getsizesoffsets]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE offsets_t * FlatBufferManager::get_sizes_offsets()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const offsets_t * FlatBufferManager::get_sizes_offsets() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getNullValuePtr [#getnullvalueptr]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const int8_t * FlatBufferManager::getNullValuePtr() const
+```
+</CodeBlock>
+
+### containsNullValue [#containsnullvalue]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE bool FlatBufferManager::containsNullValue(
+    const int8_t *value_ptr
+) const
+```
+</CodeBlock>
+
+### get_storage_indices [#getstorageindices]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE sizes_t * FlatBufferManager::get_storage_indices()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE const sizes_t * FlatBufferManager::get_storage_indices() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_storage_index [#getstorageindex]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE sizes_t FlatBufferManager::get_storage_index(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM>
+HOST DEVICE Status FlatBufferManager::isNull(
+    const int64_t index[NDIM],
+    const size_t n,
+    bool &is_null
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE Status FlatBufferManager::isNull(
+    int64_t index,
+    bool &is_null
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getLength [#getlength]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM = 1>
+HOST DEVICE Status FlatBufferManager::getLength(
+    const int64_t index,
+    size_t &length
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM>
+HOST DEVICE Status FlatBufferManager::getLength(
+    const int64_t index[NDIM],
+    const size_t n,
+    size_t &length
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getItemWorker [#getitemworker]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM>
+HOST DEVICE Status FlatBufferManager::getItemWorker(
+    const int64_t index[NDIM],
+    const size_t n,
+    int8_t *&values,
+    int32_t &nof_values,
+    int32_t *sizes_buffers[NDIM],
+    int32_t sizes_lengths[NDIM],
+    int32_t &nof_sizes,
+    bool &is_null
+)
+```
+</CodeBlock>
+
+### getItem [#getitem]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "NestedArrayItem": "#nestedarrayitem"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM>
+HOST DEVICE Status FlatBufferManager::getItem(
+    const int64_t index,
+    NestedArrayItem<NDIM> &result
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "NestedArrayItem": "#nestedarrayitem"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM>
+HOST DEVICE Status FlatBufferManager::getItem(
+    const int64_t index[NDIM],
+    const size_t n,
+    NestedArrayItem<NDIM> &result
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+Status FlatBufferManager::getItem(
+    const int64_t index,
+    std::string &s,
+    bool &is_null
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <typename CT>
+Status FlatBufferManager::getItem(
+    const int64_t index,
+    std::vector<CT> &values,
+    std::vector<int32_t> &sizes,
+    bool &is_null
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <typename CT>
+Status FlatBufferManager::getItem(
+    const int64_t index,
+    std::vector<CT> &values,
+    std::vector<int32_t> &sizes,
+    std::vector<int32_t> &sizes_of_sizes,
+    bool &is_null
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### setItemWorker [#setitemworker]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM, bool check_sizes = true>
+HOST DEVICE Status FlatBufferManager::setItemWorker(
+    const int64_t index,
+    const int8_t *values,
+    const int32_t nof_values,
+    const int32_t *const sizes_buffers[NDIM],
+    const int32_t sizes_lengths[NDIM],
+    const int32_t nof_sizes
+)
+```
+</CodeBlock>
+
+### concatItemWorker [#concatitemworker]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM, bool check_sizes = true>
+HOST DEVICE Status FlatBufferManager::concatItemWorker(
+    const int64_t index,
+    const int8_t *values,
+    const int32_t nof_values,
+    const int32_t *const sizes_buffers[NDIM],
+    const int32_t sizes_lengths[NDIM],
+    const int32_t nof_sizes
+)
+```
+</CodeBlock>
+
+### setItem [#setitem]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM = 1, bool check_sizes = true>
+HOST DEVICE Status FlatBufferManager::setItem(
+    const int64_t index,
+    const int8_t *values_buf,
+    const int32_t nof_values
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM = 1, bool check_sizes = true>
+HOST DEVICE Status FlatBufferManager::setItem(
+    const int64_t index,
+    const int8_t *values_buf,
+    const int32_t nof_values,
+    const int32_t *sizes_buf,
+    const int32_t nof_sizes
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM = 2, bool check_sizes = true>
+HOST DEVICE Status FlatBufferManager::setItem(
+    const int64_t index,
+    const int8_t *values_buf,
+    const int32_t nof_values,
+    const int32_t *sizes_buf,
+    const int32_t nof_sizes,
+    const int32_t *sizes_of_sizes_buf,
+    const int32_t nof_sizes_of_sizes
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "NestedArrayItem": "#nestedarrayitem"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM = 1, bool check_sizes = true>
+HOST DEVICE Status FlatBufferManager::setItem(
+    const int64_t index,
+    const NestedArrayItem<NDIM> &item
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+Status FlatBufferManager::setItem(
+    const int64_t index,
+    const std::string &s
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <typename CT, size_t NDIM = 0>
+Status FlatBufferManager::setItem(
+    const int64_t index,
+    const std::vector<CT> &arr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <typename CT, size_t NDIM = 1, bool check_sizes = false>
+Status FlatBufferManager::setItem(
+    const int64_t index,
+    const std::vector<std::vector<CT>> &item
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <typename CT, size_t NDIM = 2, bool check_sizes = false>
+Status FlatBufferManager::setItem(
+    const int64_t index,
+    const std::vector<std::vector<std::vector<CT>>> &item
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <typename CT, size_t NDIM = 1, bool check_sizes = true>
+Status FlatBufferManager::setItem(
+    const int64_t index,
+    const std::vector<CT> &values,
+    const std::vector<int32_t> &sizes
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <typename CT, size_t NDIM = 2, bool check_sizes = true>
+Status FlatBufferManager::setItem(
+    const int64_t index,
+    const std::vector<CT> &values,
+    const std::vector<int32_t> &sizes,
+    const std::vector<int32_t> &sizes_of_sizes
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### concatItem [#concatitem]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM = 0, bool check_sizes = true>
+HOST DEVICE Status FlatBufferManager::concatItem(
+    const int64_t index,
+    const int8_t *values_buf,
+    const int32_t nof_values
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager", "NestedArrayItem": "#nestedarrayitem"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM = 1, bool check_sizes = true>
+HOST DEVICE Status FlatBufferManager::concatItem(
+    const int64_t index,
+    const NestedArrayItem<NDIM> &item
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### setItemOld [#setitemold]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+Status FlatBufferManager::setItemOld(
+    const int64_t index,
+    const int8_t *src,
+    const int64_t size,
+    int8_t **dest = nullptr
+)
+```
+</CodeBlock>
+
+### setItemNoValidation [#setitemnovalidation]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+Status FlatBufferManager::setItemNoValidation(
+    const int64_t index,
+    const int8_t *src,
+    const int64_t size,
+    int8_t **dest
+)
+```
+</CodeBlock>
+
+### setEmptyItemNoValidation [#setemptyitemnovalidation]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+Status FlatBufferManager::setEmptyItemNoValidation(
+    int64_t index,
+    int64_t size,
+    int8_t **dest
+)
+```
+</CodeBlock>
+
+### isSpecified [#isspecified]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE bool FlatBufferManager::isSpecified(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+### setNull [#setnull]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE Status FlatBufferManager::setNull(
+    int64_t index
+)
+```
+</CodeBlock>
+
+### setNullNoValidation [#setnullnovalidation]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE Status FlatBufferManager::setNullNoValidation(
+    int64_t index
+)
+```
+</CodeBlock>
+
+### getItemOld [#getitemold]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE Status FlatBufferManager::getItemOld(
+    int64_t index,
+    int64_t &size,
+    int8_t *&dest,
+    bool &is_null
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST DEVICE Status FlatBufferManager::getItemOld(
+    int64_t index,
+    size_t &size,
+    int8_t *&dest,
+    bool &is_null
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Static methods
+
+### get_size [#getsize]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+static size_t FlatBufferManager::get_size(
+    ValueType type
+)
+```
+</CodeBlock>
+
+### isFlatBuffer [#isflatbuffer]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+HOST static DEVICE bool FlatBufferManager::isFlatBuffer(
+    const void *buffer
+)
+```
+</CodeBlock>
+
+### getBufferSize [#getbuffersize]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+static int64_t FlatBufferManager::getBufferSize(
+    const void *buffer
+)
+```
+</CodeBlock>
+
+### compute_flatbuffer_size [#computeflatbuffersize]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+static int64_t FlatBufferManager::compute_flatbuffer_size(
+    FlatBufferFormat format_id,
+    const int8_t *format_metadata_ptr
+)
+```
+</CodeBlock>
+
+### computeBufferSizeNestedArray [#computebuffersizenestedarray]
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+static int64_t FlatBufferManager::computeBufferSizeNestedArray(
+    int64_t ndims,
+    int64_t total_items_count,
+    int64_t total_sizes_count,
+    int64_t total_values_count,
+    ValueType value_type,
+    size_t user_data_size
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `sizes_t` | `int32_t` |
+| `offsets_t` | `int64_t` |
+
+### ValueType
+
+| Name | Value | Description |
+|---|---|---|
+| `Bool8` | | |
+| `Int8` | | |
+| `Int16` | | |
+| `Int32` | | |
+| `Int64` | | |
+| `UInt8` | | |
+| `UInt16` | | |
+| `UInt32` | | |
+| `UInt64` | | |
+| `Float32` | | |
+| `Float64` | | |
+| `PointInt32` | | |
+| `PointFloat64` | | |
+### Status
+
+| Name | Value | Description |
+|---|---|---|
+| `Success` | `= 0` | |
+| `IndexError` | | |
+| `SubIndexError` | | |
+| `SizeError` | | |
+| `FlatbufferSizeError` | | |
+| `ItemAlreadySpecifiedError` | | |
+| `ItemUnspecifiedError` | | |
+| `UnexpectedNullItemError` | | |
+| `ValuesBufferTooSmallError` | | |
+| `SizesBufferTooSmallError` | | |
+| `CompressedIndices2BufferTooSmallError` | | |
+| `MemoryError` | | |
+| `NotImplementedError` | | |
+| `NotSupportedFormatError` | | |
+| `InvalidUserDataError` | | |
+| `DimensionalityError` | | |
+| `TypeError` | | |
+| `UserDataError` | | |
+| `InconsistentSizesError` | | |
+| `UnknownFormatError` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `buffer` | `int8_t *` | |
+
+---
+
+## Inner classes
+
+### BaseWorker
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+struct FlatBufferManager::BaseWorker
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `format_id` | `FlatBufferFormat` | |
+| `flatbuffer_size` | `offsets_t` | |
+| `format_metadata_offset` | `offsets_t` | |
+| `format_worker_offset` | `offsets_t` | |
+
+### GeoPoint
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+struct FlatBufferManager::GeoPoint
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `total_items_count` | `int64_t` | |
+| `input_srid` | `int32_t` | |
+| `output_srid` | `int32_t` | |
+| `is_geoint` | `bool` | |
+
+### GeoPointWorker
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+struct FlatBufferManager::GeoPointWorker
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `values_offset` | `int64_t` | |
+
+### NestedArrayWorker
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+struct FlatBufferManager::NestedArrayWorker
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `specified_items_count` | `int64_t` | |
+| `storage_indices_offset` | `offsets_t` | |
+| `sizes_offsets_offset` | `offsets_t` | |
+| `values_offsets_offset` | `offsets_t` | |
+| `sizes_buffer_offset` | `offsets_t` | |
+| `values_buffer_offset` | `offsets_t` | |
+| `user_data_buffer_offset` | `offsets_t` | |
+| `value_size` | `size_t` | |
+
+### NestedArray
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+struct FlatBufferManager::NestedArray
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `ndims` | `size_t` | |
+| `total_items_count` | `int64_t` | |
+| `total_sizes_count` | `int64_t` | |
+| `total_values_count` | `int64_t` | |
+| `value_type` | `ValueType` | |
+| `user_data_size` | `size_t` | |
+
+### NestedArrayItem
+
+<CodeBlock links={{"FlatBufferManager": "flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+struct FlatBufferManager::NestedArrayItem
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `values` | `int8_t *` | |
+| `nof_values` | `int32_t` | |
+| `sizes_buffers` | `int32_t *` | |
+| `sizes_lengths` | `int32_t` | |
+| `nof_sizes` | `int32_t` | |
+| `is_null` | `bool` | |

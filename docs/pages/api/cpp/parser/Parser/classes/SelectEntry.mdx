@@ -1,0 +1,62 @@
+---
+title: Parser::SelectEntry
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Node` (public)
+
+---
+
+## Constructors
+
+### SelectEntry [#selectentry]
+
+<CodeBlock links={{"SelectEntry": "selectentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::SelectEntry::SelectEntry(
+    Expr *e,
+    std::string *r
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_select_expr [#getselectexpr]
+
+<CodeBlock links={{"SelectEntry": "selectentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::SelectEntry::get_select_expr() const
+```
+</CodeBlock>
+
+### get_alias [#getalias]
+
+<CodeBlock links={{"SelectEntry": "selectentry"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::SelectEntry::get_alias() const
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"SelectEntry": "selectentry"}}>
+```cpp showLineNumbers={false}
+std::string Parser::SelectEntry::to_string() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `select_expr_` | `std::unique_ptr< Expr >` | |
+| `alias_` | `std::unique_ptr< std::string >` | |

@@ -1,0 +1,303 @@
+---
+title: Calcite
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Calcite.h>
+```
+
+---
+
+## Constructors
+
+### Calcite [#calcite]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+Calcite::Calcite(
+    const int db_port,
+    const int port,
+    const std::string &data_dir,
+    const size_t calcite_max_mem,
+    const size_t service_timeout,
+    const bool service_keepalive,
+    const std::string &udf_filename = ""
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+Calcite::Calcite(
+    const SystemParameters &db_parameters,
+    const std::string &data_dir,
+    const std::string &udf_filename = ""
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+Calcite::Calcite()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~Calcite
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+Calcite::~Calcite()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### process [#process]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+TPlanResult Calcite::process(
+    query_state::QueryStateProxy,
+    std::string sql_string,
+    const TQueryParsingOption &query_parsing_option,
+    const TOptimizationOption &optimization_option,
+    const std::string &calcite_session_id = ""
+)
+```
+</CodeBlock>
+
+### getCompletionHints [#getcompletionhints]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+std::vector<TCompletionHint> Calcite::getCompletionHints(
+    const Catalog_Namespace::SessionInfo &session_info,
+    const std::vector<std::string> &visible_tables,
+    const std::string sql_string,
+    const int cursor
+)
+```
+</CodeBlock>
+
+### getExtensionFunctionWhitelist [#getextensionfunctionwhitelist]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+std::string Calcite::getExtensionFunctionWhitelist()
+```
+</CodeBlock>
+
+### getUserDefinedFunctionWhitelist [#getuserdefinedfunctionwhitelist]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+std::string Calcite::getUserDefinedFunctionWhitelist()
+```
+</CodeBlock>
+
+### updateMetadata [#updatemetadata]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+void Calcite::updateMetadata(
+    std::string catalog,
+    std::string table
+)
+```
+</CodeBlock>
+
+### close_calcite_server [#closecalciteserver]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+void Calcite::close_calcite_server(
+    bool log = true
+)
+```
+</CodeBlock>
+
+### getRuntimeExtensionFunctionWhitelist [#getruntimeextensionfunctionwhitelist]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+std::string Calcite::getRuntimeExtensionFunctionWhitelist()
+```
+</CodeBlock>
+
+### setRuntimeExtensionFunctions [#setruntimeextensionfunctions]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+void Calcite::setRuntimeExtensionFunctions(
+    const std::vector<TUserDefinedFunction> &udfs,
+    const std::vector<TUserDefinedTableFunction> &udtfs,
+    bool isruntime = true
+)
+```
+</CodeBlock>
+
+### getCalciteQueryParsingOption [#getcalcitequeryparsingoption]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+TQueryParsingOption Calcite::getCalciteQueryParsingOption(
+    bool legacy_syntax,
+    bool is_explain,
+    bool is_explain_detail
+)
+```
+</CodeBlock>
+
+### getCalciteOptimizationOption [#getcalciteoptimizationoption]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+TOptimizationOption Calcite::getCalciteOptimizationOption(
+    bool is_view_optimize,
+    bool enable_watchdog,
+    const std::vector<TFilterPushDownInfo> &filter_push_down_info
+)
+```
+</CodeBlock>
+
+### init [#init]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+void Calcite::init(
+    const int db_port,
+    const int port,
+    const std::string &data_dir,
+    const size_t calcite_max_mem,
+    const std::string &udf_filename
+)
+```
+</CodeBlock>
+
+### runServer [#runserver]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+void Calcite::runServer(
+    const int db_port,
+    const int port,
+    const std::string &data_dir,
+    const size_t calcite_max_mem,
+    const std::string &udf_filename
+)
+```
+</CodeBlock>
+
+### processImpl [#processimpl]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+TPlanResult Calcite::processImpl(
+    query_state::QueryStateProxy,
+    std::string sql_string,
+    const TQueryParsingOption &query_parsing_option,
+    const TOptimizationOption &optimization_option,
+    const std::string &calcite_session_id
+)
+```
+</CodeBlock>
+
+### get_db_objects [#getdbobjects]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Calcite::get_db_objects(
+    const std::string ra
+)
+```
+</CodeBlock>
+
+### inner_close_calcite_server [#innerclosecalciteserver]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+void Calcite::inner_close_calcite_server(
+    bool log
+)
+```
+</CodeBlock>
+
+### getClient [#getclient]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+std::pair<std::shared_ptr<CalciteServerClient>, std::shared_ptr<TTransport>> Calcite::getClient(
+    int port
+)
+```
+</CodeBlock>
+
+### ping [#ping]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+int Calcite::ping(
+    int retry_num = 0,
+    int max_retry = 50
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getInternalSessionProxyUserName [#getinternalsessionproxyusername]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+static std::string const Calcite::getInternalSessionProxyUserName()
+```
+</CodeBlock>
+
+### getInternalSessionProxyPassword [#getinternalsessionproxypassword]
+
+<CodeBlock links={{"Calcite": "calcite"}}>
+```cpp showLineNumbers={false}
+static std::string const Calcite::getInternalSessionProxyPassword()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `connMgr_` | `std::shared_ptr< ThriftClientConnection >` | |
+| `server_available_` | `bool` | |
+| `service_timeout_` | `size_t` | |
+| `service_keepalive_` | `bool` | |
+| `remote_calcite_port_` | `int` | |
+| `ssl_trust_store_` | `std::string` | |
+| `ssl_trust_password_` | `std::string` | |
+| `ssl_key_file_` | `std::string` | |
+| `ssl_keystore_` | `std::string` | |
+| `ssl_keystore_password_` | `std::string` | |
+| `ssl_ca_file_` | `std::string` | |
+| `db_config_file_` | `std::string` | |
+| `shutdown_once_flag_` | `std::once_flag` | |

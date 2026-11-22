@@ -1,0 +1,34 @@
+---
+title: bind_table_function
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunction": "../tablefunctions/classes/tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::tuple<table_functions::TableFunction, std::vector<SQLTypeInfo>> bind_table_function(
+    std::string name,
+    Analyzer::ExpressionPtrVector input_args,
+    const std::vector<table_functions::TableFunction> &table_funcs,
+    const bool is_gpu
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunction": "../tablefunctions/classes/tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::tuple<table_functions::TableFunction, std::vector<SQLTypeInfo>> bind_table_function(
+    std::string name,
+    Analyzer::ExpressionPtrVector input_args,
+    const bool is_gpu
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

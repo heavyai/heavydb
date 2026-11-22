@@ -1,0 +1,107 @@
+---
+title: Parser::InsertValuesStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::InsertStmt` (public)
+
+---
+
+## Constructors
+
+### InsertValuesStmt [#insertvaluesstmt]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"InsertValuesStmt": "insertvaluesstmt"}}>
+```cpp showLineNumbers={false}
+Parser::InsertValuesStmt::InsertValuesStmt(
+    const Catalog_Namespace::Catalog &catalog,
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"InsertValuesStmt": "insertvaluesstmt", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::InsertValuesStmt::InsertValuesStmt(
+    std::string *t,
+    std::list<std::string *> *c,
+    std::list<Expr *> *v
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_value_lists [#getvaluelists]
+
+<CodeBlock links={{"InsertValuesStmt": "insertvaluesstmt", "ValuesList": "valueslist"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::unique_ptr<ValuesList>> & Parser::InsertValuesStmt::get_value_lists() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"InsertValuesStmt": "insertvaluesstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::InsertValuesStmt::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query
+) const override
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"InsertValuesStmt": "insertvaluesstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::InsertValuesStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+)
+```
+</CodeBlock>
+
+### get_table [#gettable]
+
+<CodeBlock links={{"InsertValuesStmt": "insertvaluesstmt", "InsertStmt": "insertstmt"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::InsertValuesStmt::get_table() const
+```
+</CodeBlock>
+
+### get_column_list [#getcolumnlist]
+
+<CodeBlock links={{"InsertValuesStmt": "insertvaluesstmt", "InsertStmt": "insertstmt"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<std::string>> & Parser::InsertValuesStmt::get_column_list() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `insert_connector_` | `std::unique_ptr< Fragmenter_Namespace::InsertDataLoader::InsertConnector >` | |
+| `values_lists_` | `std::vector< std::unique_ptr< ValuesList > >` | |
+| `table_` | `std::unique_ptr< std::string >` | |
+| `column_list_` | `std::list< std::unique_ptr< std::string > >` | |

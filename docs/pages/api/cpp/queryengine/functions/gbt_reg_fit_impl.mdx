@@ -1,0 +1,30 @@
+---
+title: gbt_reg_fit_impl
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t gbt_reg_fit_impl(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const Column<T> &input_labels,
+    const ColumnList<T> &input_features,
+    const std::vector<std::vector<std::string>> &cat_feature_keys,
+    const int64_t max_iterations,
+    const int64_t max_tree_depth,
+    const double shrinkage,
+    const double min_split_loss,
+    const double lambda,
+    const double obs_per_tree_fraction,
+    const int64_t features_per_node,
+    const int64_t min_observations_per_leaf_node,
+    const int64_t max_bins,
+    const int64_t min_bin_size,
+    const TextEncodingNone &preferred_ml_framework_str,
+    const TextEncodingNone &model_metadata,
+    Column<TextEncodingDict> &output_model_name
+)
+```
+</CodeBlock>

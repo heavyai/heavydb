@@ -1,0 +1,18 @@
+---
+title: translate_bbox_intersect_with_reordering
+description: ""
+---
+
+<CodeBlock links={{"InputDescriptor": "../classes/inputdescriptor", "RelAlgNode": "../classes/relalgnode", "InputColDescriptor": "../classes/inputcoldescriptor", "Executor": "../classes/executor", "BoundingBoxIntersectJoinTranslationResult": "../structs/boundingboxintersectjointranslationresult"}}>
+```cpp showLineNumbers={false}
+BoundingBoxIntersectJoinTranslationResult translate_bbox_intersect_with_reordering(
+    const std::shared_ptr<Analyzer::Expr> expr,
+    std::vector<InputDescriptor> const &input_descs,
+    std::unordered_map<const RelAlgNode *, int> const &input_to_nest_level,
+    std::vector<size_t> const &input_permutation,
+    std::list<std::shared_ptr<const InputColDescriptor>> &input_col_desc,
+    const BoundingBoxIntersectJoinRewriteType rewrite_type,
+    Executor const *executor
+)
+```
+</CodeBlock>

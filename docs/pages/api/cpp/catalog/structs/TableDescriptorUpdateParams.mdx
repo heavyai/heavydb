@@ -1,0 +1,45 @@
+---
+title: TableDescriptorUpdateParams
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TableDescriptor.h>
+```
+
+---
+
+## Constructors
+
+### TableDescriptorUpdateParams [#tabledescriptorupdateparams]
+
+<CodeBlock links={{"TableDescriptorUpdateParams": "tabledescriptorupdateparams", "TableDescriptor": "tabledescriptor"}}>
+```cpp showLineNumbers={false}
+TableDescriptorUpdateParams::TableDescriptorUpdateParams(
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"TableDescriptorUpdateParams": "tabledescriptorupdateparams", "TableDescriptor": "tabledescriptor"}}>
+```cpp showLineNumbers={false}
+bool TableDescriptorUpdateParams::operator==(
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `max_rollback_epochs` | `int32_t` | |
+| `max_rows` | `int64_t` | |

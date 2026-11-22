@@ -1,0 +1,45 @@
+---
+title: import_export::delimited_parser::extend_buffer
+description: "Extends the given buffer to the lesser of max_buffer_resize or twice the given allocation size and reads new content from the file into the newly allocated buffer."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void import_export::delimited_parser::extend_buffer(
+    std::unique_ptr<char[]> &buffer,
+    size_t &buffer_size,
+    size_t &alloc_size,
+    FILE *file,
+    foreign_storage::FileReader *file_reader,
+    size_t max_buffer_resize
+)
+```
+</CodeBlock>
+
+Extends the given buffer to the lesser of max_buffer_resize or twice the given allocation size and reads new content from the file into the newly allocated buffer.
+
+**Parameters**
+
+<ParamField path="buffer" type="std::unique_ptr<char[]> &">
+- Buffer that will be extended
+</ParamField>
+
+<ParamField path="buffer_size" type="size_t &">
+- Current buffer size
+</ParamField>
+
+<ParamField path="alloc_size" type="size_t &">
+- Current allocation size
+</ParamField>
+
+<ParamField path="file" type="FILE *">
+- Handle for file to be read from (one of file or file_reader must be present)
+</ParamField>
+
+<ParamField path="file_reader" type="foreign_storage::FileReader *">
+- Reader for file to be read from (one of file or file_reader must be present)
+</ParamField>
+
+<ParamField path="max_buffer_resize" type="size_t">
+- Maximum size that the buffer can be extended to
+</ParamField>

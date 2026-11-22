@@ -1,0 +1,986 @@
+---
+title: RelAlgExecutor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgExecutor.h>
+```
+
+**Inherits from:** `StorageIOFacility` (private)
+
+---
+
+## Constructors
+
+### RelAlgExecutor [#relalgexecutor]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutor::RelAlgExecutor(
+    Executor *executor,
+    std::shared_ptr<const query_state::QueryState> query_state = nullptr,
+    gfx::GfxContext *gfx_context = nullptr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutor::RelAlgExecutor(
+    Executor *executor,
+    const std::string &query_ra,
+    const Catalog_Namespace::SessionInfo &session_info,
+    std::shared_ptr<const query_state::QueryState> query_state = nullptr,
+    gfx::GfxContext *gfx_context = nullptr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "Executor": "executor", "RelAlgDag": "relalgdag"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutor::RelAlgExecutor(
+    Executor *executor,
+    std::unique_ptr<RelAlgDag> query_dag,
+    const Catalog_Namespace::SessionInfo &session_info,
+    std::shared_ptr<const query_state::QueryState> query_state = nullptr,
+    gfx::GfxContext *gfx_context = nullptr
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getOuterFragmentCount [#getouterfragmentcount]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+size_t RelAlgExecutor::getOuterFragmentCount(
+    const CompilationOptions &co,
+    const ExecutionOptions &eo
+)
+```
+</CodeBlock>
+
+### executeRelAlgQuery [#executerelalgquery]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeRelAlgQuery(
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    const bool just_explain_plan,
+    const bool explain_verbose,
+    RenderInfo *render_info
+)
+```
+</CodeBlock>
+
+### executeRelAlgQueryWithFilterPushDown [#executerelalgquerywithfilterpushdown]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RaExecutionSequence": "raexecutionsequence", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
+    const RaExecutionSequence &seq,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    RenderInfo *render_info,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### prepareLeafExecution [#prepareleafexecution]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "AggregatedColRange": "aggregatedcolrange", "StringDictionaryGenerations": "stringdictionarygenerations", "TableGenerations": "tablegenerations"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::prepareLeafExecution(
+    const AggregatedColRange &agg_col_range,
+    const StringDictionaryGenerations &string_dictionary_generations,
+    const TableGenerations &table_generations
+)
+```
+</CodeBlock>
+
+### executeRelAlgSeq [#executerelalgseq]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RaExecutionSequence": "raexecutionsequence", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeRelAlgSeq(
+    const RaExecutionSequence &seq,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    RenderInfo *render_info,
+    const int64_t queue_time_ms,
+    const bool with_existing_temp_tables = false
+)
+```
+</CodeBlock>
+
+### executeRelAlgSubSeq [#executerelalgsubseq]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RaExecutionSequence": "raexecutionsequence", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
+    const RaExecutionSequence &seq,
+    const std::pair<size_t, size_t> interval,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    const bool skip_device_id_selection,
+    RenderInfo *render_info,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### executeRelAlgQuerySingleStep [#executerelalgquerysinglestep]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RaExecutionSequence": "raexecutionsequence", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "QueryStepExecutionResult": "../structs/querystepexecutionresult"}}>
+```cpp showLineNumbers={false}
+QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
+    const RaExecutionSequence &seq,
+    const size_t step_idx,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    RenderInfo *render_info
+)
+```
+</CodeBlock>
+
+### getOwnedRelAlgDag [#getownedrelalgdag]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgDag": "relalgdag"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<RelAlgDag> RelAlgExecutor::getOwnedRelAlgDag()
+```
+</CodeBlock>
+
+### getRelAlgDag [#getrelalgdag]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgDag": "relalgdag"}}>
+```cpp showLineNumbers={false}
+RelAlgDag * RelAlgExecutor::getRelAlgDag()
+```
+</CodeBlock>
+
+### getRootRelAlgNode [#getrootrelalgnode]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode & RelAlgExecutor::getRootRelAlgNode() const
+```
+</CodeBlock>
+
+### prepareForeignTables [#prepareforeigntables]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::prepareForeignTables()
+```
+</CodeBlock>
+
+### getRootRelAlgNodeShPtr [#getrootrelalgnodeshptr]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> RelAlgExecutor::getRootRelAlgNodeShPtr() const
+```
+</CodeBlock>
+
+### getJoinInfo [#getjoininfo]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::pair<std::vector<unsigned>, std::unordered_map<unsigned, JoinQualsPerNestingLevel>> RelAlgExecutor::getJoinInfo(
+    const RelAlgNode *root_node
+)
+```
+</CodeBlock>
+
+### getRelAlgTranslator [#getrelalgtranslator]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgNode": "relalgnode", "RelAlgTranslator": "relalgtranslator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAlgTranslator> RelAlgExecutor::getRelAlgTranslator(
+    const RelAlgNode *root_node
+)
+```
+</CodeBlock>
+
+### getSubqueries [#getsubqueries]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::shared_ptr<RexSubQuery>> & RelAlgExecutor::getSubqueries() const noexcept
+```
+</CodeBlock>
+
+### getParsedQueryHint [#getparsedqueryhint]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgNode": "relalgnode", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+std::optional<RegisteredQueryHint> RelAlgExecutor::getParsedQueryHint(
+    const RelAlgNode *node
+)
+```
+</CodeBlock>
+
+### getParsedQueryHints [#getparsedqueryhints]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgNode": "relalgnode", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+std::optional<std::unordered_map<const RelAlgNode *, std::unordered_map<unsigned, RegisteredQueryHint>>> RelAlgExecutor::getParsedQueryHints()
+```
+</CodeBlock>
+
+### getGlobalQueryHint [#getglobalqueryhint]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+std::optional<RegisteredQueryHint> RelAlgExecutor::getGlobalQueryHint()
+```
+</CodeBlock>
+
+### executeSimpleInsert [#executesimpleinsert]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeSimpleInsert(
+    const Analyzer::Query &insert_query,
+    Fragmenter_Namespace::InsertDataLoader &inserter,
+    const Catalog_Namespace::SessionInfo &session
+)
+```
+</CodeBlock>
+
+### computeColRangesCache [#computecolrangescache]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "AggregatedColRange": "aggregatedcolrange"}}>
+```cpp showLineNumbers={false}
+AggregatedColRange RelAlgExecutor::computeColRangesCache()
+```
+</CodeBlock>
+
+### computeStringDictionaryGenerations [#computestringdictionarygenerations]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "StringDictionaryGenerations": "stringdictionarygenerations"}}>
+```cpp showLineNumbers={false}
+StringDictionaryGenerations RelAlgExecutor::computeStringDictionaryGenerations()
+```
+</CodeBlock>
+
+### computeTableGenerations [#computetablegenerations]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "TableGenerations": "tablegenerations"}}>
+```cpp showLineNumbers={false}
+TableGenerations RelAlgExecutor::computeTableGenerations()
+```
+</CodeBlock>
+
+### getExecutor [#getexecutor]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+Executor * RelAlgExecutor::getExecutor() const
+```
+</CodeBlock>
+
+### cleanupPostExecution [#cleanuppostexecution]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::cleanupPostExecution()
+```
+</CodeBlock>
+
+### executePostExecutionCallback [#executepostexecutioncallback]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::executePostExecutionCallback()
+```
+</CodeBlock>
+
+### getRaExecutionSequence [#getraexecutionsequence]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgNode": "relalgnode", "Executor": "executor", "RaExecutionSequence": "raexecutionsequence"}}>
+```cpp showLineNumbers={false}
+RaExecutionSequence RelAlgExecutor::getRaExecutionSequence(
+    const RelAlgNode *root_node,
+    Executor *executor,
+    const bool just_validation = false
+)
+```
+</CodeBlock>
+
+### prepareForeignTable [#prepareforeigntable]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::prepareForeignTable()
+```
+</CodeBlock>
+
+### getPhysicalTableIds [#getphysicaltableids]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+std::unordered_set<shared::TableKey> RelAlgExecutor::getPhysicalTableIds() const
+```
+</CodeBlock>
+
+### prepareForSystemTableExecution [#prepareforsystemtableexecution]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::prepareForSystemTableExecution(
+    const CompilationOptions &co
+) const
+```
+</CodeBlock>
+
+### initializeParallelismHints [#initializeparallelismhints]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::initializeParallelismHints()
+```
+</CodeBlock>
+
+### executeRelAlgQueryNoRetry [#executerelalgquerynoretry]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    const bool just_explain_plan,
+    const bool explain_verbose,
+    RenderInfo *render_info
+)
+```
+</CodeBlock>
+
+### executeRelAlgStep [#executerelalgstep]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RaExecutionSequence": "raexecutionsequence", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::executeRelAlgStep(
+    const RaExecutionSequence &seq,
+    const size_t step_idx,
+    const CompilationOptions &,
+    const ExecutionOptions &,
+    bool skip_device_id_selection,
+    RenderInfo *,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### executeUpdate [#executeupdate]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgNode": "relalgnode", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::executeUpdate(
+    const RelAlgNode *node,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### executeDelete [#executedelete]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgNode": "relalgnode", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::executeDelete(
+    const RelAlgNode *node,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo_in,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### executeCompound [#executecompound]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelCompound": "relcompound", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeCompound(
+    const RelCompound *,
+    const CompilationOptions &,
+    const ExecutionOptions &,
+    RenderInfo *,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### executeAggregate [#executeaggregate]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAggregate": "relaggregate", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeAggregate(
+    const RelAggregate *aggregate,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    RenderInfo *render_info,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### executeProject [#executeproject]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelProject": "relproject", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeProject(
+    const RelProject *,
+    const CompilationOptions &,
+    const ExecutionOptions &,
+    RenderInfo *,
+    const int64_t queue_time_ms,
+    const std::optional<size_t> previous_count
+)
+```
+</CodeBlock>
+
+### executeTableFunction [#executetablefunction]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelTableFunction": "reltablefunction", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeTableFunction(
+    const RelTableFunction *,
+    const CompilationOptions &,
+    const ExecutionOptions &,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### executeFilter [#executefilter]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelFilter": "relfilter", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeFilter(
+    const RelFilter *,
+    const CompilationOptions &,
+    const ExecutionOptions &,
+    RenderInfo *,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### executeSort [#executesort]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelSort": "relsort", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeSort(
+    const RelSort *,
+    const CompilationOptions &,
+    const ExecutionOptions &,
+    RenderInfo *,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### executeLogicalValues [#executelogicalvalues]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelLogicalValues": "rellogicalvalues", "ExecutionOptions": "../structs/executionoptions", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeLogicalValues(
+    const RelLogicalValues *,
+    const ExecutionOptions &
+)
+```
+</CodeBlock>
+
+### executeModify [#executemodify]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelModify": "relmodify", "ExecutionOptions": "../structs/executionoptions", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeModify(
+    const RelModify *modify,
+    const ExecutionOptions &eo
+)
+```
+</CodeBlock>
+
+### executeUnion [#executeunion]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelLogicalUnion": "rellogicalunion", "RaExecutionSequence": "raexecutionsequence", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeUnion(
+    const RelLogicalUnion *,
+    const RaExecutionSequence &,
+    const CompilationOptions &,
+    const ExecutionOptions &,
+    RenderInfo *,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### createSortInputWorkUnit [#createsortinputworkunit]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelSort": "relsort", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
+    const RelSort *,
+    std::list<Analyzer::OrderEntry> &order_entries,
+    const ExecutionOptions &eo
+)
+```
+</CodeBlock>
+
+### executeWorkUnit [#executeworkunit]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "TargetMetaInfo": "targetmetainfo", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::executeWorkUnit(
+    const WorkUnit &work_unit,
+    const std::vector<TargetMetaInfo> &targets_meta,
+    const bool is_agg,
+    const CompilationOptions &co_in,
+    const ExecutionOptions &eo_in,
+    RenderInfo *,
+    const int64_t queue_time_ms,
+    const std::optional<size_t> previous_count = std::nullopt
+)
+```
+</CodeBlock>
+
+### computeWindow [#computewindow]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::computeWindow(
+    const WorkUnit &work_unit,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    ColumnCacheMap &column_cache_map,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### createWindowFunctionContext [#createwindowfunctioncontext]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "WindowProjectNodeContext": "windowprojectnodecontext", "HashJoin": "hashjoin", "InputTableInfo": "../structs/inputtableinfo", "CompilationOptions": "../structs/compilationoptions", "RowSetMemoryOwner": "rowsetmemoryowner", "WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionContext(
+    const Analyzer::WindowFunction *window_func,
+    WindowProjectNodeContext *window_project_node_ctx,
+    const size_t target_idx,
+    const std::shared_ptr<Analyzer::BinOper> &partition_key_cond,
+    std::unordered_map<QueryPlanHash, std::shared_ptr<HashJoin>> &partition_cache,
+    std::unordered_map<QueryPlanHash, size_t> &sorted_partition_key_ref_count_map,
+    const WorkUnit &work_unit,
+    const std::vector<InputTableInfo> &query_infos,
+    const CompilationOptions &co,
+    ColumnCacheMap &column_cache_map,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    Data_Namespace::DataMgr *data_mgr,
+    int device_id
+)
+```
+</CodeBlock>
+
+### getNDVEstimation [#getndvestimation]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+size_t RelAlgExecutor::getNDVEstimation(
+    const WorkUnit &work_unit,
+    const int64_t range,
+    const bool is_agg,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo
+)
+```
+</CodeBlock>
+
+### hasDeletedRowInQuery [#hasdeletedrowinquery]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+bool RelAlgExecutor::hasDeletedRowInQuery(
+    std::vector<InputTableInfo> const &
+) const
+```
+</CodeBlock>
+
+### getFilteredCountAll [#getfilteredcountall]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgExecutor::getFilteredCountAll(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const bool is_agg,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo
+)
+```
+</CodeBlock>
+
+### getFilterSelectivity [#getfilterselectivity]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "FilterSelectivity": "../structs/filterselectivity"}}>
+```cpp showLineNumbers={false}
+FilterSelectivity RelAlgExecutor::getFilterSelectivity(
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &filter_expressions,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo
+)
+```
+</CodeBlock>
+
+Given a set of filter expressions for a table, it launches a new COUNT query to compute the number of passing rows, and then generates a set of statistics related to those filters.
+
+Later, these stats are used to decide whether a filter should be pushed down or not.
+
+### selectFiltersToBePushedDown [#selectfilterstobepusheddown]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "PushedDownFilterInfo": "../structs/pusheddownfilterinfo"}}>
+```cpp showLineNumbers={false}
+std::vector<PushedDownFilterInfo> RelAlgExecutor::selectFiltersToBePushedDown(
+    const RelAlgExecutor::WorkUnit &work_unit,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo
+)
+```
+</CodeBlock>
+
+Goes through all candidate filters and evaluate whether they pass the selectivity criteria or not.
+
+### isRowidLookup [#isrowidlookup]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+bool RelAlgExecutor::isRowidLookup(
+    const WorkUnit &work_unit
+)
+```
+</CodeBlock>
+
+### handleOutOfMemoryRetry [#handleoutofmemoryretry]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "TargetMetaInfo": "targetmetainfo", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "QueryExecutionError": "queryexecutionerror", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
+    const RelAlgExecutor::WorkUnit &work_unit,
+    ColumnCacheMap &column_cache,
+    const std::vector<TargetMetaInfo> &targets_meta,
+    const bool is_agg,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    RenderInfo *render_info,
+    const QueryExecutionError &e,
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### createWorkUnit [#createworkunit]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgNode": "relalgnode", "SortInfo": "../structs/sortinfo", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(
+    const RelAlgNode *,
+    const SortInfo &,
+    const ExecutionOptions &eo
+)
+```
+</CodeBlock>
+
+### createCompoundWorkUnit [#createcompoundworkunit]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelCompound": "relcompound", "SortInfo": "../structs/sortinfo", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
+    const RelCompound *,
+    const SortInfo &,
+    const ExecutionOptions &eo
+)
+```
+</CodeBlock>
+
+### createAggregateWorkUnit [#createaggregateworkunit]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAggregate": "relaggregate", "SortInfo": "../structs/sortinfo"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
+    const RelAggregate *,
+    const SortInfo &,
+    const bool just_explain
+)
+```
+</CodeBlock>
+
+### createProjectWorkUnit [#createprojectworkunit]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelProject": "relproject", "SortInfo": "../structs/sortinfo", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
+    const RelProject *,
+    const SortInfo &,
+    const ExecutionOptions &eo
+)
+```
+</CodeBlock>
+
+### createFilterWorkUnit [#createfilterworkunit]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelFilter": "relfilter", "SortInfo": "../structs/sortinfo"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(
+    const RelFilter *,
+    const SortInfo &,
+    const bool just_explain
+)
+```
+</CodeBlock>
+
+### createJoinWorkUnit [#createjoinworkunit]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelJoin": "reljoin", "SortInfo": "../structs/sortinfo"}}>
+```cpp showLineNumbers={false}
+WorkUnit RelAlgExecutor::createJoinWorkUnit(
+    const RelJoin *,
+    const SortInfo &,
+    const bool just_explain
+)
+```
+</CodeBlock>
+
+### createUnionWorkUnit [#createunionworkunit]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelLogicalUnion": "rellogicalunion", "SortInfo": "../structs/sortinfo", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
+    const RelLogicalUnion *,
+    const SortInfo &,
+    const ExecutionOptions &eo
+)
+```
+</CodeBlock>
+
+### createTableFunctionWorkUnit [#createtablefunctionworkunit]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUnit(
+    const RelTableFunction *table_func,
+    const bool just_explain,
+    const bool is_gpu
+)
+```
+</CodeBlock>
+
+### addTemporaryTable [#addtemporarytable]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::addTemporaryTable(
+    const int node_id,
+    const ResultSetPtr &result
+)
+```
+</CodeBlock>
+
+### eraseFromTemporaryTables [#erasefromtemporarytables]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::eraseFromTemporaryTables(
+    const int node_id
+)
+```
+</CodeBlock>
+
+### handleNop [#handlenop]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RaExecutionDesc": "raexecutiondesc"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::handleNop(
+    RaExecutionDesc &ed
+)
+```
+</CodeBlock>
+
+### getLeftDeepJoinTreesInfo [#getleftdeepjointreesinfo]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+std::unordered_map<unsigned, JoinQualsPerNestingLevel> & RelAlgExecutor::getLeftDeepJoinTreesInfo()
+```
+</CodeBlock>
+
+### translateLeftDeepJoinFilter [#translateleftdeepjoinfilter]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelLeftDeepInnerJoin": "relleftdeepinnerjoin", "InputDescriptor": "inputdescriptor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
+    const RelLeftDeepInnerJoin *join,
+    const std::vector<InputDescriptor> &input_descs,
+    const std::unordered_map<const RelAlgNode *, int> &input_to_nest_level,
+    const bool just_explain
+)
+```
+</CodeBlock>
+
+### makeJoinQuals [#makejoinquals]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RexScalar": "rexscalar", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::list<std::shared_ptr<Analyzer::Expr>> RelAlgExecutor::makeJoinQuals(
+    const RexScalar *join_condition,
+    const std::vector<JoinType> &join_types,
+    const std::unordered_map<const RelAlgNode *, int> &input_to_nest_level,
+    const bool just_explain
+) const
+```
+</CodeBlock>
+
+### setHasStepForUnion [#sethasstepforunion]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::setHasStepForUnion(
+    bool flag
+)
+```
+</CodeBlock>
+
+### hasStepForUnion [#hasstepforunion]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+bool RelAlgExecutor::hasStepForUnion() const
+```
+</CodeBlock>
+
+### canUseResultsetCache [#canuseresultsetcache]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "ExecutionOptions": "../structs/executionoptions"}}>
+```cpp showLineNumbers={false}
+bool RelAlgExecutor::canUseResultsetCache(
+    const ExecutionOptions &eo
+) const
+```
+</CodeBlock>
+
+### setupCaching [#setupcaching]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::setupCaching(
+    const RelAlgNode *ra
+)
+```
+</CodeBlock>
+
+### handlePersistentError [#handlepersistenterror]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+void RelAlgExecutor::handlePersistentError(
+    const int32_t error_code
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getErrorMessageFromCode [#geterrormessagefromcode]
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+std::string RelAlgExecutor::getErrorMessageFromCode(
+    const int32_t error_code
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `TargetInfoList` | `std::vector< TargetInfo >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_` | `Executor *` | |
+| `query_dag_` | `std::unique_ptr< RelAlgDag >` | |
+| `query_state_` | `std::shared_ptr< const query_state::QueryState >` | |
+| `temporary_tables_` | `TemporaryTables` | |
+| `now_` | `time_t` | |
+| `left_deep_join_info_` | `std::unordered_map< unsigned, JoinQualsPerNestingLevel >` | |
+| `target_exprs_owned_` | `std::vector< std::shared_ptr< Analyzer::Expr > >` | |
+| `queue_time_ms_` | `int64_t` | |
+| `has_step_for_union_` | `bool` | |
+| `dml_transaction_parameters_` | `std::unique_ptr< TransactionParameters >` | |
+| `post_execution_callback_` | `std::optional< std::function< void()> >` | |
+| `gfx_context_` | `gfx::GfxContext *` | |
+| `speculative_topn_blacklist_` <Badge intent="note" minimal>static</Badge> | `SpeculativeTopNBlacklist` | |
+
+---
+
+## Inner classes
+
+### WorkUnit
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+struct RelAlgExecutor::WorkUnit
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `exe_unit` | `RelAlgExecutionUnit` | |
+| `body` | `const RelAlgNode *` | |
+| `max_groups_buffer_entry_guess` | `const size_t` | |
+| `query_rewriter` | `std::unique_ptr< QueryRewriter >` | |
+| `input_permutation` | `const std::vector< size_t >` | |
+| `left_deep_join_input_sizes` | `const std::vector< size_t >` | |
+
+### TableFunctionWorkUnit
+
+<CodeBlock links={{"RelAlgExecutor": "relalgexecutor"}}>
+```cpp showLineNumbers={false}
+struct RelAlgExecutor::TableFunctionWorkUnit
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `exe_unit` | `TableFunctionExecutionUnit` | |
+| `body` | `const RelAlgNode *` | |

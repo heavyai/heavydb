@@ -1,0 +1,82 @@
+---
+title: tf_geo_rasterize__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename Z>
+TEMPLATE_NOINLINE int32_t tf_geo_rasterize__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<T> &input_x,
+    const Column<T> &input_y,
+    const Column<Z> &input_z,
+    const TextEncodingNone &agg_type_str,
+    const T bin_dim_meters,
+    const bool geographic_coords,
+    const int64_t neighborhood_fill_radius,
+    const bool fill_only_nulls,
+    Column<T> &output_x,
+    Column<T> &output_y,
+    Column<Z> &output_z
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename Z>
+TEMPLATE_NOINLINE int32_t tf_geo_rasterize__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<T> &input_x,
+    const Column<T> &input_y,
+    const Column<Z> &input_z,
+    const TextEncodingNone &agg_type_str,
+    const TextEncodingNone &fill_agg_type_str,
+    const T bin_dim_meters,
+    const bool geographic_coords,
+    const int64_t neighborhood_fill_radius,
+    const bool fill_only_nulls,
+    Column<T> &output_x,
+    Column<T> &output_y,
+    Column<Z> &output_z
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename Z>
+TEMPLATE_NOINLINE int32_t tf_geo_rasterize__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<T> &input_x,
+    const Column<T> &input_y,
+    const Column<Z> &input_z,
+    const TextEncodingNone &agg_type_str,
+    const TextEncodingNone &fill_agg_type_str,
+    const T bin_dim_meters,
+    const bool geographic_coords,
+    const int64_t neighborhood_fill_radius,
+    const bool fill_only_nulls,
+    const T x_min,
+    const T x_max,
+    const T y_min,
+    const T y_max,
+    Column<T> &output_x,
+    Column<T> &output_y,
+    Column<Z> &output_z
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

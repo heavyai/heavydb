@@ -1,0 +1,38 @@
+---
+title: HashTableBuildDag
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgExecutionUnit.h>
+```
+
+---
+
+## Constructors
+
+### HashTableBuildDag [#hashtablebuilddag]
+
+<CodeBlock links={{"HashTableBuildDag": "hashtablebuilddag"}}>
+```cpp showLineNumbers={false}
+HashTableBuildDag::HashTableBuildDag(
+    size_t in_inner_cols_info,
+    size_t in_outer_cols_info,
+    QueryPlanHash in_inner_cols_access_path,
+    QueryPlanHash in_outer_cols_access_path,
+    std::unordered_set<size_t> &&inputTableKeys
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `inner_cols_info` | `size_t` | |
+| `outer_cols_info` | `size_t` | |
+| `inner_cols_access_path` | `QueryPlanHash` | |
+| `outer_cols_access_path` | `QueryPlanHash` | |
+| `inputTableKeys` | `std::unordered_set< size_t >` | |

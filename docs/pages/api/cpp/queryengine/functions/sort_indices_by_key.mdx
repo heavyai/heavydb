@@ -1,0 +1,18 @@
+---
+title: sort_indices_by_key
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class K, class I>
+void sort_indices_by_key(
+    thrust::device_ptr<I> d_idx_first,
+    const size_t idx_count,
+    const thrust::device_ptr<K> &d_key_buffer,
+    const bool desc,
+    ThrustAllocator &allocator,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>

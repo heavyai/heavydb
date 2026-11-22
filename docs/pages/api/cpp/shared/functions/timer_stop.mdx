@@ -1,0 +1,14 @@
+---
+title: timer_stop
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename Type = std::chrono::steady_clock::time_point,
+          typename TypeR = std::chrono::milliseconds>
+TypeR::rep timer_stop(
+    Type clock_begin
+)
+```
+</CodeBlock>

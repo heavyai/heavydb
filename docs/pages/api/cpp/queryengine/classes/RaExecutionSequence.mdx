@@ -1,0 +1,221 @@
+---
+title: RaExecutionSequence
+description: "A container for relational algebra descriptors defining the execution order for a relational algebra query."
+---
+
+A container for relational algebra descriptors defining the execution order for a relational algebra query.
+
+Holds the relational algebra descriptors for executing a relational algebra query. Each descriptor holds both a top-level relational algebra node and a [ResultSet](resultset) ptr holding the results from the execution of the accompany node(s). The sequence can be generated on initialization or lazily with calls to the next() operator.
+
+```cpp showLineNumbers={false}
+#include <RelAlgExecutionDescriptor.h>
+```
+
+---
+
+## Constructors
+
+### RaExecutionSequence [#raexecutionsequence]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence", "RelAlgNode": "relalgnode", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+RaExecutionSequence::RaExecutionSequence(
+    const RelAlgNode *,
+    Executor *,
+    const bool for_validation,
+    const bool build_sequence = true
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence", "RaExecutionDesc": "raexecutiondesc"}}>
+```cpp showLineNumbers={false}
+RaExecutionSequence::RaExecutionSequence(
+    std::unique_ptr<RaExecutionDesc> exec_desc
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### next [#next]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence", "RaExecutionDesc": "raexecutiondesc"}}>
+```cpp showLineNumbers={false}
+RaExecutionDesc * RaExecutionSequence::next()
+```
+</CodeBlock>
+
+Return the next execution descriptor in the sequence.
+
+If no more execution descriptors exist, returns nullptr.
+
+### prev [#prev]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence", "RaExecutionDesc": "raexecutiondesc"}}>
+```cpp showLineNumbers={false}
+RaExecutionDesc * RaExecutionSequence::prev()
+```
+</CodeBlock>
+
+Return the previous execution descriptor in the sequence.
+
+If the sequence is made up of 0 or 1 descriptors, returns nullptr.
+
+### nextStepId [#nextstepid]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RaExecutionSequence::nextStepId(
+    const bool after_broadcast
+) const
+```
+</CodeBlock>
+
+Returns the index of the next execution descriptor in the graph.
+
+If after_broadcast is true, returns the index of the first execution descriptor after the next global broadcast. Returns std::nullopt if no execution descriptors remain in the graph.
+
+### executionFinished [#executionfinished]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence"}}>
+```cpp showLineNumbers={false}
+bool RaExecutionSequence::executionFinished() const
+```
+</CodeBlock>
+
+### extractQueryStepSkippingInfo [#extractquerystepskippinginfo]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence"}}>
+```cpp showLineNumbers={false}
+void RaExecutionSequence::extractQueryStepSkippingInfo()
+```
+</CodeBlock>
+
+Extracts a topological information of the query plan DAG about the relationship among query steps where a parent step and its child steps can be skipped if we have a cached resultset of the parent step.
+
+### skipQuerySteps [#skipquerysteps]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence"}}>
+```cpp showLineNumbers={false}
+void RaExecutionSequence::skipQuerySteps()
+```
+</CodeBlock>
+
+Optimizes the query execution step based on the information extracted from the [`extractQueryStepSkippingInfo`](#extractquerystepskippinginfo) function.
+
+### mergeSortWithInput [#mergesortwithinput]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence"}}>
+```cpp showLineNumbers={false}
+std::vector<Vertex> RaExecutionSequence::mergeSortWithInput(
+    const std::vector<Vertex> &vertices,
+    const DAG &graph
+)
+```
+</CodeBlock>
+
+### getSkippedQueryStepCacheKeys [#getskippedquerystepcachekeys]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence"}}>
+```cpp showLineNumbers={false}
+const std::unordered_map<int, QueryPlanHash> RaExecutionSequence::getSkippedQueryStepCacheKeys() const
+```
+</CodeBlock>
+
+### getDescriptor [#getdescriptor]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence", "RaExecutionDesc": "raexecutiondesc"}}>
+```cpp showLineNumbers={false}
+RaExecutionDesc * RaExecutionSequence::getDescriptor(
+    size_t idx
+) const
+```
+</CodeBlock>
+
+### getDescriptorByBodyId [#getdescriptorbybodyid]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence", "RaExecutionDesc": "raexecutiondesc"}}>
+```cpp showLineNumbers={false}
+RaExecutionDesc * RaExecutionSequence::getDescriptorByBodyId(
+    unsigned const body_id,
+    size_t const start_idx
+) const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence"}}>
+```cpp showLineNumbers={false}
+size_t RaExecutionSequence::size() const
+```
+</CodeBlock>
+
+### empty [#empty]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence"}}>
+```cpp showLineNumbers={false}
+bool RaExecutionSequence::empty() const
+```
+</CodeBlock>
+
+### totalDescriptorsCount [#totaldescriptorscount]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence"}}>
+```cpp showLineNumbers={false}
+size_t RaExecutionSequence::totalDescriptorsCount() const
+```
+</CodeBlock>
+
+### hasQueryStepForUnion [#hasquerystepforunion]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence"}}>
+```cpp showLineNumbers={false}
+const bool RaExecutionSequence::hasQueryStepForUnion() const
+```
+</CodeBlock>
+
+### stepsToNextBroadcast [#stepstonextbroadcast]
+
+<CodeBlock links={{"RaExecutionSequence": "raexecutionsequence"}}>
+```cpp showLineNumbers={false}
+size_t RaExecutionSequence::stepsToNextBroadcast() const
+```
+</CodeBlock>
+
+Starting from the current vertex, iterate the graph counting the number of execution descriptors remaining before the next required broadcast step.
+
+The current vertex is counted as the first step before a broadcast is required; i.e. a return value of 0 indicates no additional steps in the graph can be executed without a global broadcast, and a return value of 2 indicates the current vertex and both subsequent vertices can be executed before a global broacast is needed.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `graph_` | `DAG` | |
+| `executor_` | `Executor *` | |
+| `joins_` | `std::unordered_set< Vertex >` | |
+| `ordering_` | `std::vector< Vertex >` | |
+| `current_vertex_` | `size_t` | |
+| `scan_count_` | `size_t` | |
+| `just_validation_` | `bool` | |
+| `node_ptr_to_vert_idx_` | `std::unordered_map< const RelAlgNode *, int >` | |
+| `skippable_steps_` | `std::unordered_map< int, std::unordered_set< int > >` | |
+| `cached_query_steps_` | `std::unordered_set< int >` | |
+| `cached_resultset_keys_` | `std::unordered_map< int, QueryPlanHash >` | |
+| `has_step_for_union_` | `bool` | |
+| `has_limit_clause_` | `bool` | |
+| `descs_` | `std::vector< std::unique_ptr< RaExecutionDesc > >` | |

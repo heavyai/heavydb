@@ -1,0 +1,307 @@
+---
+title: Analyzer::GeoBinOper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### GeoBinOper [#geobinoper]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::GeoBinOper::GeoBinOper(
+    const Geospatial::GeoBase::GeoOp op,
+    const SQLTypeInfo &ti,
+    const SQLTypeInfo &ti0,
+    const SQLTypeInfo &ti1,
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &args0,
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &args1
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoBinOper::deep_copy() const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::GeoBinOper::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::GeoBinOper::toString() const override
+```
+</CodeBlock>
+
+### getOp [#getop]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoBase::GeoOp Analyzer::GeoBinOper::getOp() const
+```
+</CodeBlock>
+
+### getTypeInfo0 [#gettypeinfo0]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo Analyzer::GeoBinOper::getTypeInfo0() const
+```
+</CodeBlock>
+
+### getTypeInfo1 [#gettypeinfo1]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo Analyzer::GeoBinOper::getTypeInfo1() const
+```
+</CodeBlock>
+
+### getArgs0 [#getargs0]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::shared_ptr<Analyzer::Expr>> & Analyzer::GeoBinOper::getArgs0() const
+```
+</CodeBlock>
+
+### getArgs1 [#getargs1]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::shared_ptr<Analyzer::Expr>> & Analyzer::GeoBinOper::getArgs1() const
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoBinOper::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::GeoBinOper::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::GeoBinOper::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::GeoBinOper::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::GeoBinOper::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoBinOper::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoBinOper::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::GeoBinOper::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoBinOper::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoBinOper::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "ColumnVar": "columnvar", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoBinOper::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::GeoBinOper::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::GeoBinOper::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::GeoBinOper::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::GeoBinOper::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoBinOper::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::GeoBinOper::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoBinOper::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoBinOper::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"GeoBinOper": "geobinoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoBinOper::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `op_` | `const Geospatial::GeoBase::GeoOp` | |
+| `ti0_` | `SQLTypeInfo` | |
+| `ti1_` | `SQLTypeInfo` | |
+| `args0_` | `const std::vector< std::shared_ptr< Analyzer::Expr > >` | |
+| `args1_` | `const std::vector< std::shared_ptr< Analyzer::Expr > >` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

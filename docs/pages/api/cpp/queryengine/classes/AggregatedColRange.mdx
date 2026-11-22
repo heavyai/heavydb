@@ -1,0 +1,57 @@
+---
+title: AggregatedColRange
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <AggregatedColRange.h>
+```
+
+---
+
+## Methods
+
+### getColRange [#getcolrange]
+
+<CodeBlock links={{"AggregatedColRange": "aggregatedcolrange", "PhysicalInput": "../structs/physicalinput", "ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange AggregatedColRange::getColRange(
+    const PhysicalInput &
+) const
+```
+</CodeBlock>
+
+### setColRange [#setcolrange]
+
+<CodeBlock links={{"AggregatedColRange": "aggregatedcolrange", "PhysicalInput": "../structs/physicalinput", "ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+void AggregatedColRange::setColRange(
+    const PhysicalInput &,
+    const ExpressionRange &
+)
+```
+</CodeBlock>
+
+### asMap [#asmap]
+
+<CodeBlock links={{"AggregatedColRange": "aggregatedcolrange", "PhysicalInput": "../structs/physicalinput", "ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+const std::unordered_map<PhysicalInput, ExpressionRange> & AggregatedColRange::asMap() const
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"AggregatedColRange": "aggregatedcolrange"}}>
+```cpp showLineNumbers={false}
+void AggregatedColRange::clear()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cache_` | `std::unordered_map< PhysicalInput, ExpressionRange >` | |

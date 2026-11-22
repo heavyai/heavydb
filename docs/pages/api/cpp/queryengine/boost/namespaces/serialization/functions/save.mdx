@@ -1,0 +1,35 @@
+---
+title: boost::serialization::save
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ExplainedQueryHint": "../../../../classes/explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+template <class Archive>
+void boost::serialization::save(
+    Archive &ar,
+    const ExplainedQueryHint &query_hint,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class Archive>
+void boost::serialization::save(
+    Archive &ar,
+    const SQLTypeInfo &type_info,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

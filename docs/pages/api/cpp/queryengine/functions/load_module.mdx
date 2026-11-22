@@ -1,0 +1,15 @@
+---
+title: load_module
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::shared_ptr<torch::jit::script::Module> load_module(
+    const std::string &model_path,
+    const std::string compute_device,
+    const at::ScalarType data_type,
+    const bool use_cache
+)
+```
+</CodeBlock>

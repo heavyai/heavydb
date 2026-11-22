@@ -1,0 +1,184 @@
+---
+title: import_export::QueryExporterGDAL
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/QueryExporterGDAL.h>
+```
+
+**Inherits from:** `import_export::QueryExporter` (public)
+
+---
+
+## Constructors
+
+### QueryExporterGDAL [#queryexportergdal]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryExporterGDAL": "queryexportergdal"}}>
+```cpp showLineNumbers={false}
+import_export::QueryExporterGDAL::QueryExporterGDAL(
+    const FileType file_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Deleted overload 2">
+
+<CodeBlock links={{"QueryExporterGDAL": "queryexportergdal"}}>
+```cpp showLineNumbers={false}
+import_export::QueryExporterGDAL::QueryExporterGDAL() = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~QueryExporterGDAL
+
+<CodeBlock links={{"QueryExporterGDAL": "queryexportergdal"}}>
+```cpp showLineNumbers={false}
+import_export::QueryExporterGDAL::~QueryExporterGDAL() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### beginExport [#beginexport]
+
+<CodeBlock links={{"QueryExporterGDAL": "queryexportergdal", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+void import_export::QueryExporterGDAL::beginExport(
+    const std::string &file_path,
+    const std::string &layer_name,
+    const CopyParams &copy_params,
+    const std::vector<TargetMetaInfo> &column_infos,
+    const FileCompression file_compression,
+    const ArrayNullHandling array_null_handling
+)
+```
+</CodeBlock>
+
+### exportResults [#exportresults]
+
+<CodeBlock links={{"QueryExporterGDAL": "queryexportergdal"}}>
+```cpp showLineNumbers={false}
+void import_export::QueryExporterGDAL::exportResults(
+    const std::vector<AggregatedResult> &query_results
+)
+```
+</CodeBlock>
+
+### endExport [#endexport]
+
+<CodeBlock links={{"QueryExporterGDAL": "queryexportergdal"}}>
+```cpp showLineNumbers={false}
+void import_export::QueryExporterGDAL::endExport()
+```
+</CodeBlock>
+
+### cleanUp [#cleanup]
+
+<CodeBlock links={{"QueryExporterGDAL": "queryexportergdal"}}>
+```cpp showLineNumbers={false}
+void import_export::QueryExporterGDAL::cleanUp()
+```
+</CodeBlock>
+
+### validateFileExtensions [#validatefileextensions]
+
+<CodeBlock links={{"QueryExporterGDAL": "queryexportergdal", "QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+void import_export::QueryExporterGDAL::validateFileExtensions(
+    const std::string &file_path,
+    const std::string &file_type,
+    const std::unordered_set<std::string> &valid_extensions
+) const
+```
+</CodeBlock>
+
+### safeColumnName [#safecolumnname]
+
+<CodeBlock links={{"QueryExporterGDAL": "queryexportergdal", "QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+std::string import_export::QueryExporterGDAL::safeColumnName(
+    const std::string &resname,
+    const int column_index
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### create [#create]
+
+<CodeBlock links={{"QueryExporterGDAL": "queryexportergdal", "QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<QueryExporter> import_export::QueryExporterGDAL::create(
+    const FileType file_type
+)
+```
+</CodeBlock>
+
+### formatTemporal [#formattemporal]
+
+<CodeBlock links={{"QueryExporterGDAL": "queryexportergdal", "QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+std::string import_export::QueryExporterGDAL::formatTemporal(
+    const SQLTypeInfo &type_info,
+    int64_t unix_time
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### FileType
+
+| Name | Value | Description |
+|---|---|---|
+| `kCSV` | | |
+| `kGeoJSON` | | |
+| `kGeoJSONL` | | |
+| `kShapefile` | | |
+| `kFlatGeobuf` | | |
+### FileCompression
+
+| Name | Value | Description |
+|---|---|---|
+| `kNone` | | |
+| `kGZip` | | |
+| `kZip` | | |
+### ArrayNullHandling
+
+| Name | Value | Description |
+|---|---|---|
+| `kAbortWithWarning` | | |
+| `kExportSentinels` | | |
+| `kExportZeros` | | |
+| `kNullEntireField` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `copy_params_` | `CopyParams` | |
+| `gdal_dataset_` | `GDALDataset *` | |
+| `ogr_layer_` | `OGRLayer *` | |
+| `field_indices_` | `std::vector< int >` | |
+| `array_null_handling_` | `ArrayNullHandling` | |
+| `file_type_` | `const FileType` | |

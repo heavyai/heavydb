@@ -1,0 +1,90 @@
+---
+title: threading_tbb::future
+description: ""
+---
+
+<CodeBlock id="future" links={{"future": "future"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+struct future
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <threading_tbb/threading_tbb.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### future [#future]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"future": "future"}}>
+```cpp showLineNumbers={false}
+threading_tbb::future<T>::future() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<CodeBlock links={{"future": "future"}}>
+```cpp showLineNumbers={false}
+threading_tbb::future<T>::future(
+    future &&
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move (with p)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"future": "future", "tbb_packaged_task": "tbbpackagedtask"}}>
+```cpp showLineNumbers={false}
+threading_tbb::future<T>::future(
+    std::unique_ptr<tbb_packaged_task<T>> &&p
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### wait [#wait]
+
+<CodeBlock links={{"future": "future"}}>
+```cpp showLineNumbers={false}
+void threading_tbb::future<T>::wait()
+```
+</CodeBlock>
+
+### get [#get]
+
+<CodeBlock links={{"future": "future"}}>
+```cpp showLineNumbers={false}
+T & threading_tbb::future<T>::get()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `task_` | `std::unique_ptr< tbb_packaged_task< T > >` | |

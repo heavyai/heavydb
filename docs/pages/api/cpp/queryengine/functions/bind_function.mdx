@@ -1,0 +1,59 @@
+---
+title: bind_function
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
+    std::string name,
+    Analyzer::ExpressionPtrVector func_args,
+    const std::vector<T> &ext_funcs,
+    const std::string processor
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ExtensionFunction": "../classes/extensionfunction"}}>
+```cpp showLineNumbers={false}
+ExtensionFunction bind_function(
+    std::string name,
+    Analyzer::ExpressionPtrVector func_args
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ExtensionFunction": "../classes/extensionfunction"}}>
+```cpp showLineNumbers={false}
+ExtensionFunction bind_function(
+    std::string name,
+    Analyzer::ExpressionPtrVector func_args,
+    const bool is_gpu
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"ExtensionFunction": "../classes/extensionfunction"}}>
+```cpp showLineNumbers={false}
+ExtensionFunction bind_function(
+    const Analyzer::FunctionOper *function_oper,
+    const bool is_gpu
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

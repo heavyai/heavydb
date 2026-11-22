@@ -1,0 +1,87 @@
+---
+title: TableFunctions_Namespace::OneHotEncoder_Namespace::one_hot_encode
+description: "Takes a column of text-encoded data and one-hot encoding information as input."
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../../../../structs/column", "TextEncodingDict": "../../../../structs/textencodingdict", "OneHotEncodingInfo": "../structs/onehotencodinginfo", "OneHotEncodedCol": "../structs/onehotencodedcol"}}>
+```cpp showLineNumbers={false}
+template <typename F>
+NEVER_INLINE HOST OneHotEncodedCol<F> TableFunctions_Namespace::OneHotEncoder_Namespace::one_hot_encode(
+    const Column<TextEncodingDict> &text_col,
+    const TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodingInfo &one_hot_encoding_info
+)
+```
+</CodeBlock>
+
+Takes a column of text-encoded data and one-hot encoding information as input.
+
+It performs the one-hot encoding process and returns an object containing the one-hot encoded columns and their corresponding categorical features.
+
+**Returns:** [OneHotEncodedCol&lt;F&gt;](../structs/onehotencodedcol) - A transformed column with multiple one-hot encoded sub-columns, one for each of the top-k keys
+
+**Parameters**
+
+<ParamField path="text_col" type="const Column<TextEncodingDict> &">
+- Input [TextEncodingDict](../../../../structs/textencodingdict) column
+</ParamField>
+
+<ParamField path="one_hot_encoding_info" type="const TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodingInfo &">
+- Struct of parameters specifying how to encode the column
+</ParamField>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../../../../structs/column", "TextEncodingDict": "../../../../structs/textencodingdict", "OneHotEncodingInfo": "../structs/onehotencodinginfo", "OneHotEncodedCol": "../structs/onehotencodedcol"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST OneHotEncodedCol<float> TableFunctions_Namespace::OneHotEncoder_Namespace::one_hot_encode(
+    const Column<TextEncodingDict> &text_col,
+    const TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodingInfo &one_hot_encoding_info
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ColumnList": "../../../../structs/columnlist", "TextEncodingDict": "../../../../structs/textencodingdict", "OneHotEncodingInfo": "../structs/onehotencodinginfo", "OneHotEncodedCol": "../structs/onehotencodedcol"}}>
+```cpp showLineNumbers={false}
+template <typename F>
+NEVER_INLINE HOST std::vector<OneHotEncodedCol<F>> TableFunctions_Namespace::OneHotEncoder_Namespace::one_hot_encode(
+    const ColumnList<TextEncodingDict> &text_cols,
+    const std::vector<TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodingInfo> &one_hot_encoding_infos
+)
+```
+</CodeBlock>
+
+One-hot encode multiple columns of text-encoded data in a column list, given a vector of one-hot encoding information for each column.
+
+**Returns:** std::vector&lt;OneHotEncodedCol&lt;F&gt;&gt; - A vector of transformed columns, each with multiple one-hot encoded sub-columns, one for each of the top-k keys for that column
+
+**Parameters**
+
+<ParamField path="text_cols" type="const ColumnList<TextEncodingDict> &">
+- Vector of input [TextEncodingDict](../../../../structs/textencodingdict) columns
+</ParamField>
+
+<ParamField path="one_hot_encoding_infos" type="const std::vector<TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodingInfo> &">
+- Structs of parameters for each column specifying how to encode the column
+</ParamField>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"ColumnList": "../../../../structs/columnlist", "TextEncodingDict": "../../../../structs/textencodingdict", "OneHotEncodingInfo": "../structs/onehotencodinginfo", "OneHotEncodedCol": "../structs/onehotencodedcol"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST std::vector<OneHotEncodedCol<float>> TableFunctions_Namespace::OneHotEncoder_Namespace::one_hot_encode(
+    const ColumnList<TextEncodingDict> &text_cols,
+    const std::vector<TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodingInfo> &one_hot_encoding_infos
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

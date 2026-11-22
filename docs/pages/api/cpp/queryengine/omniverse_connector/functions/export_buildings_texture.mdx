@@ -1,0 +1,40 @@
+---
+title: omniverse_connector::export_buildings_texture
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename TA>
+int8_t * omniverse_connector::export_buildings_texture(
+    const int64_t *rowid,
+    const TA **attrs,
+    const int32_t num_attrs,
+    const int64_t num_rows,
+    int32_t &num_patches_xy,
+    int32_t &num_png_bytes
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template int8_t * omniverse_connector::export_buildings_texture(
+    const int64_t *rowid,
+    const float **attrs,
+    const int32_t num_attrs,
+    const int64_t num_rows,
+    int32_t &num_patches_xy,
+    int32_t &num_png_bytes
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

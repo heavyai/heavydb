@@ -1,0 +1,317 @@
+---
+title: foreign_storage::ForeignStorageCache
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ForeignStorageCache.h>
+```
+
+---
+
+## Constructors
+
+### ForeignStorageCache [#foreignstoragecache]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache", "DiskCacheConfig": "../../filenamespace/structs/diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ForeignStorageCache::ForeignStorageCache(
+    const File_Namespace::DiskCacheConfig &config
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### checkpoint [#checkpoint]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageCache::checkpoint(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### putBuffer [#putbuffer]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageCache::putBuffer(
+    const ChunkKey &,
+    AbstractBuffer *,
+    const size_t numBytes = 0
+)
+```
+</CodeBlock>
+
+### getCachedChunkIfExists [#getcachedchunkifexists]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache", "FileBuffer": "../../filenamespace/classes/filebuffer"}}>
+```cpp showLineNumbers={false}
+File_Namespace::FileBuffer * foreign_storage::ForeignStorageCache::getCachedChunkIfExists(
+    const ChunkKey &
+)
+```
+</CodeBlock>
+
+### isMetadataCached [#ismetadatacached]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageCache::isMetadataCached(
+    const ChunkKey &
+) const
+```
+</CodeBlock>
+
+### cacheMetadataVec [#cachemetadatavec]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageCache::cacheMetadataVec(
+    const ChunkMetadataVector &
+)
+```
+</CodeBlock>
+
+### getCachedMetadataVecForKeyPrefix [#getcachedmetadatavecforkeyprefix]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageCache::getCachedMetadataVecForKeyPrefix(
+    ChunkMetadataVector &,
+    const ChunkKey &
+) const
+```
+</CodeBlock>
+
+### hasCachedMetadataForKeyPrefix [#hascachedmetadataforkeyprefix]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageCache::hasCachedMetadataForKeyPrefix(
+    const ChunkKey &
+) const
+```
+</CodeBlock>
+
+### clearForTablePrefix [#clearfortableprefix]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageCache::clearForTablePrefix(
+    const ChunkKey &
+)
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageCache::clear()
+```
+</CodeBlock>
+
+### getMaxChunkDataSize [#getmaxchunkdatasize]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ForeignStorageCache::getMaxChunkDataSize() const
+```
+</CodeBlock>
+
+### getCachedChunksForKeyPrefix [#getcachedchunksforkeyprefix]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+std::vector<ChunkKey> foreign_storage::ForeignStorageCache::getCachedChunksForKeyPrefix(
+    const ChunkKey &
+) const
+```
+</CodeBlock>
+
+### getChunkBuffersForCaching [#getchunkbuffersforcaching]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+ChunkToBufferMap foreign_storage::ForeignStorageCache::getChunkBuffersForCaching(
+    const std::set<ChunkKey> &chunk_keys
+) const
+```
+</CodeBlock>
+
+### getChunkBufferForPrecaching [#getchunkbufferforprecaching]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * foreign_storage::ForeignStorageCache::getChunkBufferForPrecaching(
+    const ChunkKey &chunk_key,
+    bool is_new_buffer
+)
+```
+</CodeBlock>
+
+### deleteBufferIfExists [#deletebufferifexists]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageCache::deleteBufferIfExists(
+    const ChunkKey &chunk_key
+)
+```
+</CodeBlock>
+
+### getNumCachedChunks [#getnumcachedchunks]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ForeignStorageCache::getNumCachedChunks() const
+```
+</CodeBlock>
+
+### getNumCachedMetadata [#getnumcachedmetadata]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ForeignStorageCache::getNumCachedMetadata() const
+```
+</CodeBlock>
+
+### dumpCachedChunkEntries [#dumpcachedchunkentries]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignStorageCache::dumpCachedChunkEntries() const
+```
+</CodeBlock>
+
+### dumpCachedMetadataEntries [#dumpcachedmetadataentries]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignStorageCache::dumpCachedMetadataEntries() const
+```
+</CodeBlock>
+
+### dumpEvictionQueue [#dumpevictionqueue]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignStorageCache::dumpEvictionQueue() const
+```
+</CodeBlock>
+
+### dump [#dump]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignStorageCache::dump() const
+```
+</CodeBlock>
+
+### getCacheDirectory [#getcachedirectory]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignStorageCache::getCacheDirectory() const
+```
+</CodeBlock>
+
+### getCacheDirectoryForTable [#getcachedirectoryfortable]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignStorageCache::getCacheDirectoryForTable(
+    int db_id,
+    int tb_id
+) const
+```
+</CodeBlock>
+
+### getSerializedWrapperPath [#getserializedwrapperpath]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignStorageCache::getSerializedWrapperPath(
+    int32_t db_id,
+    int32_t tb_id
+) const
+```
+</CodeBlock>
+
+### getSpaceReservedByTable [#getspacereservedbytable]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+uint64_t foreign_storage::ForeignStorageCache::getSpaceReservedByTable(
+    int db_id,
+    int tb_id
+) const
+```
+</CodeBlock>
+
+### storeDataWrapper [#storedatawrapper]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageCache::storeDataWrapper(
+    const std::string &doc,
+    int32_t db_id,
+    int32_t tb_id
+)
+```
+</CodeBlock>
+
+### hasStoredDataWrapperMetadata [#hasstoreddatawrappermetadata]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageCache::hasStoredDataWrapperMetadata(
+    int32_t db_id,
+    int32_t table_id
+) const
+```
+</CodeBlock>
+
+### eraseChunk [#erasechunk]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageCache::eraseChunk(
+    const ChunkKey &chunk_key
+)
+```
+</CodeBlock>
+
+### setDataSizeLimit [#setdatasizelimit]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageCache::setDataSizeLimit(
+    size_t max
+) const
+```
+</CodeBlock>
+
+### validatePath [#validatepath]
+
+<CodeBlock links={{"ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageCache::validatePath(
+    const std::string &
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `caching_file_mgr_` | `std::unique_ptr< File_Namespace::CachingFileMgr >` | |

@@ -1,0 +1,73 @@
+---
+title: ct_binding_columnlist__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t ct_binding_columnlist__cpu_template(
+    const Column<T> &input1,
+    const ColumnList<T> &input2,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../structs/column", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_columnlist__cpu_template(
+    const Column<int32_t> &input1,
+    const ColumnList<int32_t> &input2,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column": "../structs/column", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_columnlist__cpu_template(
+    const Column<float> &input1,
+    const ColumnList<float> &input2,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_columnlist__cpu_template(
+    const Column<TextEncodingDict> &input1,
+    const ColumnList<TextEncodingDict> &input2,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"Column": "../structs/column", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_columnlist__cpu_template(
+    const Column<int16_t> &input1,
+    const ColumnList<int16_t> &input2,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

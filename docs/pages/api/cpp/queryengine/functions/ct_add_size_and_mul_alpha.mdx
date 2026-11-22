@@ -1,0 +1,17 @@
+---
+title: ct_add_size_and_mul_alpha
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_add_size_and_mul_alpha(
+    TableFunctionManager &mgr,
+    const Column<int32_t> &input1,
+    const Column<int32_t> &input2,
+    int32_t alpha,
+    Column<int32_t> &output1,
+    Column<int32_t> &output2
+)
+```
+</CodeBlock>

@@ -1,0 +1,17 @@
+---
+title: get_matching_baseline_hash_slot_readonly
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+DEVICE NEVER_INLINE const T *SUFFIX get_matching_baseline_hash_slot_readonly(
+    const T *key,
+    const size_t key_component_count,
+    const T *composite_key_dict,
+    const int64_t entry_count,
+    const size_t key_size_in_bytes
+)
+```
+</CodeBlock>

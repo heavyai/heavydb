@@ -1,0 +1,15 @@
+---
+title: Fragmenter_Namespace::copy_data_of_shard
+description: ""
+---
+
+<CodeBlock links={{"InsertChunks": "../structs/insertchunks"}}>
+```cpp showLineNumbers={false}
+std::pair<std::list<std::unique_ptr<foreign_storage::ForeignStorageBuffer>>, InsertChunks> Fragmenter_Namespace::copy_data_of_shard(
+    const Catalog_Namespace::Catalog &cat,
+    const InsertChunks &insert_chunks,
+    int shardTableIndex,
+    const std::vector<size_t> &rowIndices
+)
+```
+</CodeBlock>

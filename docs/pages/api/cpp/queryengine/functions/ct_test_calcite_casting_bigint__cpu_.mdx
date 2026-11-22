@@ -1,0 +1,14 @@
+---
+title: ct_test_calcite_casting_bigint__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t ct_test_calcite_casting_bigint__cpu_(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &input1,
+    Column<int64_t> &out
+)
+```
+</CodeBlock>

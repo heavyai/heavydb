@@ -1,0 +1,171 @@
+---
+title: PcaModel
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <MLModel.h>
+```
+
+**Inherits from:** `AbstractMLModel` (public)
+
+---
+
+## Constructors
+
+### PcaModel [#pcamodel]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"PcaModel": "pcamodel"}}>
+```cpp showLineNumbers={false}
+PcaModel::PcaModel(
+    const std::vector<double> &col_means,
+    const std::vector<double> &col_std_devs,
+    const std::vector<std::vector<double>> &eigenvectors,
+    const std::vector<double> &eigenvalues,
+    const std::string &model_metadata
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with cat feature keys)">
+
+<CodeBlock links={{"PcaModel": "pcamodel"}}>
+```cpp showLineNumbers={false}
+PcaModel::PcaModel(
+    const std::vector<double> &col_means,
+    const std::vector<double> &col_std_devs,
+    const std::vector<std::vector<double>> &eigenvectors,
+    const std::vector<double> &eigenvalues,
+    const std::string &model_metadata,
+    const std::vector<std::vector<std::string>> &cat_feature_keys
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getModelType [#getmodeltype]
+
+<CodeBlock links={{"PcaModel": "pcamodel"}}>
+```cpp showLineNumbers={false}
+virtual MLModelType PcaModel::getModelType() const override
+```
+</CodeBlock>
+
+### getModelTypeString [#getmodeltypestring]
+
+<CodeBlock links={{"PcaModel": "pcamodel"}}>
+```cpp showLineNumbers={false}
+virtual std::string PcaModel::getModelTypeString() const override
+```
+</CodeBlock>
+
+### getNumFeatures [#getnumfeatures]
+
+<CodeBlock links={{"PcaModel": "pcamodel"}}>
+```cpp showLineNumbers={false}
+virtual int64_t PcaModel::getNumFeatures() const override
+```
+</CodeBlock>
+
+### getColumnMeans [#getcolumnmeans]
+
+<CodeBlock links={{"PcaModel": "pcamodel"}}>
+```cpp showLineNumbers={false}
+const std::vector<double> & PcaModel::getColumnMeans() const
+```
+</CodeBlock>
+
+### getColumnStdDevs [#getcolumnstddevs]
+
+<CodeBlock links={{"PcaModel": "pcamodel"}}>
+```cpp showLineNumbers={false}
+const std::vector<double> & PcaModel::getColumnStdDevs() const
+```
+</CodeBlock>
+
+### getEigenvectors [#geteigenvectors]
+
+<CodeBlock links={{"PcaModel": "pcamodel"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::vector<double>> & PcaModel::getEigenvectors() const
+```
+</CodeBlock>
+
+### getEigenvalues [#geteigenvalues]
+
+<CodeBlock links={{"PcaModel": "pcamodel"}}>
+```cpp showLineNumbers={false}
+const std::vector<double> & PcaModel::getEigenvalues() const
+```
+</CodeBlock>
+
+### getModelMetadataStr [#getmodelmetadatastr]
+
+<CodeBlock links={{"PcaModel": "pcamodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const std::string & PcaModel::getModelMetadataStr() const
+```
+</CodeBlock>
+
+### getModelMetadata [#getmodelmetadata]
+
+<CodeBlock links={{"PcaModel": "pcamodel", "MLModelMetadata": "mlmodelmetadata", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+MLModelMetadata PcaModel::getModelMetadata() const
+```
+</CodeBlock>
+
+### getCatFeatureKeys [#getcatfeaturekeys]
+
+<CodeBlock links={{"PcaModel": "pcamodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::vector<std::string>> & PcaModel::getCatFeatureKeys() const
+```
+</CodeBlock>
+
+### getNumCatFeatures [#getnumcatfeatures]
+
+<CodeBlock links={{"PcaModel": "pcamodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const int64_t PcaModel::getNumCatFeatures() const
+```
+</CodeBlock>
+
+### getNumOneHotFeatures [#getnumonehotfeatures]
+
+<CodeBlock links={{"PcaModel": "pcamodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const int64_t PcaModel::getNumOneHotFeatures() const
+```
+</CodeBlock>
+
+### getNumLogicalFeatures [#getnumlogicalfeatures]
+
+<CodeBlock links={{"PcaModel": "pcamodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const int64_t PcaModel::getNumLogicalFeatures() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `col_means_` | `std::vector< double >` | |
+| `col_std_devs_` | `std::vector< double >` | |
+| `eigenvectors_` | `std::vector< std::vector< double > >` | |
+| `eigenvalues_` | `std::vector< double >` | |
+| `model_metadata_` | `std::string` | |
+| `cat_feature_keys_` | `std::vector< std::vector< std::string > >` | |

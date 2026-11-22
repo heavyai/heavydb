@@ -1,0 +1,22 @@
+---
+title: is_left
+description: "Tests if a point is left, on, or to the right of a 2D line."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+DEVICE ALWAYS_INLINE T is_left(
+    const T lx0,
+    const T ly0,
+    const T lx1,
+    const T ly1,
+    const T px,
+    const T py
+)
+```
+</CodeBlock>
+
+Tests if a point is left, on, or to the right of a 2D line.
+
+**Returns:** &gt;0 if p is left of l, 0 if p is on l, and &lt; 0 if p is right of l

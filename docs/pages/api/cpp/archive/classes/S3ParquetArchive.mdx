@@ -1,0 +1,222 @@
+---
+title: S3ParquetArchive
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <S3Archive.h>
+```
+
+**Inherits from:** `S3Archive` (public)
+
+---
+
+## Constructors
+
+### S3ParquetArchive [#s3parquetarchive]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive"}}>
+```cpp showLineNumbers={false}
+S3ParquetArchive::S3ParquetArchive(
+    const std::string &url,
+    const shared::S3Config &s3_config,
+    const bool plain_text,
+    const std::optional<std::string> &regex_path_filter,
+    const std::optional<std::string> &file_sort_order_by,
+    const std::optional<std::string> &file_sort_regex
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### init_for_read [#initforread]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+void S3ParquetArchive::init_for_read() override
+```
+</CodeBlock>
+
+### get_objkeys [#getobjkeys]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & S3ParquetArchive::get_objkeys()
+```
+</CodeBlock>
+
+### land [#land]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+const std::string S3ParquetArchive::land(
+    const std::string &objkey,
+    std::exception_ptr &teptr,
+    const bool for_detection
+)
+```
+</CodeBlock>
+
+### vacuum [#vacuum]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+void S3ParquetArchive::vacuum(
+    const std::string &objkey
+)
+```
+</CodeBlock>
+
+### get_total_file_size [#gettotalfilesize]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+size_t S3ParquetArchive::get_total_file_size() const
+```
+</CodeBlock>
+
+### archive_error [#archiveerror]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+virtual std::string Archive::archive_error(
+    int err
+)
+```
+</CodeBlock>
+
+### read_next_header [#readnextheader]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+virtual bool Archive::read_next_header()
+```
+</CodeBlock>
+
+### read_data_block [#readdatablock]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+virtual bool Archive::read_data_block(
+    const void **buff,
+    size_t *size,
+    int64_t *offset
+)
+```
+</CodeBlock>
+
+### get_position_compressed [#getpositioncompressed]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+virtual int64_t Archive::get_position_compressed() const
+```
+</CodeBlock>
+
+### open [#open]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+virtual int Archive::open()
+```
+</CodeBlock>
+
+### close [#close]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+virtual int Archive::close()
+```
+</CodeBlock>
+
+### read [#read]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+virtual ptrdiff_t Archive::read(
+    const void **buff
+)
+```
+</CodeBlock>
+
+### url_part [#urlpart]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+const std::string Archive::url_part(
+    const int i
+)
+```
+</CodeBlock>
+
+### entryName [#entryname]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+std::string Archive::entryName()
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### open [#open]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+static int Archive::open(
+    struct archive *a,
+    void *client_data
+)
+```
+</CodeBlock>
+
+### close [#close]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+static int Archive::close(
+    struct archive *a,
+    void *client_data
+)
+```
+</CodeBlock>
+
+### read [#read]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+static ptrdiff_t Archive::read(
+    struct archive *a,
+    void *client_data,
+    const void **buff
+)
+```
+</CodeBlock>
+
+### parse_url [#parseurl]
+
+<CodeBlock links={{"S3ParquetArchive": "s3parquetarchive", "S3Archive": "s3archive"}}>
+```cpp showLineNumbers={false}
+static void Archive::parse_url(
+    const std::string url,
+    std::map<int, std::string> &url_parts
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `url` | `std::string` | |
+| `url_parts` | `std::map< int, std::string >` | |
+| `ar` | `archive *` | |
+| `entry` | `archive_entry *` | |
+| `plain_text` | `bool` | |

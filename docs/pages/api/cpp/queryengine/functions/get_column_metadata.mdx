@@ -1,0 +1,107 @@
+---
+title: get_column_metadata
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST std::tuple<T, T, bool> get_column_metadata(
+    const Column<T> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST std::tuple<int8_t, int8_t, bool> get_column_metadata(
+    const Column<int8_t> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST std::tuple<int16_t, int16_t, bool> get_column_metadata(
+    const Column<int16_t> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST std::tuple<int32_t, int32_t, bool> get_column_metadata(
+    const Column<int32_t> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST std::tuple<int64_t, int64_t, bool> get_column_metadata(
+    const Column<int64_t> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST std::tuple<float, float, bool> get_column_metadata(
+    const Column<float> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST std::tuple<double, double, bool> get_column_metadata(
+    const Column<double> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+std::tuple<int32_t, int32_t, bool> get_column_metadata(
+    const Column<TextEncodingDict> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+NEVER_INLINE HOST std::tuple<int32_t, int32_t, bool> get_column_metadata(
+    const Column<TextEncodingDict> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,170 @@
+---
+title: ExplainInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ParserWrapper.h>
+```
+
+---
+
+## Constructors
+
+### ExplainInfo [#explaininfo]
+
+<Tabs>
+<Tab title="Default">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+ExplainInfo::ExplainInfo()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+ExplainInfo::ExplainInfo(
+    ExplainType type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+ExplainInfo::ExplainInfo(
+    std::string query_string
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### isExplain [#isexplain]
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+bool ExplainInfo::isExplain() const
+```
+</CodeBlock>
+
+### isJustExplain [#isjustexplain]
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+bool ExplainInfo::isJustExplain() const
+```
+</CodeBlock>
+
+### isSelectExplain [#isselectexplain]
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+bool ExplainInfo::isSelectExplain() const
+```
+</CodeBlock>
+
+### isIRExplain [#isirexplain]
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+bool ExplainInfo::isIRExplain() const
+```
+</CodeBlock>
+
+### isOptimizedExplain [#isoptimizedexplain]
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+bool ExplainInfo::isOptimizedExplain() const
+```
+</CodeBlock>
+
+### isCalciteExplain [#iscalciteexplain]
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+bool ExplainInfo::isCalciteExplain() const
+```
+</CodeBlock>
+
+### isCalciteExplainDetail [#iscalciteexplaindetail]
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+bool ExplainInfo::isCalciteExplainDetail() const
+```
+</CodeBlock>
+
+### isPlanExplain [#isplanexplain]
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+bool ExplainInfo::isPlanExplain() const
+```
+</CodeBlock>
+
+### isOtherExplain [#isotherexplain]
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+bool ExplainInfo::isOtherExplain() const
+```
+</CodeBlock>
+
+### ActualQuery [#actualquery]
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+std::string ExplainInfo::ActualQuery()
+```
+</CodeBlock>
+
+### isVerbose [#isverbose]
+
+<CodeBlock links={{"ExplainInfo": "explaininfo"}}>
+```cpp showLineNumbers={false}
+bool ExplainInfo::isVerbose() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### ExplainType
+
+| Name | Value | Description |
+|---|---|---|
+| `None` | | |
+| `IR` | | |
+| `OptimizedIR` | | |
+| `Calcite` | | |
+| `CalciteDetail` | | |
+| `ExecutionPlan` | | |
+| `Other` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `explain_type_` | `ExplainType` | |
+| `actual_query_` | `std::string` | |
+| `verbose_` | `bool` | |

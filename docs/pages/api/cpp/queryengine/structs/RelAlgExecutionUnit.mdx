@@ -1,0 +1,77 @@
+---
+title: RelAlgExecutionUnit
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgExecutionUnit.h>
+```
+
+---
+
+## Methods
+
+### createNdvExecutionUnit [#createndvexecutionunit]
+
+<CodeBlock links={{"RelAlgExecutionUnit": "relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutionUnit RelAlgExecutionUnit::createNdvExecutionUnit(
+    const int64_t range
+) const
+```
+</CodeBlock>
+
+### createCountAllExecutionUnit [#createcountallexecutionunit]
+
+<CodeBlock links={{"RelAlgExecutionUnit": "relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutionUnit RelAlgExecutionUnit::createCountAllExecutionUnit(
+    Analyzer::Expr *replacement_target
+) const
+```
+</CodeBlock>
+
+### eachAggTarget [#eachaggtarget]
+
+<CodeBlock links={{"RelAlgExecutionUnit": "relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+template <SQLAgg AggType>
+void RelAlgExecutionUnit::eachAggTarget(
+    std::function<void(Analyzer::AggExpr const *, size_t target_idx)> lambda
+) const
+```
+</CodeBlock>
+
+### isAllJoinQualsAreLoopJoin [#isalljoinqualsareloopjoin]
+
+<CodeBlock links={{"RelAlgExecutionUnit": "relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+bool RelAlgExecutionUnit::isAllJoinQualsAreLoopJoin() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `input_descs` | `std::vector< InputDescriptor >` | |
+| `input_col_descs` | `std::list< std::shared_ptr< const InputColDescriptor > >` | |
+| `simple_quals` | `std::list< std::shared_ptr< Analyzer::Expr > >` | |
+| `quals` | `std::list< std::shared_ptr< Analyzer::Expr > >` | |
+| `join_quals` | `const JoinQualsPerNestingLevel` | |
+| `groupby_exprs` | `const std::list< std::shared_ptr< Analyzer::Expr > >` | |
+| `target_exprs` | `std::vector< Analyzer::Expr * >` | |
+| `estimator` | `const std::shared_ptr< Analyzer::Estimator >` | |
+| `sort_info` | `const SortInfo` | |
+| `scan_limit` | `size_t` | |
+| `query_hint` | `RegisteredQueryHint` | |
+| `query_plan_dag_hash` | `QueryPlanHash` | |
+| `hash_table_build_plan_dag` | `HashTableBuildDagMap` | |
+| `table_id_to_node_map` | `TableIdToNodeMap` | |
+| `use_bump_allocator` | `bool` | |
+| `union_all` | `const std::optional< bool >` | |
+| `query_state` | `std::shared_ptr< const query_state::QueryState >` | |
+| `target_exprs_union` | `std::vector< Analyzer::Expr * >` | |
+| `per_device_cardinality` | `std::vector< std::pair< std::vector< size_t >, size_t > >` | |

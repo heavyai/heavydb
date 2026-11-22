@@ -1,0 +1,264 @@
+---
+title: foreign_storage::LazyParquetChunkLoader
+description: "A lazy parquet to chunk loader."
+---
+
+A lazy parquet to chunk loader.
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/LazyParquetChunkLoader.h>
+```
+
+---
+
+## Constructors
+
+### LazyParquetChunkLoader [#lazyparquetchunkloader]
+
+<CodeBlock links={{"LazyParquetChunkLoader": "lazyparquetchunkloader", "FileReaderMap": "filereadermap"}}>
+```cpp showLineNumbers={false}
+foreign_storage::LazyParquetChunkLoader::LazyParquetChunkLoader(
+    std::shared_ptr<arrow::fs::FileSystem> file_system,
+    FileReaderMap *file_reader_cache,
+    HeavyColumnToParquetColumnMap *column_map,
+    const ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### loadChunk [#loadchunk]
+
+<CodeBlock links={{"LazyParquetChunkLoader": "lazyparquetchunkloader", "RowGroupInterval": "../structs/rowgroupinterval", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::list<std::unique_ptr<ChunkMetadata>> foreign_storage::LazyParquetChunkLoader::loadChunk(
+    const std::vector<RowGroupInterval> &row_group_intervals,
+    const int parquet_column_index,
+    std::list<Chunk_NS::Chunk> &chunks,
+    StringDictionary *string_dictionary = nullptr,
+    RejectedRowIndices *rejected_row_indices = nullptr
+)
+```
+</CodeBlock>
+
+Load a number of row groups of a column in a parquet file into a chunk.
+
+NOTE: if more than one chunk is supplied, the first chunk is required to be the chunk corresponding to the logical column, while the remaining chunks correspond to physical columns (in ascending order of column id.) Similarly, if a metada update is expected, the list of [ChunkMetadata](../../structs/chunkmetadata) shared pointers returned will correspond directly to the list `chunks`.
+
+**Returns:** An empty list when no metadata update is applicable, otherwise a list of [ChunkMetadata](../../structs/chunkmetadata) shared pointers with which to update the corresponding column chunk metadata.
+
+**Parameters**
+
+<ParamField path="parquet_column_index" type="const int">
+- The logical column index in the parquet file (and omnisci db) of column to load
+</ParamField>
+
+<ParamField path="chunks" type="std::list<Chunk_NS::Chunk> &">
+- A list containing the chunks to load
+</ParamField>
+
+<ParamField path="string_dictionary" type="StringDictionary *" default="nullptr">
+- A string dictionary for the column corresponding to the column, if applicable
+</ParamField>
+
+<ParamField path="rejected_row_indices" type="RejectedRowIndices *" default="nullptr">
+- Optional, if specified errors will be tracked in this data structure while loading
+</ParamField>
+
+### metadataScan [#metadatascan]
+
+<CodeBlock links={{"LazyParquetChunkLoader": "lazyparquetchunkloader", "ForeignTableSchema": "foreigntableschema", "RowGroupMetadata": "../structs/rowgroupmetadata"}}>
+```cpp showLineNumbers={false}
+std::list<RowGroupMetadata> foreign_storage::LazyParquetChunkLoader::metadataScan(
+    const std::vector<std::string> &file_paths,
+    const ForeignTableSchema &schema,
+    const bool do_metadata_stats_validation = true
+)
+```
+</CodeBlock>
+
+Perform a metadata scan for the paths specified.
+
+**Returns:** a list of the row group metadata extracted from `file_paths`
+
+**Parameters**
+
+<ParamField path="file_paths" type="const std::vector<std::string> &">
+- (Ordered) files of the metadata scan
+</ParamField>
+
+<ParamField path="schema" type="const ForeignTableSchema &">
+- Schema of the foreign table to perform metadata scan for
+</ParamField>
+
+<ParamField path="do_metadata_stats_validation" type="const bool" default="true">
+- Validate stats in metadata of parquet files if true
+</ParamField>
+
+### loadRowGroups [#loadrowgroups]
+
+<CodeBlock links={{"LazyParquetChunkLoader": "lazyparquetchunkloader", "RowGroupInterval": "../structs/rowgroupinterval", "Chunk": "../../chunkns/classes/chunk", "ForeignTableSchema": "foreigntableschema"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, size_t> foreign_storage::LazyParquetChunkLoader::loadRowGroups(
+    const RowGroupInterval &row_group_interval,
+    const std::map<int, Chunk_NS::Chunk> &chunks,
+    const ForeignTableSchema &schema,
+    const std::map<int, StringDictionary *> &column_dictionaries,
+    const int num_threads = 1
+)
+```
+</CodeBlock>
+
+Load row groups of data into given chunks.
+
+Note that only logical chunks are expected because the data is read into an intermediate form into the underlying buffers. This member is intended to be used for import.
+
+NOTE: Currently, loading one row group at a time is required.
+
+**Returns:** [num_rows_completed,num_rows_rejected] - returns number of rows loaded and rejected while loading
+
+**Parameters**
+
+<ParamField path="row_group_interval" type="const RowGroupInterval &">
+- Specifies which row groups to load
+</ParamField>
+
+<ParamField path="chunks" type="const std::map<int, Chunk_NS::Chunk> &">
+- Map of column index to chunk which data will be loaded into
+</ParamField>
+
+<ParamField path="schema" type="const ForeignTableSchema &">
+- Schema of the foreign table to perform metadata scan for
+</ParamField>
+
+<ParamField path="column_dictionaries" type="const std::map<int, StringDictionary *> &">
+- A map of string dictionaries for columns that require it
+</ParamField>
+
+<ParamField path="num_threads" type="const int" default="1">
+- Number of threads to utilize while reading (if applicale)
+</ParamField>
+
+### previewFiles [#previewfiles]
+
+<CodeBlock links={{"LazyParquetChunkLoader": "lazyparquetchunkloader", "DataPreview": "../structs/datapreview"}}>
+```cpp showLineNumbers={false}
+DataPreview foreign_storage::LazyParquetChunkLoader::previewFiles(
+    const std::vector<std::string> &files,
+    const size_t max_num_rows,
+    const ForeignTable &table
+)
+```
+</CodeBlock>
+
+Preview rows of data and column types in a set of files.
+
+**Returns:** a [`DataPreview`](../structs/datapreview) instance that contains relevant preview information
+
+**Parameters**
+
+<ParamField path="files" type="const std::vector<std::string> &">
+- Files to preview
+</ParamField>
+
+<ParamField path="max_num_rows" type="const size_t">
+- Maximum number of rows to preview
+</ParamField>
+
+<ParamField path="table" type="const ForeignTable &">
+- Foreign table for preview
+</ParamField>
+
+### suggestColumnMapping [#suggestcolumnmapping]
+
+<CodeBlock links={{"LazyParquetChunkLoader": "lazyparquetchunkloader"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo foreign_storage::LazyParquetChunkLoader::suggestColumnMapping(
+    const parquet::ColumnDescriptor *parquet_column
+)
+```
+</CodeBlock>
+
+Suggest a possible Parquet to OmniSci column mapping based on heuristics.
+
+NOTE: the suggested type may be entirely inappropriate given a specific use-case; however, it is guaranteed to be an allowed mapping. For example, geo-types are never attempted to be detected and instead strings are always suggested in their place.
+
+**Returns:** a supported OmniSci `SQLTypeInfo` given the Parquet column type
+
+**Parameters**
+
+<ParamField path="parquet_column" type="const parquet::ColumnDescriptor *">
+- The column descriptor of the Parquet column
+</ParamField>
+
+### appendRowGroups [#appendrowgroups]
+
+<CodeBlock links={{"LazyParquetChunkLoader": "lazyparquetchunkloader", "RowGroupInterval": "../structs/rowgroupinterval", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::list<std::unique_ptr<ChunkMetadata>> foreign_storage::LazyParquetChunkLoader::appendRowGroups(
+    const std::vector<RowGroupInterval> &row_group_intervals,
+    const ColumnDescriptor *column_descriptor,
+    std::list<Chunk_NS::Chunk> &chunks,
+    StringDictionary *string_dictionary,
+    RejectedRowIndices *rejected_row_indices,
+    const bool is_for_detect = false,
+    const std::optional<int64_t> max_rows_to_read = std::nullopt
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### isColumnMappingSupported [#iscolumnmappingsupported]
+
+<CodeBlock links={{"LazyParquetChunkLoader": "lazyparquetchunkloader"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::LazyParquetChunkLoader::isColumnMappingSupported(
+    const ColumnDescriptor *omnisci_column,
+    const parquet::ColumnDescriptor *parquet_column
+)
+```
+</CodeBlock>
+
+Determine if a Parquet to OmniSci column mapping is supported.
+
+**Returns:** true if the column mapping is supported by `LazyParquetChunkLoader`, false otherwise
+
+**Parameters**
+
+<ParamField path="omnisci_column" type="const ColumnDescriptor *">
+- The column descriptor of the OmniSci column
+</ParamField>
+
+<ParamField path="parquet_column" type="const parquet::ColumnDescriptor *">
+- The column descriptor of the Parquet column
+</ParamField>
+
+### createColumnMap [#createcolumnmap]
+
+<CodeBlock links={{"LazyParquetChunkLoader": "lazyparquetchunkloader", "ForeignTableSchema": "foreigntableschema"}}>
+```cpp showLineNumbers={false}
+HeavyColumnToParquetColumnMap foreign_storage::LazyParquetChunkLoader::createColumnMap(
+    const ForeignTableSchema &schema,
+    const ReaderPtr &reader,
+    const bool lat_lon_order
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `batch_reader_num_elements` <Badge intent="note" minimal>static</Badge> | `const int` | |
+| `file_system_` | `std::shared_ptr< arrow::fs::FileSystem >` | |
+| `file_reader_cache_` | `FileReaderMap *` | |
+| `column_map_` | `HeavyColumnToParquetColumnMap *` | |
+| `foreign_table_` | `const ForeignTable *` | |

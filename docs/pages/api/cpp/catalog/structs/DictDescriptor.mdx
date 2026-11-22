@@ -1,0 +1,72 @@
+---
+title: DictDescriptor
+description: "@type DictDescriptor"
+---
+
+@type `DictDescriptor`
+
+Descriptor for a dictionary for a string columne
+
+```cpp showLineNumbers={false}
+#include <DictDescriptor.h>
+```
+
+---
+
+## Constructors
+
+### DictDescriptor [#dictdescriptor]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"DictDescriptor": "dictdescriptor"}}>
+```cpp showLineNumbers={false}
+DictDescriptor::DictDescriptor(
+    DictRef dict_ref,
+    const std::string &name,
+    int nbits,
+    bool shared,
+    const int rc,
+    const std::string &fname,
+    bool temp
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"DictDescriptor": "dictdescriptor"}}>
+```cpp showLineNumbers={false}
+DictDescriptor::DictDescriptor(
+    int db_id,
+    int dict_id,
+    const std::string &name,
+    int nbits,
+    bool shared,
+    const int rc,
+    const std::string &fname,
+    bool temp
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dictRef` | `DictRef` | |
+| `dictName` | `std::string` | |
+| `dictNBits` | `int` | |
+| `dictIsShared` | `bool` | |
+| `dictFolderPath` | `std::string` | |
+| `refcount` | `int` | |
+| `dictIsTemp` | `bool` | |
+| `stringDict` | `std::shared_ptr< StringDictionary >` | |
+| `string_dict_mutex` | `std::shared_ptr< std::mutex >` | |

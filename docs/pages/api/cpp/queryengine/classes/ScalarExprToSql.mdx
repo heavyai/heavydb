@@ -1,0 +1,474 @@
+---
+title: ScalarExprToSql
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <SerializeToSql.h>
+```
+
+**Inherits from:** `ScalarExprVisitor< std::string >` (public)
+
+---
+
+## Constructors
+
+### ScalarExprToSql [#scalarexprtosql]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+ScalarExprToSql::ScalarExprToSql(
+    const RelAlgExecutionUnit *ra_exe_unit
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::visitVar(
+    const Analyzer::Var *
+) const override
+```
+</CodeBlock>
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::visitColumnVar(
+    const Analyzer::ColumnVar *col_var
+) const override
+```
+</CodeBlock>
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::visitConstant(
+    const Analyzer::Constant *constant
+) const override
+```
+</CodeBlock>
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::visitUOper(
+    const Analyzer::UOper *uoper
+) const override
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const override
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::visitInValues(
+    const Analyzer::InValues *in_values
+) const override
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const override
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::visitCaseExpr(
+    const Analyzer::CaseExpr *case_
+) const override
+```
+</CodeBlock>
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const override
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const override
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const override
+```
+</CodeBlock>
+
+### visitList [#visitlist]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+template <typename List>
+std::vector<std::string> ScalarExprToSql::visitList(
+    const List &expressions
+) const
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprVisitor<std::string>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::aggregateResult(
+    const std::string &aggregate,
+    const std::string &next_result
+) const override
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::defaultResult() const override
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *
+) const
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitKeyForString(
+    const Analyzer::KeyForStringExpr *key_for_string
+) const
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *sample_ratio
+) const
+```
+</CodeBlock>
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitStringOper(
+    const Analyzer::StringOper *string_oper
+) const
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const
+```
+</CodeBlock>
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitDotProduct(
+    const Analyzer::DotProductExpr *dot_product
+) const
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitMLPredict(
+    const Analyzer::MLPredictExpr *ml_predict_expr
+) const
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitPCAProject(
+    const Analyzer::PCAProjectExpr *pca_project_expr
+) const
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitArrayOper(
+    Analyzer::ArrayExpr const *array_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::string ScalarExprVisitor<std::string>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void ScalarExprVisitor<std::string>::visitBegin() const
+```
+</CodeBlock>
+
+### binOpTypeToString [#binoptypetostring]
+
+<CodeBlock links={{"ScalarExprToSql": "scalarexprtosql"}}>
+```cpp showLineNumbers={false}
+std::string ScalarExprToSql::binOpTypeToString(
+    const SQLOps op_type
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ra_exe_unit_` | `const RelAlgExecutionUnit *` | |

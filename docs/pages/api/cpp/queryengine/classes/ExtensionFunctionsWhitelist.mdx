@@ -1,0 +1,247 @@
+---
+title: ExtensionFunctionsWhitelist
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ExtensionFunctionsWhitelist.h>
+```
+
+---
+
+## Methods
+
+### addCommon [#addcommon]
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist", "ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+void ExtensionFunctionsWhitelist::addCommon(
+    std::unordered_map<std::string, std::vector<ExtensionFunction>> &sigs,
+    const std::string &json_func_sigs,
+    const bool is_runtime
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### add [#add]
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist"}}>
+```cpp showLineNumbers={false}
+void ExtensionFunctionsWhitelist::add(
+    const std::string &json_func_sigs
+)
+```
+</CodeBlock>
+
+### addUdfs [#addudfs]
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist"}}>
+```cpp showLineNumbers={false}
+void ExtensionFunctionsWhitelist::addUdfs(
+    const std::string &json_func_sigs
+)
+```
+</CodeBlock>
+
+### clearRTUdfs [#clearrtudfs]
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist"}}>
+```cpp showLineNumbers={false}
+void ExtensionFunctionsWhitelist::clearRTUdfs()
+```
+</CodeBlock>
+
+### addRTUdfs [#addrtudfs]
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist"}}>
+```cpp showLineNumbers={false}
+void ExtensionFunctionsWhitelist::addRTUdfs(
+    const std::string &json_func_sigs
+)
+```
+</CodeBlock>
+
+### get [#get]
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist", "ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+std::vector<ExtensionFunction> * ExtensionFunctionsWhitelist::get(
+    const std::string &name
+)
+```
+</CodeBlock>
+
+### get_udf [#getudf]
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist", "ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+std::vector<ExtensionFunction> * ExtensionFunctionsWhitelist::get_udf(
+    const std::string &name
+)
+```
+</CodeBlock>
+
+### get_udfs_name [#getudfsname]
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist"}}>
+```cpp showLineNumbers={false}
+std::unordered_set<std::string> ExtensionFunctionsWhitelist::get_udfs_name(
+    const bool is_runtime
+)
+```
+</CodeBlock>
+
+### get_ext_funcs [#getextfuncs]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist", "ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
+    const std::string &name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist", "ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
+    const std::string &name,
+    const bool is_gpu
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist", "ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
+    const std::string &name,
+    size_t arity
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist", "ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
+    const std::string &name,
+    size_t arity,
+    const SQLTypeInfo &rtype
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### toString [#tostring]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist", "ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+std::string ExtensionFunctionsWhitelist::toString(
+    const std::vector<ExtensionFunction> &ext_funcs,
+    std::string tab = ""
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist"}}>
+```cpp showLineNumbers={false}
+std::string ExtensionFunctionsWhitelist::toString(
+    const std::vector<SQLTypeInfo> &arg_types
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist"}}>
+```cpp showLineNumbers={false}
+std::string ExtensionFunctionsWhitelist::toString(
+    const std::vector<ExtArgumentType> &sig_types
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist"}}>
+```cpp showLineNumbers={false}
+std::string ExtensionFunctionsWhitelist::toString(
+    const ExtArgumentType &sig_type
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### toStringSQL [#tostringsql]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist"}}>
+```cpp showLineNumbers={false}
+std::string ExtensionFunctionsWhitelist::toStringSQL(
+    const std::vector<ExtArgumentType> &sig_types
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist"}}>
+```cpp showLineNumbers={false}
+std::string ExtensionFunctionsWhitelist::toStringSQL(
+    const ExtArgumentType &sig_type
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getLLVMDeclarations [#getllvmdeclarations]
+
+<CodeBlock links={{"ExtensionFunctionsWhitelist": "extensionfunctionswhitelist"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
+    const std::unordered_set<std::string> &udf_decls,
+    const bool is_gpu = false
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `functions_` <Badge intent="note" minimal>static</Badge> | `std::unordered_map< std::string, std::vector< ExtensionFunction > >` | |
+| `udf_functions_` <Badge intent="note" minimal>static</Badge> | `std::unordered_map< std::string, std::vector< ExtensionFunction > >` | |
+| `rt_udf_functions_` <Badge intent="note" minimal>static</Badge> | `std::unordered_map< std::string, std::vector< ExtensionFunction > >` | |

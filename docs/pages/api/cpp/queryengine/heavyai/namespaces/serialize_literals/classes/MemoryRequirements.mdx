@@ -1,0 +1,256 @@
+---
+title: heavyai::serialize_literals::MemoryRequirements
+description: "Calculate memory requirements and structure of serialized literals."
+---
+
+Calculate memory requirements and structure of serialized literals.
+
+See Executor::serializeLiterals() for more info.
+
+```cpp showLineNumbers={false}
+#include <heavyai/serialize_literals/SerializeLiterals.h>
+```
+
+---
+
+## Constructors
+
+### MemoryRequirements [#memoryrequirements]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+heavyai::serialize_literals::MemoryRequirements::MemoryRequirements() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+heavyai::serialize_literals::MemoryRequirements::MemoryRequirements(
+    MemoryRequirements const &
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+MemoryRequirements & heavyai::serialize_literals::MemoryRequirements::operator=(
+    MemoryRequirements const &
+) = delete
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getHeaderSize [#getheadersize]
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+size_t heavyai::serialize_literals::MemoryRequirements::getHeaderSize() const
+```
+</CodeBlock>
+
+### getOffset [#getoffset]
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+size_t & heavyai::serialize_literals::MemoryRequirements::getOffset(
+    VarKey const var_key
+)
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::MemoryRequirements::operator()(
+    CgenState::LiteralValue const &lit
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::MemoryRequirements::operator()(
+    int8_t
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::MemoryRequirements::operator()(
+    int16_t
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::MemoryRequirements::operator()(
+    int32_t
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::MemoryRequirements::operator()(
+    int64_t
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::MemoryRequirements::operator()(
+    float
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::MemoryRequirements::operator()(
+    double
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::MemoryRequirements::operator()(
+    std::pair<std::string, shared::StringDictKey> const &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::MemoryRequirements::operator()(
+    std::string const &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void heavyai::serialize_literals::MemoryRequirements::operator()(
+    std::vector<T> const &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::MemoryRequirements::operator()(
+    std::pair<std::vector<int8_t>, int> const &v
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### setVarlenOffsets [#setvarlenoffsets]
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+size_t heavyai::serialize_literals::MemoryRequirements::setVarlenOffsets()
+```
+</CodeBlock>
+
+Set varlen_offsets_ based on varlen_sizes_ and varlen_type_sizes_.
+
+Return the final offset = size in bytes of the entire serialized vector.
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `VarKey` | `size_t` |
+| `VarlenMap` | `std::unordered_map< VarKey, size_t >` |
+| `TypeSize` | `size_t` |
+| `VarlenTypeSizePair` | `std::pair< VarKey, TypeSize >` |
+| `VarlenTypeSizes` | `std::set< VarlenTypeSizePair, ByTypeSizeDescVarKeyAsc >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `header_size_` | `size_t` | |
+| `varlen_sizes_` | `VarlenMap` | varlen_sizes_ tracks the total size (number of elements, not bytes) of all variable length content by VarKey. |
+| `varlen_offsets_` | `VarlenMap` | |
+| `varlen_type_sizes_` | `VarlenTypeSizes` | Set of (var_key, type_size) pairs. |
+| `variant_index_` | `VarKey` | Set for each call to std::visit(). |
+
+---
+
+## Inner classes
+
+### ByTypeSizeDescVarKeyAsc
+
+<CodeBlock links={{"MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+struct heavyai::serialize_literals::MemoryRequirements::ByTypeSizeDescVarKeyAsc
+```
+</CodeBlock>
+
+Order by (TypeSize DESC, VarKey ASC).

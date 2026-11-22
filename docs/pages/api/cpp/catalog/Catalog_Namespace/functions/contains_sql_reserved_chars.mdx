@@ -1,0 +1,16 @@
+---
+title: Catalog_Namespace::contains_sql_reserved_chars
+description: "returns true if the string contains one or more OmniSci SQL reserved characters"
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::contains_sql_reserved_chars(
+    std::string_view str,
+    std::string_view chars = "`~!@#$%^&*()- = +[{]}\\|;:'\",
+    <.>/?"
+)
+```
+</CodeBlock>
+
+returns true if the string contains one or more OmniSci SQL reserved characters

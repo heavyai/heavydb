@@ -1,0 +1,77 @@
+---
+title: foreign_storage::ForeignTableRefreshScheduler
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ForeignTableRefreshScheduler.h>
+```
+
+---
+
+## Static methods
+
+### start [#start]
+
+<CodeBlock links={{"ForeignTableRefreshScheduler": "foreigntablerefreshscheduler"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTableRefreshScheduler::start(
+    std::atomic<bool> &is_program_running
+)
+```
+</CodeBlock>
+
+### stop [#stop]
+
+<CodeBlock links={{"ForeignTableRefreshScheduler": "foreigntablerefreshscheduler"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTableRefreshScheduler::stop()
+```
+</CodeBlock>
+
+### setWaitDuration [#setwaitduration]
+
+<CodeBlock links={{"ForeignTableRefreshScheduler": "foreigntablerefreshscheduler"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTableRefreshScheduler::setWaitDuration(
+    int64_t duration_in_seconds
+)
+```
+</CodeBlock>
+
+### isRunning [#isrunning]
+
+<CodeBlock links={{"ForeignTableRefreshScheduler": "foreigntablerefreshscheduler"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignTableRefreshScheduler::isRunning()
+```
+</CodeBlock>
+
+### hasRefreshedTable [#hasrefreshedtable]
+
+<CodeBlock links={{"ForeignTableRefreshScheduler": "foreigntablerefreshscheduler"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignTableRefreshScheduler::hasRefreshedTable()
+```
+</CodeBlock>
+
+### resetHasRefreshedTable [#resethasrefreshedtable]
+
+<CodeBlock links={{"ForeignTableRefreshScheduler": "foreigntablerefreshscheduler"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTableRefreshScheduler::resetHasRefreshedTable()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_scheduler_running_` <Badge intent="note" minimal>static</Badge> | `std::atomic< bool >` | |
+| `thread_wait_duration_` <Badge intent="note" minimal>static</Badge> | `std::chrono::seconds` | |
+| `scheduler_thread_` <Badge intent="note" minimal>static</Badge> | `std::thread` | |
+| `has_refreshed_table_` <Badge intent="note" minimal>static</Badge> | `std::atomic< bool >` | |
+| `wait_mutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+| `wait_condition_` <Badge intent="note" minimal>static</Badge> | `std::condition_variable` | |

@@ -1,0 +1,31 @@
+---
+title: agg_count_shared
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ uint64_t agg_count_shared(
+    uint64_t *agg,
+    const int64_t val
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+NEVER_INLINE uint64_t agg_count_shared(
+    uint64_t *agg,
+    const int64_t val
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

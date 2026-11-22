@@ -1,0 +1,65 @@
+---
+title: SortedStringPermutation
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringDictionary.h>
+```
+
+---
+
+## Constructors
+
+### SortedStringPermutation [#sortedstringpermutation]
+
+<CodeBlock links={{"SortedStringPermutation": "sortedstringpermutation"}}>
+```cpp showLineNumbers={false}
+SortedStringPermutation::SortedStringPermutation(
+    const bool should_sort_descending
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### size [#size]
+
+<CodeBlock links={{"SortedStringPermutation": "sortedstringpermutation"}}>
+```cpp showLineNumbers={false}
+size_t SortedStringPermutation::size() const
+```
+</CodeBlock>
+
+### get_permutation [#getpermutation]
+
+<CodeBlock links={{"SortedStringPermutation": "sortedstringpermutation"}}>
+```cpp showLineNumbers={false}
+std::pair<int32_t, int32_t> SortedStringPermutation::get_permutation(
+    const int32_t str_id
+) const
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"SortedStringPermutation": "sortedstringpermutation"}}>
+```cpp showLineNumbers={false}
+bool SortedStringPermutation::operator()(
+    const int32_t lhs,
+    const int32_t rhs
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `sort_descending` | `bool` | |
+| `persisted_permutation` | `std::vector< int32_t >` | |
+| `transient_permutation` | `std::vector< std::pair< int32_t, int32_t > >` | |

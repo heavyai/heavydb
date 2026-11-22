@@ -1,0 +1,193 @@
+---
+title: json_utils::get_value
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    size_t &value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    int &value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    std::string &value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    int64_t &value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    bool &value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    SQLTypes &value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    EncodingType &value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"StringDictKey": "../../shared/structs/stringdictkey"}}>
+```cpp showLineNumbers={false}
+void json_utils::get_value(
+    const rapidjson::Value &json_obj,
+    shared::StringDictKey &dict_key
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"SQLTypeInfo": "../../classes/sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    SQLTypeInfo &type_info
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class T>
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    T &value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class T>
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    std::vector<T> &vector_value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 12">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class T>
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    std::list<T> &list_value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 13">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class T, class V>
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    std::vector<std::pair<T, V>> &vector_value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 14">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class T, class V>
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    std::list<std::pair<T, V>> &list_value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 15">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class T, class V>
+void json_utils::get_value(
+    const rapidjson::Value &json_val,
+    std::map<T, V> &map_value
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

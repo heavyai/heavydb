@@ -1,0 +1,197 @@
+---
+title: foreign_storage::CsvFileBufferParser
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/CsvFileBufferParser.h>
+```
+
+**Inherits from:** `foreign_storage::TextFileBufferParser` (public)
+
+---
+
+## Methods
+
+### parseBuffer [#parsebuffer]
+
+<CodeBlock links={{"CsvFileBufferParser": "csvfilebufferparser", "ParseBufferRequest": "../structs/parsebufferrequest", "ParseBufferResult": "../structs/parsebufferresult"}}>
+```cpp showLineNumbers={false}
+ParseBufferResult foreign_storage::CsvFileBufferParser::parseBuffer(
+    ParseBufferRequest &request,
+    bool convert_data_blocks,
+    bool columns_are_pre_filtered = false,
+    bool skip_dict_encoding = false
+) const override
+```
+</CodeBlock>
+
+Parses a given CSV file buffer and returns data blocks for each column in the file along with metadata related to rows and row offsets within the buffer.
+
+### validateAndGetCopyParams [#validateandgetcopyparams]
+
+<CodeBlock links={{"CsvFileBufferParser": "csvfilebufferparser"}}>
+```cpp showLineNumbers={false}
+import_export::CopyParams foreign_storage::CsvFileBufferParser::validateAndGetCopyParams(
+    const ForeignTable *foreign_table
+) const override
+```
+</CodeBlock>
+
+Validates foreign table parse options and returns a CopyParams object upon successful validation.
+
+An exception is thrown if validation fails.
+
+### findRowEndPosition [#findrowendposition]
+
+<CodeBlock links={{"CsvFileBufferParser": "csvfilebufferparser", "FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::CsvFileBufferParser::findRowEndPosition(
+    size_t &alloc_size,
+    std::unique_ptr<char[]> &buffer,
+    size_t &buffer_size,
+    const import_export::CopyParams &copy_params,
+    const size_t buffer_first_row_index,
+    unsigned int &num_rows_in_buffer,
+    foreign_storage::FileReader *file_reader
+) const override
+```
+</CodeBlock>
+
+Finds and returns the offset of the end of the last row in the given buffer.
+
+If the buffer does not contain at least one row, the buffer is extended with more content from the file until a row is read. An exception is thrown if the buffer is extended to a maximum threshold and at least one row has still not been read.
+
+### validateExpectedColumnCount [#validateexpectedcolumncount]
+
+<CodeBlock links={{"CsvFileBufferParser": "csvfilebufferparser"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CsvFileBufferParser::validateExpectedColumnCount(
+    const std::string &row,
+    const import_export::CopyParams &copy_params,
+    size_t num_cols,
+    int point_cols,
+    const std::string &file_name
+) const
+```
+</CodeBlock>
+
+Takes a single row and verifies number of columns is valid for num_cols and point_cols (number of point columns).
+
+### validateFiles [#validatefiles]
+
+<CodeBlock links={{"CsvFileBufferParser": "csvfilebufferparser", "FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CsvFileBufferParser::validateFiles(
+    const FileReader *file_reader,
+    const ForeignTable *foreign_table
+) const override
+```
+</CodeBlock>
+
+Performs basic validation of files to be parsed.
+
+### optionallyRemoveBadFiles [#optionallyremovebadfiles]
+
+<CodeBlock links={{"CsvFileBufferParser": "csvfilebufferparser", "MultiFileReader": "multifilereader", "TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::CsvFileBufferParser::optionallyRemoveBadFiles(
+    MultiFileReader *file_reader
+) const
+```
+</CodeBlock>
+
+May remove files that violate parsing rules.
+
+Does nothing by default.
+
+---
+
+## Static methods
+
+### convertImportBuffersToDataBlocks [#convertimportbufferstodatablocks]
+
+<CodeBlock links={{"CsvFileBufferParser": "csvfilebufferparser", "TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+std::map<int, DataBlockPtr> foreign_storage::CsvFileBufferParser::convertImportBuffersToDataBlocks(
+    const std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>> &import_buffers,
+    const bool skip_dict_encoding = false
+)
+```
+</CodeBlock>
+
+### isCoordinateScalar [#iscoordinatescalar]
+
+<CodeBlock links={{"CsvFileBufferParser": "csvfilebufferparser", "TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::CsvFileBufferParser::isCoordinateScalar(
+    const std::string_view datum
+)
+```
+</CodeBlock>
+
+### processGeoColumn [#processgeocolumn]
+
+<CodeBlock links={{"CsvFileBufferParser": "csvfilebufferparser", "TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CsvFileBufferParser::processGeoColumn(
+    std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>> &import_buffers,
+    size_t &col_idx,
+    const import_export::CopyParams &copy_params,
+    std::list<const ColumnDescriptor *>::iterator &cd_it,
+    std::vector<std::string_view> &row,
+    size_t &import_idx,
+    bool is_null,
+    size_t first_row_index,
+    size_t row_index_plus_one,
+    std::shared_ptr<Catalog_Namespace::Catalog> catalog
+)
+```
+</CodeBlock>
+
+### fillRejectedRowWithInvalidData [#fillrejectedrowwithinvaliddata]
+
+<CodeBlock links={{"CsvFileBufferParser": "csvfilebufferparser", "ParseBufferRequest": "../structs/parsebufferrequest", "TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CsvFileBufferParser::fillRejectedRowWithInvalidData(
+    const std::list<const ColumnDescriptor *> &columns,
+    std::list<const ColumnDescriptor *>::iterator &cd_it,
+    const size_t col_idx,
+    ParseBufferRequest &request
+)
+```
+</CodeBlock>
+
+Fill the current row of the `request` with invalid (null) data as row will be marked as rejected.
+
+### isNullDatum [#isnulldatum]
+
+<CodeBlock links={{"CsvFileBufferParser": "csvfilebufferparser", "TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::CsvFileBufferParser::isNullDatum(
+    const std::string_view datum,
+    const ColumnDescriptor *column,
+    const std::string &null_indicator
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `DELIMITER_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `NULLS_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `HEADER_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `QUOTED_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `QUOTE_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `ESCAPE_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `LINE_DELIMITER_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `ARRAY_DELIMITER_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `ARRAY_MARKER_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `GEO_EXPLODE_COLLECTIONS_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `SOURCE_SRID_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `TRIM_SPACES_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `BUFFER_SIZE_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |

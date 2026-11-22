@@ -1,0 +1,60 @@
+---
+title: Data_Namespace::ProcMeminfoParser
+description: "Parse /proc/meminfo into key/value pairs."
+---
+
+Parse /proc/meminfo into key/value pairs.
+
+```cpp showLineNumbers={false}
+#include <Data_Namespace/DataMgr.h>
+```
+
+---
+
+## Constructors
+
+### ProcMeminfoParser [#procmeminfoparser]
+
+<CodeBlock links={{"ProcMeminfoParser": "procmeminfoparser"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::ProcMeminfoParser::ProcMeminfoParser()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"ProcMeminfoParser": "procmeminfoparser"}}>
+```cpp showLineNumbers={false}
+auto Data_Namespace::ProcMeminfoParser::operator[](
+    const std::string &name
+)
+```
+</CodeBlock>
+
+### begin [#begin]
+
+<CodeBlock links={{"ProcMeminfoParser": "procmeminfoparser"}}>
+```cpp showLineNumbers={false}
+auto Data_Namespace::ProcMeminfoParser::begin()
+```
+</CodeBlock>
+
+### end [#end]
+
+<CodeBlock links={{"ProcMeminfoParser": "procmeminfoparser"}}>
+```cpp showLineNumbers={false}
+auto Data_Namespace::ProcMeminfoParser::end()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `items_` | `std::unordered_map< std::string, size_t >` | |

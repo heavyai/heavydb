@@ -1,0 +1,37 @@
+---
+title: File_Namespace::writePage
+description: "Writes a page from buf to the file."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+size_t File_Namespace::writePage(
+    FILE *f,
+    const size_t pageSize,
+    const size_t pageNum,
+    int8_t *buf
+)
+```
+</CodeBlock>
+
+Writes a page from buf to the file.
+
+**Returns:** size_t The number of bytes written (should be equal to pageSize).
+
+**Parameters**
+
+<ParamField path="f" type="FILE *">
+Pointer to the FILE.
+</ParamField>
+
+<ParamField path="pageSize" type="const size_t">
+The logical page size of the file.
+</ParamField>
+
+<ParamField path="pageNum" type="const size_t">
+The page number to where data is being written.
+</ParamField>
+
+<ParamField path="buf" type="int8_t *">
+The source buffer from where data is being read.
+</ParamField>

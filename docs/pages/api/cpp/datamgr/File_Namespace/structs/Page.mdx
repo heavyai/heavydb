@@ -1,0 +1,79 @@
+---
+title: File_Namespace::Page
+description: "A logical page (Page) belongs to a file on disk."
+---
+
+A logical page (`Page`) belongs to a file on disk.
+
+A `Page` struct stores the file id for the file it belongs to, and it stores its page number and number of used bytes within the page.
+
+Note: the number of used bytes should not be greater than the page size. The page size is determined by the containing file.
+
+```cpp showLineNumbers={false}
+#include <File_Namespace/Page.h>
+```
+
+---
+
+## Constructors
+
+### Page [#page]
+
+<Tabs>
+<Tab title="Page number">
+
+<CodeBlock links={{"Page": "page"}}>
+```cpp showLineNumbers={false}
+File_Namespace::Page::Page(
+    int32_t fileId,
+    size_t pageNum
+)
+```
+</CodeBlock>
+
+page number
+
+Constructor
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"Page": "page"}}>
+```cpp showLineNumbers={false}
+File_Namespace::Page::Page()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### isValid [#isvalid]
+
+<CodeBlock links={{"Page": "page"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::Page::isValid()
+```
+</CodeBlock>
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"Page": "page"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::Page::operator<(
+    const Page other
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `fileId` | `int32_t` | |
+| `pageNum` | `size_t` | unique identifier of the owning file |

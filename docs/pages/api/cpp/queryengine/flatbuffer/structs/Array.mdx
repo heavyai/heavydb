@@ -1,0 +1,224 @@
+---
+title: flatbuffer::Array
+description: ""
+---
+
+<CodeBlock id="Array" links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+struct Array
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <flatbuffer/heavydbTypes.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+**Inherits from:** `flatbuffer::NestedArray< T >` (public)
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE Array<T> & flatbuffer::Array<T>::operator=(
+    const ::Array<T> &s
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator[] [#operator_subscript]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+T & flatbuffer::Array<T>::operator[](
+    const int64_t index
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"Array": "array", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+const T flatbuffer::NestedArray<T>::operator[](
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator+= [#operator_plus_assign]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE Array<T> & flatbuffer::Array<T>::operator+=(
+    const ::Array<T> &s
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Array": "array", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+NestedArray<T> & flatbuffer::NestedArray<T>::operator+=(
+    const NestedArray<T> &other
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getSize [#getsize]
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE int64_t flatbuffer::Array<T>::getSize() const
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE T flatbuffer::Array<T>::operator()(
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE T flatbuffer::Array<T>::operator()(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### size [#size]
+
+<CodeBlock links={{"Array": "array", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+size_t flatbuffer::NestedArray<T>::size() const
+```
+</CodeBlock>
+
+### getValuesBuffer [#getvaluesbuffer]
+
+<CodeBlock links={{"Array": "array", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<T>::getValuesBuffer(
+    T *&values,
+    int64_t &nof_values,
+    bool &is_null,
+    bool require_1d_item = true
+) const
+```
+</CodeBlock>
+
+### getRawBuffer [#getrawbuffer]
+
+<CodeBlock links={{"Array": "array", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<T>::getRawBuffer(
+    int8_t *&values,
+    int64_t &nof_values,
+    size_t &value_size,
+    bool &is_null,
+    bool require_1d_item = true
+) const
+```
+</CodeBlock>
+
+### getValue [#getvalue]
+
+<CodeBlock links={{"Array": "array", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+T & flatbuffer::NestedArray<T>::getValue(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### getItem [#getitem]
+
+<CodeBlock links={{"Array": "array", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+const T flatbuffer::NestedArray<T>::getItem(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"Array": "array", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+bool flatbuffer::NestedArray<T>::isNull() const
+```
+</CodeBlock>
+
+### extend [#extend]
+
+<CodeBlock links={{"Array": "array", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::NestedArray<T>::extend(
+    const int8_t *data,
+    const int32_t size,
+    bool assign = false
+)
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"Array": "array", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfoLite * flatbuffer::NestedArray<T>::getTypeInfo() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `flatbuffer_` | `int8_t *` | |
+| `index_` | `int64_t` | |
+| `n_` | `size_t` | |

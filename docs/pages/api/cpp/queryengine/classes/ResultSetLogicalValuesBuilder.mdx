@@ -1,0 +1,113 @@
+---
+title: ResultSetLogicalValuesBuilder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetBuilder.h>
+```
+
+**Inherits from:** `ResultSetBuilder` (public)
+
+---
+
+## Constructors
+
+### ResultSetLogicalValuesBuilder [#resultsetlogicalvaluesbuilder]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"ResultSetLogicalValuesBuilder": "resultsetlogicalvaluesbuilder", "QueryMemoryDescriptor": "querymemorydescriptor", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+ResultSetLogicalValuesBuilder::ResultSetLogicalValuesBuilder(
+    const std::vector<TargetInfo> &targets,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ResultSetLogicalValuesBuilder": "resultsetlogicalvaluesbuilder", "RelLogicalValues": "rellogicalvalues", "QueryMemoryDescriptor": "querymemorydescriptor", "RowSetMemoryOwner": "rowsetmemoryowner", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+ResultSetLogicalValuesBuilder::ResultSetLogicalValuesBuilder(
+    const RelLogicalValues *logical_values,
+    const std::vector<TargetInfo> &targets,
+    const ExecutorDeviceType device_type,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### build [#build]
+
+<CodeBlock links={{"ResultSetLogicalValuesBuilder": "resultsetlogicalvaluesbuilder", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ResultSet * ResultSetLogicalValuesBuilder::build() override
+```
+</CodeBlock>
+
+### makeResultSet [#makeresultset]
+
+<CodeBlock links={{"ResultSetLogicalValuesBuilder": "resultsetlogicalvaluesbuilder", "QueryMemoryDescriptor": "querymemorydescriptor", "RowSetMemoryOwner": "rowsetmemoryowner", "Executor": "executor", "ResultSet": "resultset", "ResultSetBuilder": "resultsetbuilder"}}>
+```cpp showLineNumbers={false}
+ResultSet * ResultSetLogicalValuesBuilder::makeResultSet(
+    const std::vector<TargetInfo> &targets,
+    const ExecutorDeviceType device_type,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### addVarlenBuffer [#addvarlenbuffer]
+
+<CodeBlock links={{"ResultSetLogicalValuesBuilder": "resultsetlogicalvaluesbuilder", "ResultSet": "resultset", "ResultSetBuilder": "resultsetbuilder"}}>
+```cpp showLineNumbers={false}
+void ResultSetLogicalValuesBuilder::addVarlenBuffer(
+    ResultSet *result_set,
+    std::vector<std::string> &varlen_storage
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### create [#create]
+
+<CodeBlock links={{"ResultSetLogicalValuesBuilder": "resultsetlogicalvaluesbuilder", "TargetMetaInfo": "targetmetainfo", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ResultSet * ResultSetLogicalValuesBuilder::create(
+    std::vector<TargetMetaInfo> &label_infos,
+    std::vector<RelLogicalValues::RowValues> &logical_values
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `logical_values` | `const RelLogicalValues *` | |
+| `targets` | `const std::vector< TargetInfo > &` | |
+| `device_type` | `const ExecutorDeviceType` | |
+| `query_mem_desc` | `const QueryMemoryDescriptor &` | |
+| `row_set_mem_owner` | `const std::shared_ptr< RowSetMemoryOwner >` | |
+| `executor` | `const Executor *` | |

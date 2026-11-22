@@ -1,0 +1,16 @@
+---
+title: ct_test_runtime_libs_sub__cpu_template_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+TEMPLATE_NOINLINE int32_t ct_test_runtime_libs_sub__cpu_template_(
+    TableFunctionManager &mgr,
+    const Column<T> &input1,
+    const Column<T> &input2,
+    Column<T> &out
+)
+```
+</CodeBlock>

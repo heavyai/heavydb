@@ -1,0 +1,22 @@
+---
+title: RasterFormat_Namespace::fill_row_halo
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename OutputType>
+TEMPLATE_NOINLINE void RasterFormat_Namespace::fill_row_halo(
+    std::vector<OutputType> &output_data,
+    const int64_t tile_x,
+    const int64_t tile_y,
+    const int64_t tiles_x,
+    const int64_t tiles_y,
+    const int64_t halo_y_pixels_per_tile_boundary,
+    const int64_t x_pixels_per_tile,
+    const int64_t y_pixels_per_tile,
+    const int64_t num_raster_channels,
+    const int64_t source_tile_y_offset
+)
+```
+</CodeBlock>

@@ -1,0 +1,15 @@
+---
+title: foreign_storage::PreviewContext
+description: ""
+---
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `detect_buffers` | `std::vector< std::unique_ptr< TypedParquetDetectBuffer > >` | |
+| `column_chunks` | `std::vector< Chunk_NS::Chunk >` | |
+| `rejected_row_indices_per_column` | `std::vector< std::unique_ptr< RejectedRowIndices > >` | |
+| `column_descriptors` | `std::list< ColumnDescriptor >` | |

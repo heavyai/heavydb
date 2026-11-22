@@ -1,0 +1,585 @@
+---
+title: HashJoin
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashJoin.h>
+```
+
+---
+
+## Methods
+
+### toString [#tostring]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+virtual std::string HashJoin::toString(
+    const ExecutorDeviceType device_type,
+    const int device_id = 0,
+    bool raw = false
+) const
+```
+</CodeBlock>
+
+### toStringFlat64 [#tostringflat64]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::string HashJoin::toStringFlat64(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### toStringFlat32 [#tostringflat32]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::string HashJoin::toStringFlat32(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### toSet [#toset]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+virtual DecodedJoinHashBufferSet HashJoin::toSet(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### codegenSlot [#codegenslot]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+virtual llvm::Value * HashJoin::codegenSlot(
+    const CompilationOptions &,
+    const size_t
+)
+```
+</CodeBlock>
+
+### codegenMatchingSet [#codegenmatchingset]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "CompilationOptions": "../structs/compilationoptions", "HashJoinMatchingSet": "../structs/hashjoinmatchingset"}}>
+```cpp showLineNumbers={false}
+virtual HashJoinMatchingSet HashJoin::codegenMatchingSet(
+    const CompilationOptions &,
+    const size_t
+)
+```
+</CodeBlock>
+
+### getInnerTableId [#getinnertableid]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+virtual shared::TableKey HashJoin::getInnerTableId() const noexcept
+```
+</CodeBlock>
+
+### getInnerTableRteIdx [#getinnertablerteidx]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+virtual int HashJoin::getInnerTableRteIdx() const noexcept
+```
+</CodeBlock>
+
+### getHashType [#gethashtype]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+virtual HashType HashJoin::getHashType() const noexcept
+```
+</CodeBlock>
+
+### getMemoryLevel [#getmemorylevel]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+virtual Data_Namespace::MemoryLevel HashJoin::getMemoryLevel() const noexcept
+```
+</CodeBlock>
+
+### offsetBufferOff [#offsetbufferoff]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+virtual size_t HashJoin::offsetBufferOff() const noexcept
+```
+</CodeBlock>
+
+### countBufferOff [#countbufferoff]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+virtual size_t HashJoin::countBufferOff() const noexcept
+```
+</CodeBlock>
+
+### payloadBufferOff [#payloadbufferoff]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+virtual size_t HashJoin::payloadBufferOff() const noexcept
+```
+</CodeBlock>
+
+### getHashJoinType [#gethashjointype]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+virtual std::string HashJoin::getHashJoinType() const
+```
+</CodeBlock>
+
+### isBitwiseEq [#isbitwiseeq]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+virtual bool HashJoin::isBitwiseEq() const
+```
+</CodeBlock>
+
+### fetchJoinColumn [#fetchjoincolumn]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "Executor": "executor", "JoinColumn": "../structs/joincolumn"}}>
+```cpp showLineNumbers={false}
+JoinColumn HashJoin::fetchJoinColumn(
+    const Analyzer::ColumnVar *hash_col,
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragment_info,
+    const Data_Namespace::MemoryLevel effective_memory_level,
+    const int device_id,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>> &chunks_owner,
+    DeviceAllocator *dev_buff_owner,
+    std::vector<std::shared_ptr<void>> &malloc_owner,
+    Executor *executor,
+    ColumnCacheMap *column_cache
+)
+```
+</CodeBlock>
+
+fetchJoinColumn() calls ColumnFetcher::makeJoinColumn(), then copies the [JoinColumn](../structs/joincolumn)'s col_chunks_buff memory onto the GPU if required by the effective_memory_level parameter. The dev_buff_owner parameter will manage the GPU memory.
+
+### getJoinHashBufferSize [#getjoinhashbuffersize]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+size_t HashJoin::getJoinHashBufferSize(
+    const ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+size_t HashJoin::getJoinHashBufferSize(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getJoinHashBuffer [#getjoinhashbuffer]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+int8_t * HashJoin::getJoinHashBuffer(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### freeHashBufferMemory [#freehashbuffermemory]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void HashJoin::freeHashBufferMemory()
+```
+</CodeBlock>
+
+### getHashTableForDevice [#gethashtablefordevice]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashTable> HashJoin::getHashTableForDevice(
+    int device_id
+) const
+```
+</CodeBlock>
+
+### replaceHashTableForDevice [#replacehashtablefordevice]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+void HashJoin::replaceHashTableForDevice(
+    std::shared_ptr<HashTable> &&hash_table,
+    int device_id
+)
+```
+</CodeBlock>
+
+### getAnyHashTableForDevice [#getanyhashtablefordevice]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashTable> HashJoin::getAnyHashTableForDevice() const
+```
+</CodeBlock>
+
+### moveHashTableForDevice [#movehashtablefordevice]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+void HashJoin::moveHashTableForDevice(
+    std::shared_ptr<HashTable> &&hash_table,
+    int device_id
+)
+```
+</CodeBlock>
+
+### putHashTableForDevice [#puthashtablefordevice]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+void HashJoin::putHashTableForDevice(
+    std::shared_ptr<HashTable> hash_table,
+    int device_id
+)
+```
+</CodeBlock>
+
+### clearHashTableForDevice [#clearhashtablefordevice]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void HashJoin::clearHashTableForDevice()
+```
+</CodeBlock>
+
+### getComponentBufferSize [#getcomponentbuffersize]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+virtual size_t HashJoin::getComponentBufferSize() const noexcept
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getMaximumNumHashEntriesCanHold [#getmaximumnumhashentriescanhold]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+size_t HashJoin::getMaximumNumHashEntriesCanHold(
+    MemoryLevel memory_level,
+    const Executor *executor,
+    size_t rowid_size
+) noexcept
+```
+</CodeBlock>
+
+### generateTooManyHashEntriesErrMsg [#generatetoomanyhashentrieserrmsg]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+static std::string HashJoin::generateTooManyHashEntriesErrMsg(
+    size_t num_entries,
+    size_t threshold,
+    MemoryLevel memory_level
+)
+```
+</CodeBlock>
+
+### layoutRequiresAdditionalBuffers [#layoutrequiresadditionalbuffers]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+static bool HashJoin::layoutRequiresAdditionalBuffers(
+    HashType layout
+) noexcept
+```
+</CodeBlock>
+
+### getHashTypeString [#gethashtypestring]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+static std::string HashJoin::getHashTypeString(
+    HashType ht
+) noexcept
+```
+</CodeBlock>
+
+### codegenMatchingSet [#codegenmatchingset]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "Executor": "executor", "HashJoinMatchingSet": "../structs/hashjoinmatchingset"}}>
+```cpp showLineNumbers={false}
+HashJoinMatchingSet HashJoin::codegenMatchingSet(
+    const std::vector<llvm::Value *> &hash_join_idx_args_in,
+    const bool is_sharded,
+    const bool col_is_nullable,
+    const bool is_bw_eq,
+    const int64_t sub_buff_size,
+    Executor *executor,
+    const bool is_bucketized = false
+)
+```
+</CodeBlock>
+
+### codegenHashTableLoad [#codegenhashtableload]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+llvm::Value * HashJoin::codegenHashTableLoad(
+    const size_t table_idx,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### getInstance [#getinstance]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "InputTableInfo": "../structs/inputtableinfo", "Executor": "executor", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashJoin> HashJoin::getInstance(
+    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const std::vector<InputTableInfo> &query_infos,
+    const Data_Namespace::MemoryLevel memory_level,
+    const JoinType join_type,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor,
+    const HashTableBuildDagMap &hashtable_build_dag_map,
+    const RegisteredQueryHint &query_hint,
+    const TableIdToNodeMap &table_id_to_node_map
+)
+```
+</CodeBlock>
+
+Make hash table from an in-flight SQL query's parse tree etc.
+
+### getSyntheticInstance [#getsyntheticinstance]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"HashJoin": "hashjoin", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
+    std::string_view table1,
+    std::string_view column1,
+    const Catalog_Namespace::Catalog &catalog1,
+    std::string_view table2,
+    std::string_view column2,
+    const Catalog_Namespace::Catalog &catalog2,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+Make hash table from named tables and columns (such as for testing).
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"HashJoin": "hashjoin", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
+    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+Make hash table from named tables and columns (such as for testing).
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"HashJoin": "hashjoin", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance(
+    std::vector<std::shared_ptr<Analyzer::BinOper>>,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getInnerTableId [#getinnertableid]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+static shared::TableKey HashJoin::getInnerTableId(
+    const std::vector<InnerOuter> &inner_outer_pairs
+)
+```
+</CodeBlock>
+
+### canAccessHashTable [#canaccesshashtable]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+bool HashJoin::canAccessHashTable(
+    bool allow_hash_table_recycling,
+    bool invalid_cache_key,
+    JoinType join_type
+)
+```
+</CodeBlock>
+
+### normalizeColumnPair [#normalizecolumnpair]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
+    const Analyzer::Expr *lhs,
+    const Analyzer::Expr *rhs,
+    const TemporaryTables *temporary_tables,
+    const bool is_bbox_intersect = false
+)
+```
+</CodeBlock>
+
+### getHashJoinColumn [#gethashjoincolumn]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+const T * HashJoin::getHashJoinColumn(
+    const Analyzer::Expr *expr
+)
+```
+</CodeBlock>
+
+### normalizeColumnPairs [#normalizecolumnpairs]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>> HashJoin::normalizeColumnPairs(
+    const Analyzer::BinOper *condition,
+    const TemporaryTables *temporary_tables
+)
+```
+</CodeBlock>
+
+### collectFragmentIds [#collectfragmentids]
+
+<CodeBlock links={{"HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::vector<int> HashJoin::collectFragmentIds(
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragments
+)
+```
+</CodeBlock>
+
+### getCompositeKeyInfo [#getcompositekeyinfo]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "Executor": "executor", "CompositeKeyInfo": "../structs/compositekeyinfo"}}>
+```cpp showLineNumbers={false}
+CompositeKeyInfo HashJoin::getCompositeKeyInfo(
+    const std::vector<InnerOuter> &inner_outer_pairs,
+    const Executor *executor,
+    const std::vector<InnerOuterStringOpInfos> &inner_outer_string_op_infos_pairs = {}
+)
+```
+</CodeBlock>
+
+### translateCompositeStrDictProxies [#translatecompositestrdictproxies]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "CompositeKeyInfo": "../structs/compositekeyinfo", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::vector<const StringDictionaryProxy::IdMap *> HashJoin::translateCompositeStrDictProxies(
+    const CompositeKeyInfo &composite_key_info,
+    const std::vector<InnerOuterStringOpInfos> &string_op_infos_for_keys,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### getStrDictProxies [#getstrdictproxies]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::pair<const StringDictionaryProxy *, StringDictionaryProxy *> HashJoin::getStrDictProxies(
+    const InnerOuter &cols,
+    const Executor *executor,
+    const bool has_string_ops
+)
+```
+</CodeBlock>
+
+### translateInnerToOuterStrDictProxies [#translateinnertoouterstrdictproxies]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "ExpressionRange": "expressionrange", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryProxy::IdMap * HashJoin::translateInnerToOuterStrDictProxies(
+    const InnerOuter &cols,
+    const InnerOuterStringOpInfos &inner_outer_string_op_infos,
+    ExpressionRange &old_col_range,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### codegenColOrStringOper [#codegencolorstringoper]
+
+<CodeBlock links={{"HashJoin": "hashjoin", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * HashJoin::codegenColOrStringOper(
+    const Analyzer::Expr *col_or_string_oper,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos,
+    CodeGenerator &code_generator,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `MAX_NUM_HASH_ENTRIES` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+| `hash_tables_mutex_` | `std::shared_mutex` | |
+| `hash_tables_for_device_` | `std::unordered_map< int, std::shared_ptr< HashTable > >` | |

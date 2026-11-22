@@ -1,0 +1,310 @@
+---
+title: Geospatial::GeoPoint
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Geospatial/Types.h>
+```
+
+**Inherits from:** `Geospatial::GeoBase` (public)
+
+---
+
+## Constructors
+
+### GeoPoint [#geopoint]
+
+<Tabs>
+<Tab title="Copy (with coords)">
+
+<CodeBlock links={{"GeoPoint": "geopoint"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoPoint::GeoPoint(
+    const std::vector<double> &coords
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with wkt)">
+
+<CodeBlock links={{"GeoPoint": "geopoint"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoPoint::GeoPoint(
+    const std::string &wkt
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"GeoPoint": "geopoint"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoPoint::GeoPoint(
+    OGRGeometry *geom,
+    const bool owns_geom_obj
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getColumns [#getcolumns]
+
+<CodeBlock links={{"GeoPoint": "geopoint"}}>
+```cpp showLineNumbers={false}
+void Geospatial::GeoPoint::getColumns(
+    std::vector<double> &coords
+) const
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"GeoPoint": "geopoint"}}>
+```cpp showLineNumbers={false}
+GeoType Geospatial::GeoPoint::getType() const
+```
+</CodeBlock>
+
+### clone [#clone]
+
+<CodeBlock links={{"GeoPoint": "geopoint"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoPoint::clone() const override
+```
+</CodeBlock>
+
+### getWktString [#getwktstring]
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::string Geospatial::GeoPoint::getWktString() const
+```
+</CodeBlock>
+
+### getWkb [#getwkb]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoPoint::getWkb(
+    std::vector<uint8_t> &
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with wkb size)">
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+uint8_t * Geospatial::GeoPoint::getWkb(
+    size_t &wkb_size
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getOGRGeometry [#getogrgeometry]
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+const OGRGeometry * Geospatial::GeoPoint::getOGRGeometry() const
+```
+</CodeBlock>
+
+### getBestPlanarSRID [#getbestplanarsrid]
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+int32_t Geospatial::GeoPoint::getBestPlanarSRID() const
+```
+</CodeBlock>
+
+### transform [#transform]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoPoint::transform(
+    int32_t srid0,
+    int32_t srid1
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoPoint::transform(
+    SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoPoint::operator==(
+    const GeoBase &other
+) const
+```
+</CodeBlock>
+
+### isEmpty [#isempty]
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoPoint::isEmpty() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<Tabs>
+<Tab title="Const (with other)">
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoPoint::run(
+    GeoOp op,
+    const GeoBase &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with param)">
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoPoint::run(
+    GeoOp op,
+    double param
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoPoint::run(
+    GeoOp op
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### optimized_run [#optimizedrun]
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoPoint::optimized_run(
+    GeoOp op,
+    const GeoBase &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getTransformation [#gettransformation]
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<OGRCoordinateTransformation> Geospatial::GeoPoint::getTransformation(
+    int32_t srid0,
+    int32_t srid1
+)
+```
+</CodeBlock>
+
+### createFromWktString [#createfromwktstring]
+
+<CodeBlock links={{"GeoPoint": "geopoint", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+OGRErr Geospatial::GeoPoint::createFromWktString(
+    const std::string &wkt,
+    OGRGeometry **geom
+)
+```
+</CodeBlock>
+
+### createFromWkbView [#createfromwkbview]
+
+<CodeBlock links={{"GeoPoint": "geopoint", "WkbView": "../structs/wkbview", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+OGRErr Geospatial::GeoPoint::createFromWkbView(
+    OGRGeometry **geom,
+    WkbView const
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### GeoType
+
+| Name | Value | Description |
+|---|---|---|
+| `kPOINT` | | |
+| `kLINESTRING` | | |
+| `kPOLYGON` | | |
+| `kMULTIPOLYGON` | | |
+| `kGEOMETRY` | | |
+| `kGEOMETRYCOLLECTION` | | |
+| `kMULTILINESTRING` | | |
+| `kMULTIPOINT` | | |
+### GeoOp
+
+| Name | Value | Description |
+|---|---|---|
+| `kPROJECTION` | `= 0` | |
+| `kINTERSECTION` | `= 1` | |
+| `kDIFFERENCE` | `= 2` | |
+| `kUNION` | `= 3` | |
+| `kBUFFER` | `= 4` | |
+| `kISVALID` | `= 5` | |
+| `kISEMPTY` | `= 6` | |
+| `kEQUALS` | `= 7` | |
+| `kCONCAVEHULL` | `= 8` | |
+| `kCONVEXHULL` | `= 9` | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `geom_` | `OGRGeometry *` | |
+| `owns_geom_obj_` | `bool` | |

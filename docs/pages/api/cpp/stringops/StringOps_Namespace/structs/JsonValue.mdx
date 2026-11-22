@@ -1,0 +1,247 @@
+---
+title: StringOps_Namespace::JsonValue
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringOps_Namespace/StringOps.h>
+```
+
+**Inherits from:** `StringOps_Namespace::StringOp` (public)
+
+---
+
+## Constructors
+
+### JsonValue [#jsonvalue]
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::JsonValue::JsonValue(
+    const std::optional<std::string> &var_str_optional_literal,
+    const std::string &json_path,
+    const StringOpInfo &string_op_info
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+NullableStrType StringOps_Namespace::JsonValue::operator()(
+    const std::string &str
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "NullableStrType": "nullablestrtype", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::JsonValue::operator()(
+    const std::string &str1,
+    const std::string &str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "NullableStrType": "nullablestrtype", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::JsonValue::operator()() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### numericEval [#numericeval]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::JsonValue::numericEval(
+    const std::string_view str
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::JsonValue::numericEval(
+    const std::string_view str1,
+    const std::string_view str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::JsonValue::numericEval() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getReturnType [#getreturntype]
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual const SQLTypeInfo & StringOps_Namespace::JsonValue::getReturnType() const
+```
+</CodeBlock>
+
+### getVarStringLiteral [#getvarstringliteral]
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const std::string & StringOps_Namespace::JsonValue::getVarStringLiteral() const
+```
+</CodeBlock>
+
+### hasVarStringLiteral [#hasvarstringliteral]
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::JsonValue::hasVarStringLiteral() const
+```
+</CodeBlock>
+
+### getOpInfo [#getopinfo]
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "StringOpInfo": "stringopinfo", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const StringOpInfo & StringOps_Namespace::JsonValue::getOpInfo() const
+```
+</CodeBlock>
+
+### parse_json_parse_mode [#parsejsonparsemode]
+
+<CodeBlock links={{"JsonValue": "jsonvalue"}}>
+```cpp showLineNumbers={false}
+JsonValue::JsonParseMode StringOps_Namespace::JsonValue::parse_json_parse_mode(
+    std::string_view json_path
+)
+```
+</CodeBlock>
+
+### parse_json_path [#parsejsonpath]
+
+<CodeBlock links={{"JsonValue": "jsonvalue"}}>
+```cpp showLineNumbers={false}
+std::vector<JsonValue::JsonKey> StringOps_Namespace::JsonValue::parse_json_path(
+    const std::string &json_path
+)
+```
+</CodeBlock>
+
+### handle_parse_error [#handleparseerror]
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+NullableStrType StringOps_Namespace::JsonValue::handle_parse_error(
+    const std::string &json_str
+) const
+```
+</CodeBlock>
+
+### handle_key_error [#handlekeyerror]
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+NullableStrType StringOps_Namespace::JsonValue::handle_key_error(
+    const std::string &json_str
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### generateRegex [#generateregex]
+
+<CodeBlock links={{"JsonValue": "jsonvalue", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+boost::regex StringOps_Namespace::JsonValue::generateRegex(
+    const std::string &op_name,
+    const std::string &regex_pattern,
+    const std::string &regex_params,
+    const bool supports_sub_matches
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### JsonKeyKind
+
+| Name | Value | Description |
+|---|---|---|
+| `JSON_OBJECT` | | |
+| `JSON_ARRAY` | | |
+### JsonParseMode
+
+| Name | Value | Description |
+|---|---|---|
+| `PARSE_MODE_LAX` | | |
+| `PARSE_MODE_STRICT` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `allow_strict_json_parsing` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `bool` | |
+| `json_parse_mode_` | `const JsonParseMode` | |
+| `json_keys_` | `const std::vector< JsonKey >` | |
+| `op_kind_` | `const SqlStringOpKind` | |
+| `return_ti_` | `const SQLTypeInfo` | |
+| `has_var_str_literal_` | `const bool` | |
+| `var_str_literal_` | `const NullableStrType` | |
+| `string_op_info_` | `const StringOpInfo` | |
+
+---
+
+## Inner classes
+
+### JsonKey
+
+<CodeBlock links={{"JsonValue": "jsonvalue"}}>
+```cpp showLineNumbers={false}
+struct StringOps_Namespace::JsonValue::JsonKey
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `key_kind` | `JsonKeyKind` | |
+| `object_key` | `std::string` | |
+| `array_key` | `size_t` | |

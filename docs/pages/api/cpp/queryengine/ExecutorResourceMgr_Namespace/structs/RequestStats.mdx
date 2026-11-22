@@ -1,0 +1,58 @@
+---
+title: ExecutorResourceMgr_Namespace::RequestStats
+description: "Stores info pertaining to a single request made to ExecutorResourceMgr, including its request_id, min and max possible resource grants, actual resource_grant, and various timing stats."
+---
+
+Stores info pertaining to a single request made to [`ExecutorResourceMgr`](../classes/executorresourcemgr), including its `request_id`, min and max possible resource grants, actual resource_grant, and various timing stats.
+
+In future work it is planned to use these stats to allow the [`ExecutorResourceMgr`](../classes/executorresourcemgr) to learn from query patterns and timings over time to enable more efficient query scheduling.
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/ExecutorResourceMgr.h>
+```
+
+---
+
+## Constructors
+
+### RequestStats [#requeststats]
+
+<CodeBlock links={{"RequestStats": "requeststats", "RequestInfo": "requestinfo", "ResourceGrant": "resourcegrant"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::RequestStats::RequestStats(
+    const RequestId request_id,
+    const RequestInfo &request_info,
+    const ResourceGrant &min_resource_grant,
+    const ResourceGrant &max_resource_grant,
+    const std::chrono::steady_clock::time_point &enqueue_time,
+    const size_t queue_length_at_entry,
+    const size_t device_type_queue_length_at_entry,
+    const size_t timeout_in_ms
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `request_id` | `const RequestId` | |
+| `request_info` | `const RequestInfo` | |
+| `min_resource_grant` | `const ResourceGrant` | |
+| `max_resource_grant` | `const ResourceGrant` | |
+| `actual_resource_grant` | `ResourceGrant` | |
+| `enqueue_time` | `std::chrono::steady_clock::time_point` | |
+| `deque_time` | `std::chrono::steady_clock::time_point` | |
+| `execution_finished_time` | `std::chrono::steady_clock::time_point` | |
+| `queue_length_at_entry` | `size_t` | |
+| `device_type_queue_length_at_entry` | `size_t` | |
+| `finished_queueing` | `bool` | |
+| `finished_executing` | `bool` | |
+| `queue_time_ms` | `size_t` | |
+| `execution_time_ms` | `size_t` | |
+| `total_time_ms` | `size_t` | |
+| `timeout_in_ms` | `size_t` | |
+| `timed_out` | `bool` | |
+| `error` | `std::optional< std::string >` | |

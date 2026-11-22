@@ -1,0 +1,31 @@
+---
+title: import_export::delimited_parser::parse_string_array
+description: "Parses given string array and inserts into given vector of strings."
+---
+
+<CodeBlock links={{"CopyParams": "../../../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+void import_export::delimited_parser::parse_string_array(
+    const std::string &s,
+    const import_export::CopyParams &copy_params,
+    std::vector<std::string> &string_vec,
+    bool truncate_values = false
+)
+```
+</CodeBlock>
+
+Parses given string array and inserts into given vector of strings.
+
+**Parameters**
+
+<ParamField path="s" type="const std::string &">
+Given string array
+</ParamField>
+
+<ParamField path="copy_params" type="const import_export::CopyParams &">
+Copy params for the table.
+</ParamField>
+
+<ParamField path="string_vec" type="std::vector<std::string> &">
+Given vector to be populated with parsed fields.
+</ParamField>

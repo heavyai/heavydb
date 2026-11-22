@@ -1,0 +1,58 @@
+---
+title: DecimalOverflowValidator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Encoder.h>
+```
+
+---
+
+## Constructors
+
+### DecimalOverflowValidator [#decimaloverflowvalidator]
+
+<CodeBlock links={{"DecimalOverflowValidator": "decimaloverflowvalidator"}}>
+```cpp showLineNumbers={false}
+DecimalOverflowValidator::DecimalOverflowValidator(
+    SQLTypeInfo type
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### validate [#validate]
+
+<CodeBlock links={{"DecimalOverflowValidator": "decimaloverflowvalidator"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void DecimalOverflowValidator::validate(
+    T value
+) const
+```
+</CodeBlock>
+
+### do_validate [#dovalidate]
+
+<CodeBlock links={{"DecimalOverflowValidator": "decimaloverflowvalidator"}}>
+```cpp showLineNumbers={false}
+void DecimalOverflowValidator::do_validate(
+    int64_t value
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `do_check_` | `bool` | |
+| `max_` | `int64_t` | |
+| `min_` | `int64_t` | |
+| `pow10_` | `int` | |

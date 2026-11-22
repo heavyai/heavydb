@@ -1,0 +1,17 @@
+---
+title: apply_permutation_on_gpu
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void apply_permutation_on_gpu(
+    int64_t *val_buff,
+    int32_t *idx_buff,
+    const uint64_t entry_count,
+    const uint32_t chosen_bytes,
+    ThrustAllocator &alloc,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>

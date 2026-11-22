@@ -1,0 +1,23 @@
+---
+title: point_in_polygon_winding_number
+description: "Computes whether the point p is inside the polygon poly using the winding number algorithm."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T, EdgeBehavior TEdgeBehavior>
+DEVICE ALWAYS_INLINE bool point_in_polygon_winding_number(
+    const int8_t *poly,
+    const int32_t poly_num_coords,
+    const T px,
+    const T py,
+    const int32_t ic1,
+    const int32_t isr1,
+    const int32_t osr
+)
+```
+</CodeBlock>
+
+Computes whether the point p is inside the polygon poly using the winding number algorithm.
+
+The winding number algorithm efficiently computes the winding number, which is the number of revolutions made around a point P while traveling around the polygon. If the winding number is non-zero, then P must be inside the polygon. The actual algorithm loops over all edges in the polygon, and determines the location of the crossing between a ray from the point P and each edge E of the polygon. In the implementation below, this crossing calculation is performed by assigning a fixed orientation to each edge, then computing the location of the point with respect to that edge. The parameter `include_point_on_edge` allows the algorithm to work for both point-inside-polygon, or point-on-polygon calculations. The original source and additional detail for this implementation is here: [http://geomalgorithms.com/a03-_inclusion.html](http://geomalgorithms.com/a03-_inclusion.html)

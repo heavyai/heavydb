@@ -1,0 +1,118 @@
+---
+title: WindowProjectNodeContext
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <WindowContext.h>
+```
+
+---
+
+## Methods
+
+### addWindowFunctionContext [#addwindowfunctioncontext]
+
+<CodeBlock links={{"WindowProjectNodeContext": "windowprojectnodecontext", "WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowProjectNodeContext::addWindowFunctionContext(
+    std::unique_ptr<WindowFunctionContext> window_function_context,
+    const size_t target_index
+)
+```
+</CodeBlock>
+
+### activateWindowFunctionContext [#activatewindowfunctioncontext]
+
+<CodeBlock links={{"WindowProjectNodeContext": "windowprojectnodecontext", "Executor": "executor", "WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const WindowFunctionContext * WindowProjectNodeContext::activateWindowFunctionContext(
+    Executor *executor,
+    const size_t target_index
+) const
+```
+</CodeBlock>
+
+### registerWindowPartition [#registerwindowpartition]
+
+<CodeBlock links={{"WindowProjectNodeContext": "windowprojectnodecontext", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void WindowProjectNodeContext::registerWindowPartition(
+    size_t const target_idx,
+    std::shared_ptr<HashJoin> partition
+)
+```
+</CodeBlock>
+
+### getWindowPartition [#getwindowpartition]
+
+<CodeBlock links={{"WindowProjectNodeContext": "windowprojectnodecontext", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+HashJoin * WindowProjectNodeContext::getWindowPartition(
+    size_t const target_idx
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### resetWindowFunctionContext [#resetwindowfunctioncontext]
+
+<CodeBlock links={{"WindowProjectNodeContext": "windowprojectnodecontext", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void WindowProjectNodeContext::resetWindowFunctionContext(
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### getActiveWindowFunctionContext [#getactivewindowfunctioncontext]
+
+<CodeBlock links={{"WindowProjectNodeContext": "windowprojectnodecontext", "Executor": "executor", "WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+WindowFunctionContext * WindowProjectNodeContext::getActiveWindowFunctionContext(
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### create [#create]
+
+<CodeBlock links={{"WindowProjectNodeContext": "windowprojectnodecontext", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+WindowProjectNodeContext * WindowProjectNodeContext::create(
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### get [#get]
+
+<CodeBlock links={{"WindowProjectNodeContext": "windowprojectnodecontext", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const WindowProjectNodeContext * WindowProjectNodeContext::get(
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### reset [#reset]
+
+<CodeBlock links={{"WindowProjectNodeContext": "windowprojectnodecontext", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void WindowProjectNodeContext::reset(
+    Executor *executor
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `window_contexts_` | `std::unordered_map< size_t, std::unique_ptr< WindowFunctionContext > >` | |
+| `window_partition_owned_` | `std::unordered_map< size_t, std::shared_ptr< HashJoin > >` | |

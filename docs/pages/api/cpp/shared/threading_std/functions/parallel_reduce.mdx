@@ -1,0 +1,23 @@
+---
+title: threading_std::parallel_reduce
+description: "Parallel iteration with reduction."
+---
+
+<CodeBlock links={{"blocked_range": "../../threadingcommon/classes/blockedrange"}}>
+```cpp showLineNumbers={false}
+template <typename Int,
+          typename Value,
+          typename RealBody,
+          typename Reduction,
+          typename Partitioner = auto_partitioner>
+Value threading_std::parallel_reduce(
+    const blocked_range<Int> &range,
+    const Value &identity,
+    const RealBody &real_body,
+    const Reduction &reduction,
+    const Partitioner &p = Partitioner()
+)
+```
+</CodeBlock>
+
+Parallel iteration with reduction.

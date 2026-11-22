@@ -1,0 +1,15 @@
+---
+title: import_export::create_importer
+description: ""
+---
+
+<CodeBlock links={{"CopyParams": "../structs/copyparams", "AbstractImporter": "../classes/abstractimporter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<AbstractImporter> import_export::create_importer(
+    Catalog_Namespace::Catalog &catalog,
+    const TableDescriptor *td,
+    const std::string &copy_from_source,
+    const import_export::CopyParams &copy_params
+)
+```
+</CodeBlock>

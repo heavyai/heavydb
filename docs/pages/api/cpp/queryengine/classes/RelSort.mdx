@@ -1,0 +1,521 @@
+---
+title: RelSort
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RelAlgNode` (public)
+
+---
+
+## Constructors
+
+### RelSort [#relsort]
+
+<Tabs>
+<Tab title="Default">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+RelSort::RelSort()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with collation and limit and offset and input)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelSort": "relsort", "SortField": "sortfield", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+RelSort::RelSort(
+    const std::vector<SortField> &collation,
+    std::optional<size_t> limit,
+    const size_t offset,
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+RelSort::RelSort(
+    RelSort const &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RelSort": "relsort", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelSort::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RelSort": "relsort", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelSort::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+bool RelSort::operator==(
+    const RelSort &that
+) const
+```
+</CodeBlock>
+
+### collationCount [#collationcount]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+size_t RelSort::collationCount() const
+```
+</CodeBlock>
+
+### getCollation [#getcollation]
+
+<CodeBlock links={{"RelSort": "relsort", "SortField": "sortfield"}}>
+```cpp showLineNumbers={false}
+SortField RelSort::getCollation(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### setCollation [#setcollation]
+
+<CodeBlock links={{"RelSort": "relsort", "SortField": "sortfield"}}>
+```cpp showLineNumbers={false}
+void RelSort::setCollation(
+    std::vector<SortField> &&collation
+)
+```
+</CodeBlock>
+
+### isEmptyResult [#isemptyresult]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+bool RelSort::isEmptyResult() const
+```
+</CodeBlock>
+
+### isLimitDelivered [#islimitdelivered]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+bool RelSort::isLimitDelivered() const
+```
+</CodeBlock>
+
+### getLimit [#getlimit]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelSort::getLimit() const
+```
+</CodeBlock>
+
+### getOffset [#getoffset]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+size_t RelSort::getOffset() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RelSort": "relsort", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RelSort::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+size_t RelSort::size() const override
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAlgNode> RelSort::deepCopy() const override
+```
+</CodeBlock>
+
+### getOrderEntries [#getorderentries]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+std::list<Analyzer::OrderEntry> RelSort::getOrderEntries() const
+```
+</CodeBlock>
+
+### addHint [#addhint]
+
+<CodeBlock links={{"RelSort": "relsort", "ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+void RelSort::addHint(
+    const ExplainedQueryHint &hint_explained
+)
+```
+</CodeBlock>
+
+### hasHintEnabled [#hashintenabled]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+const bool RelSort::hasHintEnabled(
+    QueryHint candidate_hint
+) const
+```
+</CodeBlock>
+
+### getHintInfo [#gethintinfo]
+
+<CodeBlock links={{"RelSort": "relsort", "ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+const ExplainedQueryHint & RelSort::getHintInfo(
+    QueryHint hint
+) const
+```
+</CodeBlock>
+
+### hasDeliveredHint [#hasdeliveredhint]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+bool RelSort::hasDeliveredHint()
+```
+</CodeBlock>
+
+### getDeliveredHints [#getdeliveredhints]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+Hints * RelSort::getDeliveredHints()
+```
+</CodeBlock>
+
+### resetQueryExecutionState [#resetqueryexecutionstate]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelSort::resetQueryExecutionState()
+```
+</CodeBlock>
+
+### setContextData [#setcontextdata]
+
+<CodeBlock links={{"RelSort": "relsort", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelSort::setContextData(
+    const RaExecutionDesc *context_data
+) const
+```
+</CodeBlock>
+
+### setOutputMetainfo [#setoutputmetainfo]
+
+<CodeBlock links={{"RelSort": "relsort", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelSort::setOutputMetainfo(
+    std::vector<TargetMetaInfo> targets_metainfo
+) const
+```
+</CodeBlock>
+
+### setQueryPlanDag [#setqueryplandag]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelSort::setQueryPlanDag(
+    const std::string &extracted_query_plan_dag
+) const
+```
+</CodeBlock>
+
+### getQueryPlanDag [#getqueryplandag]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::string RelSort::getQueryPlanDag() const
+```
+</CodeBlock>
+
+### getQueryPlanDagHash [#getqueryplandaghash]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelSort::getQueryPlanDagHash() const
+```
+</CodeBlock>
+
+### getOutputMetainfo [#getoutputmetainfo]
+
+<CodeBlock links={{"RelSort": "relsort", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetMetaInfo> & RelSort::getOutputMetainfo() const
+```
+</CodeBlock>
+
+### getId [#getid]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+unsigned RelSort::getId() const
+```
+</CodeBlock>
+
+### hasContextData [#hascontextdata]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelSort::hasContextData() const
+```
+</CodeBlock>
+
+### getContextData [#getcontextdata]
+
+<CodeBlock links={{"RelSort": "relsort", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RaExecutionDesc * RelSort::getContextData() const
+```
+</CodeBlock>
+
+### inputCount [#inputcount]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const size_t RelSort::inputCount() const
+```
+</CodeBlock>
+
+### getInput [#getinput]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RelSort::getInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getInputs [#getinputs]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<RelAlgNode const  *> RelSort::getInputs() const
+```
+</CodeBlock>
+
+### getAndOwnInput [#getandowninput]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> RelSort::getAndOwnInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### addManagedInput [#addmanagedinput]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelSort::addManagedInput(
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### hasInput [#hasinput]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelSort::hasInput(
+    const RelAlgNode *needle
+) const
+```
+</CodeBlock>
+
+### replaceInput [#replaceinput]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelSort::replaceInput(
+    std::shared_ptr<const RelAlgNode> old_input,
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### setRelNodeDagId [#setrelnodedagid]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelSort::setRelNodeDagId(
+    const size_t id
+) const
+```
+</CodeBlock>
+
+### getRelNodeDagId [#getrelnodedagid]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelSort::getRelNodeDagId() const
+```
+</CodeBlock>
+
+### isNop [#isnop]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelSort::isNop() const
+```
+</CodeBlock>
+
+### markAsNop [#markasnop]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelSort::markAsNop()
+```
+</CodeBlock>
+
+### clearContextData [#clearcontextdata]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelSort::clearContextData() const
+```
+</CodeBlock>
+
+Clears the ptr to the result for this descriptor.
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelSort::toHash() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual size_t RelAlgDagNode::getStepNumber() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+size_t RelSort::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+### hasEquivCollationOf [#hasequivcollationof]
+
+<CodeBlock links={{"RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+bool RelSort::hasEquivCollationOf(
+    const RelSort &that
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### resetRelAlgFirstId [#resetrelalgfirstid]
+
+<CodeBlock links={{"RelSort": "relsort", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelSort::resetRelAlgFirstId() noexcept
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `collation_` | `std::vector< SortField >` | |
+| `limit_` | `std::optional< size_t >` | |
+| `offset_` | `size_t` | |
+| `hint_applied_` | `bool` | |
+| `hints_` | `std::unique_ptr< Hints >` | |
+| `inputs_` | `RelAlgInputs` | |
+| `id_` | `unsigned` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

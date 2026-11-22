@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Publishes the Fern documentation site to production whenever docs content
+# lands on master. Runs on `push`, not pull_request — only reachable after a
+# PR merges (or a direct push by someone with write access to master), so
+# there is no fork-PR trust concern here.
+#
+# Regenerates the C++ API reference pages from current master source before
+# publishing (ephemeral — not committed back), so production always reflects
+# the latest source rather than whatever was last manually regenerated and
+# committed to docs/pages/api/cpp/.
+
+name: Publish docs
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "fern/**"
+      - "docs/pages/**"
+      - "docs/images/**"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish Fern docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Fern CLI
+        run: npm install -g fern-api
+
+      - name: Regenerate C++ API reference pages
+        run: cd fern && fern docs md generate --local
+
+      - name: Publish docs
+        env:
+          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+        run: cd fern && fern generate --docs

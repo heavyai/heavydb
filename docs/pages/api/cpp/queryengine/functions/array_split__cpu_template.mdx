@@ -1,0 +1,134 @@
+---
+title: array_split__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t array_split__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<T>> &input,
+    Column<Array<T>> &first,
+    Column<Array<T>> &second
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_split__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<float>> &input,
+    Column<Array<float>> &first,
+    Column<Array<float>> &second
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_split__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<double>> &input,
+    Column<Array<double>> &first,
+    Column<Array<double>> &second
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (4)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_split__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<int8_t>> &input,
+    Column<Array<int8_t>> &first,
+    Column<Array<int8_t>> &second
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (5)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_split__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<int16_t>> &input,
+    Column<Array<int16_t>> &first,
+    Column<Array<int16_t>> &second
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (6)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_split__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<int32_t>> &input,
+    Column<Array<int32_t>> &first,
+    Column<Array<int32_t>> &second
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (7)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_split__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<int64_t>> &input,
+    Column<Array<int64_t>> &first,
+    Column<Array<int64_t>> &second
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (8)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_split__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<bool>> &input,
+    Column<Array<bool>> &first,
+    Column<Array<bool>> &second
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (9)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_split__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<TextEncodingDict>> &input,
+    Column<Array<TextEncodingDict>> &first,
+    Column<Array<TextEncodingDict>> &second
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

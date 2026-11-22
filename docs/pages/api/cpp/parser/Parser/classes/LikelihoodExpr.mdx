@@ -1,0 +1,112 @@
+---
+title: Parser::LikelihoodExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### LikelihoodExpr [#likelihoodexpr]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::LikelihoodExpr::LikelihoodExpr(
+    bool n,
+    Expr *a,
+    float l
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_is_not [#getisnot]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr"}}>
+```cpp showLineNumbers={false}
+bool Parser::LikelihoodExpr::get_is_not() const
+```
+</CodeBlock>
+
+### get_arg [#getarg]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::LikelihoodExpr::get_arg() const
+```
+</CodeBlock>
+
+### get_likelihood [#getlikelihood]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr"}}>
+```cpp showLineNumbers={false}
+float Parser::LikelihoodExpr::get_likelihood() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::LikelihoodExpr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr"}}>
+```cpp showLineNumbers={false}
+std::string Parser::LikelihoodExpr::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### get [#get]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::LikelihoodExpr::get(
+    std::shared_ptr<Analyzer::Expr> arg_expr,
+    float likelihood,
+    const bool is_not
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_not_` | `bool` | |
+| `arg_` | `std::unique_ptr< Expr >` | |
+| `likelihood_` | `float` | |

@@ -1,0 +1,51 @@
+---
+title: ShowCreateServerCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+**Inherits from:** `DdlCommand` (public)
+
+---
+
+## Constructors
+
+### ShowCreateServerCommand [#showcreateservercommand]
+
+<CodeBlock links={{"ShowCreateServerCommand": "showcreateservercommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+ShowCreateServerCommand::ShowCreateServerCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"ShowCreateServerCommand": "showcreateservercommand"}}>
+```cpp showLineNumbers={false}
+ExecutionResult ShowCreateServerCommand::execute(
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `server_` | `std::string` | |
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

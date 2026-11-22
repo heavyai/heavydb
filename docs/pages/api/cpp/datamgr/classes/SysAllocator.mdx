@@ -1,0 +1,99 @@
+---
+title: SysAllocator
+description: ""
+---
+
+<CodeBlock id="SysAllocator" links={{"SysAllocator": "sysallocator"}}>
+```cpp showLineNumbers={false}
+template <class T>
+class SysAllocator
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <ArenaAllocator.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="class">
+</ParamField>
+
+---
+
+## Constructors
+
+### SysAllocator [#sysallocator]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"SysAllocator": "sysallocator"}}>
+```cpp showLineNumbers={false}
+SysAllocator<T>::SysAllocator() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (1)">
+
+<CodeBlock links={{"SysAllocator": "sysallocator"}}>
+```cpp showLineNumbers={false}
+SysAllocator<T>::SysAllocator(
+    SysAllocator const &
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (2)">
+
+<Badge intent="note" minimal>inline</Badge> <Badge intent="note" minimal>noexcept</Badge>
+
+<CodeBlock links={{"SysAllocator": "sysallocator"}}>
+```cpp showLineNumbers={false}
+template <class U>
+SysAllocator<T>::SysAllocator(
+    const SysAllocator<U> &
+) noexcept
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### allocate [#allocate]
+
+<CodeBlock links={{"SysAllocator": "sysallocator"}}>
+```cpp showLineNumbers={false}
+T * SysAllocator<T>::allocate(
+    size_t count
+)
+```
+</CodeBlock>
+
+### deallocate [#deallocate]
+
+<CodeBlock links={{"SysAllocator": "sysallocator"}}>
+```cpp showLineNumbers={false}
+void SysAllocator<T>::deallocate(
+    T *p,
+    size_t
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `Self` | `SysAllocator` |
+| `value_type` | `T` |
