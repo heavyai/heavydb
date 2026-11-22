@@ -844,7 +844,7 @@ llvm::Function* CodeGenerator::getArithWithOverflowIntrinsic(
       LOG(FATAL) << "unexpected arith with overflow optype: " << bin_oper->toString();
   }
 
-  return llvm::Intrinsic::getDeclaration(cgen_state_->module_, fn_id, type);
+  return llvm::Intrinsic::getOrInsertDeclaration(cgen_state_->module_, fn_id, type);
 }
 
 llvm::Value* CodeGenerator::codegenBinOpWithOverflowForCPU(

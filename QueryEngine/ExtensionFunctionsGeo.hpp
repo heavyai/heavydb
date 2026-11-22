@@ -1615,11 +1615,16 @@ void ST_Centroid_LineString(int8_t* coords,
   }
 }
 
+// spatial_type::Centroid builds this call by hand and emits every size as i32 (see
+// array_size in Centroid::codegenLoads), so the size parameters must stay int32_t to
+// match, as they do in the sibling ST_Centroid_* overloads. Widening one here does not
+// reach the caller: it leaves undefined high bits on CPU and shifts every following
+// NVPTX .param slot, including the output pointer.
 EXTENSION_NOINLINE
 void ST_Centroid_MultiLineString(int8_t* coords,
-                                 int64_t coords_sz,
+                                 int32_t coords_sz,
                                  int8_t* linestring_sizes_in,
-                                 int64_t linestring_sizes_sz,
+                                 int32_t linestring_sizes_sz,
                                  int32_t ic,
                                  int32_t isr,
                                  int32_t osr,
@@ -1629,7 +1634,7 @@ void ST_Centroid_MultiLineString(int8_t* coords,
   int64_t num_points = 0;
   double point_centroid_sum[2] = {0.0, 0.0};
   auto next_linestring_coords = coords;
-  for (int64_t l = 0; l < linestring_sizes_sz; l++) {
+  for (int32_t l = 0; l < linestring_sizes_sz; l++) {
     auto linestring_coords = next_linestring_coords;
     auto linestring_sizes = reinterpret_cast<int32_t*>(linestring_sizes_in);
     auto linestring_num_points = linestring_sizes[l];

@@ -245,6 +245,10 @@ class ExtensionFunctionSignatureParser {
       // in the line below
       return ExtensionFunction.ExtArgumentType.Void;
     }
+    if (type_name.equals("Point2D") || type_name.equals("CoordData")) {
+      // Internal geo codegen helpers in ExtensionFunctionsGeo.hpp; not SQL types.
+      return ExtensionFunction.ExtArgumentType.Void;
+    }
     if (type_name.equals("Timestamp")) {
       return ExtensionFunction.ExtArgumentType.Timestamp;
     }

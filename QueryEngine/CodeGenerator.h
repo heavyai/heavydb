@@ -6,7 +6,6 @@
 #pragma once
 
 #include <llvm/IR/Value.h>
-#include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
 #include "../Analyzer/Analyzer.h"
 #include "Execute.h"
@@ -101,7 +100,6 @@ class CodeGenerator {
 
   static void linkModuleWithLibdevice(Executor* executor,
                                       llvm::Module& module,
-                                      llvm::PassManagerBuilder& pass_manager_builder,
                                       const GPUTarget& gpu_target);
 
   static std::shared_ptr<GpuCompilationContext> generateNativeGPUCode(
@@ -775,4 +773,5 @@ std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state)
 std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
                                                      llvm::Value* byte_stream_arg,
                                                      llvm::IRBuilder<>& ir_builder,
-                                                     llvm::LLVMContext& ctx);
+                                                     llvm::LLVMContext& ctx,
+                                                     llvm::Type* element_ty);

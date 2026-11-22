@@ -31,7 +31,7 @@ ArrayLoadCodegen CodeGenerator::codegenGeoArrayLoadAndNullcheck(llvm::Value* byt
 
   auto pt_arr_buf =
       cgen_state->emitExternalCall("array_buff",
-                                   llvm::Type::getInt8PtrTy(cgen_state->context_),
+                                   typed_ptr_ty(get_int_type(8, cgen_state->context_), 0),
                                    {key.first, key.second});
   llvm::Value* pt_is_null{nullptr};
   if (is_nullable) {
@@ -114,7 +114,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoConstant(
     auto array_buff_lv = operand_lvs[0];
     if (i > 0) {
       array_buff_lv = cgen_state_->ir_builder_.CreateBitCast(
-          operand_lvs[0], llvm::Type::getInt8PtrTy(cgen_state_->context_));
+          operand_lvs[0], typed_ptr_ty(get_int_type(8, cgen_state_->context_), 0));
     }
     ret.push_back(array_buff_lv);
     ret.push_back(operand_lvs[1]);
@@ -215,7 +215,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
   for (auto i = 3; i > geo_expr->getTypeInfo0().get_physical_coord_cols(); i--) {
     argument_list.insert(argument_list.end(),
                          llvm::ConstantPointerNull::get(
-                             llvm::Type::getInt32PtrTy(cgen_state_->context_, 0)));
+                             typed_ptr_ty(get_int_type(32, cgen_state_->context_), 0)));
     argument_list.insert(argument_list.end(), cgen_state_->llInt(int64_t(0)));
   }
   // Append geo expr compression
@@ -289,7 +289,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   for (auto i = 3; i > geo_expr->getTypeInfo0().get_physical_coord_cols(); i--) {
     argument_list.insert(argument_list.end(),
                          llvm::ConstantPointerNull::get(
-                             llvm::Type::getInt32PtrTy(cgen_state_->context_, 0)));
+                             typed_ptr_ty(get_int_type(32, cgen_state_->context_), 0)));
     argument_list.insert(argument_list.end(), cgen_state_->llInt(int64_t(0)));
   }
   // Append geo expr compression
@@ -323,7 +323,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
     for (auto i = 3; i > geo_expr->getTypeInfo1().get_physical_coord_cols(); i--) {
       arg1_list.insert(arg1_list.end(),
                        llvm::ConstantPointerNull::get(
-                           llvm::Type::getInt32PtrTy(cgen_state_->context_, 0)));
+                           typed_ptr_ty(get_int_type(32, cgen_state_->context_), 0)));
       arg1_list.insert(arg1_list.end(), cgen_state_->llInt(int64_t(0)));
     }
     // Append geo expr compression
@@ -422,7 +422,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoArgs(
         coord_col = false;
       } else {
         ptr_lv = cgen_state_->ir_builder_.CreatePointerCast(
-            ptr_lv, llvm::Type::getInt32PtrTy(cgen_state_->context_));
+            ptr_lv, get_int_ptr_type(32, cgen_state_->context_));
       }
       argument_list.emplace_back(ptr_lv);
       auto cast_len_lv = cgen_state_->ir_builder_.CreateZExt(
@@ -438,27 +438,27 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoArgs(
         if (col_var) {
           ptr_lv = cgen_state_->emitExternalCall(
               "fast_fixlen_array_buff",
-              llvm::Type::getInt8PtrTy(cgen_state_->context_),
+              typed_ptr_ty(get_int_type(8, cgen_state_->context_), 0),
               {arg_lvs.front(), posArg(arg)});
         }
         if (coord_col) {
           coord_col = false;
         } else {
           ptr_lv = cgen_state_->ir_builder_.CreatePointerCast(
-              ptr_lv, llvm::Type::getInt32PtrTy(cgen_state_->context_));
+              ptr_lv, get_int_ptr_type(32, cgen_state_->context_));
         }
         argument_list.emplace_back(ptr_lv);
         argument_list.emplace_back(cgen_state_->llInt<int64_t>(arg_ti.get_size()));
       } else {
-        auto ptr_lv =
-            cgen_state_->emitExternalCall("array_buff",
-                                          llvm::Type::getInt8PtrTy(cgen_state_->context_),
-                                          {arg_lvs.front(), posArg(arg)});
+        auto ptr_lv = cgen_state_->emitExternalCall(
+            "array_buff",
+            typed_ptr_ty(get_int_type(8, cgen_state_->context_), 0),
+            {arg_lvs.front(), posArg(arg)});
         if (coord_col) {
           coord_col = false;
         } else {
           ptr_lv = cgen_state_->ir_builder_.CreatePointerCast(
-              ptr_lv, llvm::Type::getInt32PtrTy(cgen_state_->context_));
+              ptr_lv, get_int_ptr_type(32, cgen_state_->context_));
         }
         argument_list.emplace_back(ptr_lv);
         const auto len_lv = cgen_state_->emitExternalCall(
@@ -504,8 +504,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosPredicateCall(
   cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(int32_t(ErrorCode::GEOS_OR_H3)));
   cgen_state_->needs_error_check_ = true;
   cgen_state_->ir_builder_.SetInsertPoint(geos_pred_ok_bb);
-  auto res = cgen_state_->ir_builder_.CreateLoad(
-      result->getType()->getPointerElementType(), result);
+  auto res = typed_load(cgen_state_->ir_builder_, i8_type, result);
   return {res};
 }
 
@@ -529,8 +528,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoConstructorCall(
   auto i8_type = get_int_type(8, cgen_state_->context_);
   auto i32_type = get_int_type(32, cgen_state_->context_);
   auto i64_type = get_int_type(64, cgen_state_->context_);
-  auto pi8_type = llvm::PointerType::get(i8_type, 0);
-  auto pi32_type = llvm::PointerType::get(i32_type, 0);
+  auto pi8_type = typed_ptr_ty(i8_type, 0);
+  auto pi32_type = typed_ptr_ty(i32_type, 0);
 
   auto result_type =
       cgen_state_->ir_builder_.CreateAlloca(i32_type, nullptr, "result_type");
@@ -597,27 +596,23 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoConstructorCall(
   // The type of result is returned in `result_type`
 
   // Load return values
-  auto buf1 = cgen_state_->ir_builder_.CreateLoad(
-      result_coords->getType()->getPointerElementType(), result_coords);
-  auto buf1s = cgen_state_->ir_builder_.CreateLoad(
-      result_coords_size->getType()->getPointerElementType(), result_coords_size);
+  auto buf1 = typed_load(cgen_state_->ir_builder_, pi8_type, result_coords);
+  auto buf1s = typed_load(cgen_state_->ir_builder_, i64_type, result_coords_size);
 
   llvm::LoadInst* buf2{};
   llvm::LoadInst* buf2s{};
   llvm::LoadInst* buf3{};
   llvm::LoadInst* buf3s{};
   if (need_ring_sizes) {
-    buf2 = cgen_state_->ir_builder_.CreateLoad(
-        result_ring_sizes->getType()->getPointerElementType(), result_ring_sizes);
-    buf2s = cgen_state_->ir_builder_.CreateLoad(
-        result_ring_sizes_size->getType()->getPointerElementType(),
-        result_ring_sizes_size);
+    buf2 = llvm::cast<llvm::LoadInst>(
+        typed_load(cgen_state_->ir_builder_, pi32_type, result_ring_sizes));
+    buf2s = llvm::cast<llvm::LoadInst>(
+        typed_load(cgen_state_->ir_builder_, i64_type, result_ring_sizes_size));
     if (need_poly_rings) {
-      buf3 = cgen_state_->ir_builder_.CreateLoad(
-          result_poly_rings->getType()->getPointerElementType(), result_poly_rings);
-      buf3s = cgen_state_->ir_builder_.CreateLoad(
-          result_poly_rings_size->getType()->getPointerElementType(),
-          result_poly_rings_size);
+      buf3 = llvm::cast<llvm::LoadInst>(
+          typed_load(cgen_state_->ir_builder_, pi32_type, result_poly_rings));
+      buf3s = llvm::cast<llvm::LoadInst>(
+          typed_load(cgen_state_->ir_builder_, i64_type, result_poly_rings_size));
     }
   }
 

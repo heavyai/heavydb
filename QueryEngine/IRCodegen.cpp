@@ -47,8 +47,7 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
           "NULL type literals are not currently supported in this context.");
     }
     if (constant->get_is_null()) {
-      const auto i8p_ty =
-          llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
+      const auto i8p_ty = get_int_ptr_type(8, executor_->cgen_state_->context_);
       if (ti.is_string() && ti.get_compression() == kENCODING_NONE) {
         std::vector<llvm::Value*> null_target_lvs;
         llvm::StructType* str_view_ty = createStringViewStructType();
@@ -57,8 +56,8 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
         // string
         null_target_lvs.push_back(
             cgen_state_->ir_builder_.CreateLoad(str_view_ty, null_str_view_struct_lv));
-        null_target_lvs.push_back(llvm::ConstantPointerNull::get(
-            llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, 8), 0)));
+        null_target_lvs.push_back(
+            llvm::ConstantPointerNull::get(get_int_ptr_type(8, cgen_state_->context_)));
         null_target_lvs.push_back(cgen_state_->llInt((int32_t)0));
         return null_target_lvs;
       } else if (ti.is_geometry()) {
@@ -802,14 +801,15 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             addJoinLoopIterator(prev_iters, level_idx);
             JoinLoopDomain domain{{0}};
             auto* arg = get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan");
-            const auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(
-                arg->getType()->getScalarType()->getPointerElementType(),
-                arg,
-                cgen_state_->llInt(int32_t(level_idx + 1)));
-            domain.upper_bound = cgen_state_->ir_builder_.CreateLoad(
-                rows_per_scan_ptr->getType()->getPointerElementType(),
-                rows_per_scan_ptr,
-                "num_rows_per_scan");
+            const auto rows_per_scan_ptr =
+                typed_gep(cgen_state_->ir_builder_,
+                          get_int_type(64, cgen_state_->context_),
+                          arg,
+                          cgen_state_->llInt(int32_t(level_idx + 1)));
+            domain.upper_bound = typed_load(cgen_state_->ir_builder_,
+                                            get_int_type(64, cgen_state_->context_),
+                                            rows_per_scan_ptr,
+                                            "num_rows_per_scan");
             return domain;
           },
           /*outer_condition_match=*/
@@ -1170,12 +1170,7 @@ void Executor::redeclareFilterFunction() {
   // copy the filter_func function body over
   // see
   // https://stackoverflow.com/questions/12864106/move-function-body-avoiding-full-cloning/18751365
-#if LLVM_VERSION_MAJOR >= 16
   filter_func2->splice(filter_func2->begin(), cgen_state_->filter_func_);
-#else
-  filter_func2->getBasicBlockList().splice(
-      filter_func2->begin(), cgen_state_->filter_func_->getBasicBlockList());
-#endif
 
   if (cgen_state_->current_func_ == cgen_state_->filter_func_) {
     cgen_state_->current_func_ = filter_func2;
@@ -1441,8 +1436,8 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     cgen_state_->ir_builder_.CreateBr(array_loop_head);
     cgen_state_->ir_builder_.SetInsertPoint(array_loop_head);
     CHECK(array_len);
-    auto array_idx = cgen_state_->ir_builder_.CreateLoad(
-        array_idx_ptr->getType()->getPointerElementType(), array_idx_ptr);
+    auto array_idx = typed_load(
+        cgen_state_->ir_builder_, get_int_type(32, cgen_state_->context_), array_idx_ptr);
     auto bound_check = cgen_state_->ir_builder_.CreateICmp(
         llvm::ICmpInst::ICMP_SLT, array_idx, array_len);
     auto array_loop_body = llvm::BasicBlock::Create(

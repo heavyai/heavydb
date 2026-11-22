@@ -903,6 +903,9 @@ void ResultSetReductionJIT::reduceOneEntryBaselineIdx(
   const auto serialized_varlen_buffer_arg = ir_reduce_one_entry_idx->arg(6);
   const auto row_bytes = ir_reduce_one_entry_idx->addConstant<ConstantInt>(
       get_row_bytes(query_mem_desc_), Type::Int64);
+  // get_group_value_reduction_rt() takes the row size as a uint32_t.
+  const auto row_bytes_i32 = ir_reduce_one_entry_idx->addConstant<ConstantInt>(
+      get_row_bytes(query_mem_desc_), Type::Int32);
   const auto that_entry_idx_64 = ir_reduce_one_entry_idx->add<Cast>(
       Cast::CastOp::SExt, that_entry_idx, Type::Int64, "that_entry_idx_64");
   const auto that_row_off_in_bytes =
@@ -938,7 +941,7 @@ void ResultSetReductionJIT::reduceOneEntryBaselineIdx(
           that_buff,
           that_entry_idx,
           that_entry_count,
-          row_bytes,
+          row_bytes_i32,
           this_targets_ptr_i64_ptr,
           this_is_empty_ptr},
       "");

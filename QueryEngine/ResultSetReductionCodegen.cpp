@@ -36,25 +36,25 @@ llvm::Type* llvm_type(const Type type, llvm::LLVMContext& ctx) {
       return llvm::Type::getVoidTy(ctx);
     }
     case Type::Int8Ptr: {
-      return llvm::PointerType::get(get_int_type(8, ctx), 0);
+      return get_int_ptr_type(8, ctx);
     }
     case Type::Int32Ptr: {
-      return llvm::PointerType::get(get_int_type(32, ctx), 0);
+      return get_int_ptr_type(32, ctx);
     }
     case Type::Int64Ptr: {
-      return llvm::PointerType::get(get_int_type(64, ctx), 0);
+      return get_int_ptr_type(64, ctx);
     }
     case Type::FloatPtr: {
-      return llvm::Type::getFloatPtrTy(ctx);
+      return get_fp_ptr_type(32, ctx);
     }
     case Type::DoublePtr: {
-      return llvm::Type::getDoublePtrTy(ctx);
+      return get_fp_ptr_type(64, ctx);
     }
     case Type::VoidPtr: {
-      return llvm::PointerType::get(get_int_type(8, ctx), 0);
+      return get_int_ptr_type(8, ctx);
     }
     case Type::Int64PtrPtr: {
-      return llvm::PointerType::get(llvm::PointerType::get(get_int_type(64, ctx), 0), 0);
+      return typed_ptr_ty(get_int_ptr_type(64, ctx), 0);
     }
     default: {
       LOG(FATAL) << "Argument type not supported: " << static_cast<int>(type);
@@ -202,15 +202,17 @@ void translate_body(const std::vector<std::unique_ptr<Instruction>>& body,
     llvm::Value* translated{nullptr};
     if (auto gep = dynamic_cast<const GetElementPtr*>(instr_ptr)) {
       auto* base = mapped_value(gep->base(), m);
-      translated = cgen_state->ir_builder_.CreateGEP(
-          base->getType()->getScalarType()->getPointerElementType(),
-          base,
-          mapped_value(gep->index(), m),
-          gep->label());
+      translated = typed_gep(cgen_state->ir_builder_,
+                             llvm_type(pointee_type(gep->base()->type()), ctx),
+                             base,
+                             mapped_value(gep->index(), m));
+      translated->setName(gep->label());
     } else if (auto load = dynamic_cast<const Load*>(instr_ptr)) {
       auto* value = mapped_value(load->source(), m);
-      translated = cgen_state->ir_builder_.CreateLoad(
-          value->getType()->getPointerElementType(), value, load->label());
+      translated = typed_load(cgen_state->ir_builder_,
+                              llvm_type(load->type(), ctx),
+                              value,
+                              load->label().c_str());
     } else if (auto icmp = dynamic_cast<const ICmp*>(instr_ptr)) {
       translated = cgen_state->ir_builder_.CreateICmp(llvm_predicate(icmp->predicate()),
                                                       mapped_value(icmp->lhs(), m),

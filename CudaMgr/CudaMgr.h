@@ -147,13 +147,13 @@ class CudaMgr {
         return "sm_75";
       case NvidiaDeviceArch::Ampere:
         return "sm_80";
-      // For Ada, Hopper, and Blackwell architectures, use the latest compute capability
-      // that is supported by the current LLVM version (LLVM 14). Update returned value
-      // when LLVM is updated.
+      // LLVM 21.1.8 NVPTX supports sm_89, sm_90, and sm_100 (Blackwell).
       case NvidiaDeviceArch::Ada:
+        return "sm_89";
       case NvidiaDeviceArch::Hopper:
+        return "sm_90";
       case NvidiaDeviceArch::Blackwell:
-        return "sm_86";
+        return "sm_100";
     }
     UNREACHABLE();
     return "";

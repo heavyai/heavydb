@@ -1068,8 +1068,8 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
                                          LLVM_ALIGN(8),
                                          llvm::AtomicOrdering::Monotonic);
         } else {
-          old_total_matched_val = LL_BUILDER.CreateLoad(
-              total_matched_ptr->getType()->getPointerElementType(), total_matched_ptr);
+          old_total_matched_val =
+              typed_load(LL_BUILDER, get_int_type(32, LL_CONTEXT), total_matched_ptr);
           LL_BUILDER.CreateStore(
               LL_BUILDER.CreateAdd(old_total_matched_val, LL_INT(int32_t(1))),
               total_matched_ptr);
@@ -1104,8 +1104,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
           } else {
             nullcheck_cond = LL_BUILDER.CreateICmpNE(
                 std::get<0>(agg_out_ptr_w_idx),
-                llvm::ConstantPointerNull::get(
-                    llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)));
+                llvm::ConstantPointerNull::get(get_int_ptr_type(64, LL_CONTEXT)));
           }
           DiamondCodegen nullcheck_cfg(
               nullcheck_cond, executor_, false, "groupby_nullcheck", &filter_cfg, false);
@@ -1234,10 +1233,9 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
   } else {
     auto* arg = get_arg_by_name(ROW_FUNC, "max_matched");
     const auto output_buffer_entry_count_lv =
-        LL_BUILDER.CreateLoad(arg->getType()->getPointerElementType(), arg);
+        typed_load(LL_BUILDER, get_int_type(32, LL_CONTEXT), arg);
     arg = get_arg_by_name(ROW_FUNC, "old_total_matched");
-    const auto group_expr_lv =
-        LL_BUILDER.CreateLoad(arg->getType()->getPointerElementType(), arg);
+    const auto group_expr_lv = typed_load(LL_BUILDER, get_int_type(32, LL_CONTEXT), arg);
     std::vector<llvm::Value*> args{groups_buffer,
                                    output_buffer_entry_count_lv,
                                    group_expr_lv,
@@ -1348,12 +1346,14 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
                                             row_size_quad);
     } else {
       // store the sub-key to the buffer
+      const auto key_elem_ty = query_mem_desc.getQueryDescriptionType() ==
+                                           QueryDescriptionType::GroupByBaselineHash &&
+                                       col_width_size == sizeof(int32_t)
+                                   ? get_int_type(32, LL_CONTEXT)
+                                   : get_int_type(64, LL_CONTEXT);
       LL_BUILDER.CreateStore(
           group_expr_lv,
-          LL_BUILDER.CreateGEP(
-              group_key->getType()->getScalarType()->getPointerElementType(),
-              group_key,
-              LL_INT(subkey_idx++)));
+          typed_gep(LL_BUILDER, key_elem_ty, group_key, LL_INT(subkey_idx++)));
     }
   }
   if (query_mem_desc.getQueryDescriptionType() ==
@@ -1385,7 +1385,7 @@ llvm::Value* GroupByAndAggregate::codegenVarlenOutputBuffer(
   auto arg_it = ROW_FUNC->arg_begin();
   arg_it++; /* groups_buffer */
   auto varlen_output_buffer = arg_it++;
-  CHECK(varlen_output_buffer->getType() == llvm::Type::getInt64PtrTy(LL_CONTEXT));
+  CHECK(varlen_output_buffer->getType() == get_int_ptr_type(64, LL_CONTEXT));
   return varlen_output_buffer;
 }
 
@@ -1493,10 +1493,9 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(
     const size_t key_width,
     const int32_t row_size_quad) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
-  if (group_key->getType() != llvm::Type::getInt64PtrTy(LL_CONTEXT)) {
+  if (group_key->getType() != get_int_ptr_type(64, LL_CONTEXT)) {
     CHECK(key_width == sizeof(int32_t));
-    group_key =
-        LL_BUILDER.CreatePointerCast(group_key, llvm::Type::getInt64PtrTy(LL_CONTEXT));
+    group_key = LL_BUILDER.CreatePointerCast(group_key, get_int_ptr_type(64, LL_CONTEXT));
   }
   std::vector<llvm::Value*> func_args{
       groups_buffer,
@@ -1523,10 +1522,10 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(
 llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   CHECK_GT(ra_exe_unit_.groupby_exprs.size(), size_t(1));
-  auto ft = llvm::FunctionType::get(
-      get_int_type(32, LL_CONTEXT),
-      std::vector<llvm::Type*>{llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)},
-      false);
+  auto ft =
+      llvm::FunctionType::get(get_int_type(32, LL_CONTEXT),
+                              std::vector<llvm::Type*>{get_int_ptr_type(64, LL_CONTEXT)},
+                              false);
   auto key_hash_func = llvm::Function::Create(ft,
                                               llvm::Function::ExternalLinkage,
                                               "perfect_key_hash",
@@ -1547,12 +1546,12 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   }
   size_t dim_idx = 0;
   for (const auto& groupby_expr : ra_exe_unit_.groupby_exprs) {
-    auto* gep = key_hash_func_builder.CreateGEP(
-        key_buff_lv->getType()->getScalarType()->getPointerElementType(),
-        key_buff_lv,
-        LL_INT(dim_idx));
+    auto* gep = typed_gep(key_hash_func_builder,
+                          get_int_type(64, LL_CONTEXT),
+                          key_buff_lv,
+                          LL_INT(dim_idx));
     auto key_comp_lv =
-        key_hash_func_builder.CreateLoad(gep->getType()->getPointerElementType(), gep);
+        typed_load(key_hash_func_builder, get_int_type(64, LL_CONTEXT), gep);
     auto col_range_info =
         get_expr_range_info(ra_exe_unit_, query_infos_, groupby_expr.get(), executor_);
     auto crt_term_lv =
@@ -1689,9 +1688,8 @@ bool GroupByAndAggregate::codegenAggCalls(
   llvm::Value* out_row_idx{nullptr};
   if (query_mem_desc.didOutputColumnar() &&
       query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
-    output_buffer_byte_stream = LL_BUILDER.CreateBitCast(
-        std::get<0>(agg_out_ptr_w_idx),
-        llvm::PointerType::get(llvm::Type::getInt8Ty(LL_CONTEXT), 0));
+    output_buffer_byte_stream = LL_BUILDER.CreateBitCast(std::get<0>(agg_out_ptr_w_idx),
+                                                         get_int_ptr_type(8, LL_CONTEXT));
     output_buffer_byte_stream->setName("out_buff_b_stream");
     CHECK(std::get<1>(agg_out_ptr_w_idx));
     out_row_idx = LL_BUILDER.CreateZExt(std::get<1>(agg_out_ptr_w_idx),
@@ -1751,13 +1749,12 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
       auto byte_offset = LL_BUILDER.CreateAdd(out_per_col_byte_idx,
                                               LL_INT(static_cast<int64_t>(col_off)));
       byte_offset->setName("out_byte_off_target_" + std::to_string(target_idx));
-      auto output_ptr = LL_BUILDER.CreateGEP(
-          output_buffer_byte_stream->getType()->getScalarType()->getPointerElementType(),
-          output_buffer_byte_stream,
-          byte_offset);
+      auto output_ptr = typed_gep(LL_BUILDER,
+                                  get_int_type(8, LL_CONTEXT),
+                                  output_buffer_byte_stream,
+                                  byte_offset);
       agg_col_ptr = LL_BUILDER.CreateBitCast(
-          output_ptr,
-          llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
+          output_ptr, typed_ptr_ty(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
       agg_col_ptr->setName("out_ptr_target_" + std::to_string(target_idx));
     } else {
       auto const col_off_in_bytes = query_mem_desc.getColOffInBytes(agg_out_off);
@@ -1771,11 +1768,9 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
       auto* offset = LL_BUILDER.CreateAdd(agg_out_idx, LL_INT(col_off));
       auto* bit_cast = LL_BUILDER.CreateBitCast(
           std::get<0>(agg_out_ptr_w_idx),
-          llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
-      agg_col_ptr = LL_BUILDER.CreateGEP(
-          bit_cast->getType()->getScalarType()->getPointerElementType(),
-          bit_cast,
-          offset);
+          typed_ptr_ty(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
+      agg_col_ptr = typed_gep(
+          LL_BUILDER, get_int_type((chosen_bytes << 3), LL_CONTEXT), bit_cast, offset);
     }
   } else {
     auto const col_off_in_bytes = query_mem_desc.getColOnlyOffInBytes(agg_out_off);
@@ -1784,11 +1779,11 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
     CHECK_EQ(col_rem, 0u) << col_off_in_bytes << " % " << chosen_bytes;
     auto* bit_cast = LL_BUILDER.CreateBitCast(
         std::get<0>(agg_out_ptr_w_idx),
-        llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
-    agg_col_ptr = LL_BUILDER.CreateGEP(
-        bit_cast->getType()->getScalarType()->getPointerElementType(),
-        bit_cast,
-        LL_INT(col_off));
+        typed_ptr_ty(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
+    agg_col_ptr = typed_gep(LL_BUILDER,
+                            get_int_type((chosen_bytes << 3), LL_CONTEXT),
+                            bit_cast,
+                            LL_INT(col_off));
   }
   CHECK(agg_col_ptr);
   return agg_col_ptr;
@@ -1817,14 +1812,13 @@ void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_
     CHECK(!estimator_arg_comp_lvs.original_value);
     const auto estimator_arg_comp_lv = estimator_arg_comp_lvs.translated_value;
     // store the sub-key to the buffer
-    LL_BUILDER.CreateStore(
-        estimator_arg_comp_lv,
-        LL_BUILDER.CreateGEP(
-            estimator_key_lv->getType()->getScalarType()->getPointerElementType(),
-            estimator_key_lv,
-            LL_INT(subkey_idx++)));
+    LL_BUILDER.CreateStore(estimator_arg_comp_lv,
+                           typed_gep(LL_BUILDER,
+                                     get_int_type(64, LL_CONTEXT),
+                                     estimator_key_lv,
+                                     LL_INT(subkey_idx++)));
   }
-  const auto int8_ptr_ty = llvm::PointerType::get(get_int_type(8, LL_CONTEXT), 0);
+  const auto int8_ptr_ty = get_int_ptr_type(8, LL_CONTEXT);
   const auto bitmap = LL_BUILDER.CreateBitCast(&*ROW_FUNC->arg_begin(), int8_ptr_ty);
   const auto key_bytes = LL_BUILDER.CreateBitCast(estimator_key_lv, int8_ptr_ty);
   const auto estimator_comp_bytes_lv =
@@ -1963,11 +1957,7 @@ void GroupByAndAggregate::codegenApproxQuantile(
     calc = llvm::BasicBlock::Create(cs->context_, "calc_approx_quantile");
     skip = llvm::BasicBlock::Create(cs->context_, "skip_approx_quantile");
     irb.CreateCondBr(skip_cond, skip, calc);
-#if LLVM_VERSION_MAJOR >= 16
     cs->current_func_->insert(cs->current_func_->end(), calc);
-#else
-    cs->current_func_->getBasicBlockList().push_back(calc);
-#endif
     irb.SetInsertPoint(calc);
   }
   if (!arg_ti.is_fp()) {
@@ -1978,11 +1968,7 @@ void GroupByAndAggregate::codegenApproxQuantile(
       "agg_approx_quantile", llvm::Type::getVoidTy(cs->context_), agg_args);
   if (nullable) {
     irb.CreateBr(skip);
-#if LLVM_VERSION_MAJOR >= 16
     cs->current_func_->insert(cs->current_func_->end(), skip);
-#else
-    cs->current_func_->getBasicBlockList().push_back(skip);
-#endif
     irb.SetInsertPoint(skip);
   }
 }
@@ -2013,11 +1999,7 @@ void GroupByAndAggregate::codegenMode(const size_t target_idx,
     calc_bb = llvm::BasicBlock::Create(cs->context_, "calc_mode");
     skip_bb = llvm::BasicBlock::Create(cs->context_, "skip_mode");
     irb.CreateCondBr(skip_cond, skip_bb, calc_bb);
-#if LLVM_VERSION_MAJOR >= 16
     cs->current_func_->insert(cs->current_func_->end(), calc_bb);
-#else
-    cs->current_func_->getBasicBlockList().push_back(calc_bb);
-#endif
     irb.SetInsertPoint(calc_bb);
   }
   if (is_fp) {
@@ -2043,11 +2025,7 @@ void GroupByAndAggregate::codegenMode(const size_t target_idx,
   }
   if (nullable) {
     irb.CreateBr(skip_bb);
-#if LLVM_VERSION_MAJOR >= 16
     cs->current_func_->insert(cs->current_func_->end(), skip_bb);
-#else
-    cs->current_func_->getBasicBlockList().push_back(skip_bb);
-#endif
     irb.SetInsertPoint(skip_bb);
     if (error_code_lv) {
       llvm::PHINode* error_code_phi =
@@ -2066,13 +2044,10 @@ void GroupByAndAggregate::codegenMode(const size_t target_idx,
 llvm::Value* GroupByAndAggregate::getAdditionalLiteral(const int32_t off) {
   CHECK_LT(off, 0);
   const auto lit_buff_lv = get_arg_by_name(ROW_FUNC, "literals");
-  auto* bit_cast = LL_BUILDER.CreateBitCast(
-      lit_buff_lv, llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0));
-  auto* gep =
-      LL_BUILDER.CreateGEP(bit_cast->getType()->getScalarType()->getPointerElementType(),
-                           bit_cast,
-                           LL_INT(off));
-  return LL_BUILDER.CreateLoad(gep->getType()->getPointerElementType(), gep);
+  auto* bit_cast =
+      LL_BUILDER.CreateBitCast(lit_buff_lv, get_int_ptr_type(64, LL_CONTEXT));
+  auto* gep = typed_gep(LL_BUILDER, get_int_type(64, LL_CONTEXT), bit_cast, LL_INT(off));
+  return typed_load(LL_BUILDER, get_int_type(64, LL_CONTEXT), gep);
 }
 
 std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
@@ -2104,8 +2079,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
         CHECK_EQ(size_t(1), target_lvs.size());
         CHECK(!agg_expr || agg_expr->get_aggtype() == kSAMPLE);
         const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
-        const auto i8p_ty =
-            llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
+        const auto i8p_ty = get_int_ptr_type(8, executor_->cgen_state_->context_);
         const auto& elem_ti = target_ti.get_elem_type();
         return {
             executor_->cgen_state_->emitExternalCall(
@@ -2129,13 +2103,17 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
           CHECK_EQ(size_t(1), target_lvs.size());
           const auto prefix = target_ti.get_buffer_name();
           CHECK(target_ti.is_array() || target_ti.is_text_encoding_none());
-          const auto target_lv = LL_BUILDER.CreateLoad(
-              target_lvs[0]->getType()->getPointerElementType(), target_lvs[0]);
+          auto const buffer_struct_ty =
+              llvm::StructType::get(LL_CONTEXT,
+                                    {typed_ptr_ty(get_int_type(8, LL_CONTEXT), 0),
+                                     get_int_type(64, LL_CONTEXT),
+                                     get_int_type(8, LL_CONTEXT)});
+          const auto target_lv = typed_load(LL_BUILDER, buffer_struct_ty, target_lvs[0]);
           // const auto target_lv_type = target_lvs[0]->getType();
           // CHECK(target_lv_type->isStructTy());
           // CHECK_EQ(target_lv_type->getNumContainedTypes(), 3u);
-          const auto i8p_ty = llvm::PointerType::get(
-              get_int_type(8, executor_->cgen_state_->context_), 0);
+          const auto i8p_ty =
+              typed_ptr_ty(get_int_type(8, executor_->cgen_state_->context_), 0);
           const auto ptr = LL_BUILDER.CreatePointerCast(
               LL_BUILDER.CreateExtractValue(target_lv, 0), i8p_ty);
           const auto size = LL_BUILDER.CreateExtractValue(target_lv, 1);
@@ -2199,8 +2177,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
                  target_lvs.size());
 
         const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
-        const auto i8p_ty =
-            llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
+        const auto i8p_ty = get_int_ptr_type(8, executor_->cgen_state_->context_);
         std::vector<llvm::Value*> coords;
         size_t ctr = 0;
         for (const auto& target_lv : target_lvs) {

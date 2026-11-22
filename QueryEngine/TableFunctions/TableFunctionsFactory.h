@@ -269,11 +269,23 @@ class TableFunction {
   inline bool usesManager() const { return uses_manager_; }
 
   inline bool isGPU() const {
-    return !usesManager() && (name_.find("_cpu_", name_.find("__")) == std::string::npos);
+    if (usesManager()) {
+      return false;
+    }
+    const auto name = deviceClassificationName();
+    const auto suffix = name.find("__");
+    const auto search_start = suffix == std::string::npos ? 0 : suffix;
+    return name.find("_cpu_", search_start) == std::string::npos;
   }
 
   inline bool isCPU() const {
-    return usesManager() || (name_.find("_gpu_", name_.find("__")) == std::string::npos);
+    if (usesManager()) {
+      return true;
+    }
+    const auto name = deviceClassificationName();
+    const auto suffix = name.find("__");
+    const auto search_start = suffix == std::string::npos ? 0 : suffix;
+    return name.find("_gpu_", search_start) == std::string::npos;
   }
 
   inline bool useDefaultSizer() const {
@@ -317,6 +329,18 @@ class TableFunction {
   }
 
  private:
+  // Calcite-only default-sizer variants append __default_RowMultiplier_; strip that
+  // suffix before _cpu_/_gpu_ detection so names like *_cpu_only__default_* inherit
+  // CPU-only classification from the base implementation name.
+  inline std::string deviceClassificationName() const {
+    std::string name = name_;
+    if (const auto pos = name.find(DEFAULT_ROW_MULTIPLIER_SUFFIX);
+        pos != std::string::npos) {
+      name.erase(pos);
+    }
+    return name;
+  }
+
   const std::string name_;
   const TableFunctionOutputRowSizer output_sizer_;
   const std::vector<ExtArgumentType> input_args_;

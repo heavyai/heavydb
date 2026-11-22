@@ -321,8 +321,7 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
     auto partition_index_lv = executor_->codegenCurrentPartitionIndex(
         window_function_context, this, co, pos_arg);
     // # elems per partition
-    const auto pi32_type =
-        llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
+    const auto pi32_type = get_int_ptr_type(32, cgen_state_->context_);
     auto* partition_count_buf = window_function_context->getCountBuf(co.device_type);
     CHECK(partition_count_buf);
     auto const partition_count_buf_ptr_lvs = CodegenUtil::createPtrWithHoistedMemoryAddr(
@@ -340,11 +339,11 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
         cgen_state_->ir_builder_.CreateGEP(get_int_type(32, cgen_state_->context_),
                                            partition_count_buf_ptr_lv,
                                            partition_index_lv);
-    const auto num_elem_current_partition_lv = cgen_state_->castToTypeIn(
-        cgen_state_->ir_builder_.CreateLoad(
-            num_elem_current_partition_ptr->getType()->getPointerElementType(),
-            num_elem_current_partition_ptr),
-        64);
+    const auto num_elem_current_partition_lv =
+        cgen_state_->castToTypeIn(typed_load(cgen_state_->ir_builder_,
+                                             get_int_type(32, cgen_state_->context_),
+                                             num_elem_current_partition_ptr),
+                                  64);
     auto is_valid_n_value_lv = cgen_state_->ir_builder_.CreateICmpSLT(
         n_value_lv, num_elem_current_partition_lv, "is_valid_nth_value");
     auto cond_lv = cgen_state_->ir_builder_.CreateAnd(
@@ -405,12 +404,12 @@ llvm::Value* CodeGenerator::codegenRowId(const Analyzer::ColumnVar* col_var,
     rowid_lv = cgen_state_->ir_builder_.CreateAdd(rowid_lv, offset_lv);
   } else if (col_var->get_rte_idx() > 0) {
     auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
-    auto input_off_ptr = cgen_state_->ir_builder_.CreateGEP(
-        frag_off_ptr->getType()->getScalarType()->getPointerElementType(),
-        frag_off_ptr,
-        cgen_state_->llInt(int32_t(col_var->get_rte_idx())));
-    auto rowid_offset_lv = cgen_state_->ir_builder_.CreateLoad(
-        input_off_ptr->getType()->getPointerElementType(), input_off_ptr);
+    const auto i64_ty = get_int_type(64, cgen_state_->context_);
+    auto input_off_ptr = typed_gep(cgen_state_->ir_builder_,
+                                   i64_ty,
+                                   frag_off_ptr,
+                                   cgen_state_->llInt(int32_t(col_var->get_rte_idx())));
+    auto rowid_offset_lv = typed_load(cgen_state_->ir_builder_, i64_ty, input_off_ptr);
     rowid_lv = cgen_state_->ir_builder_.CreateAdd(rowid_lv, rowid_offset_lv);
   }
   if (table_generation.start_rowid > 0) {
@@ -574,7 +573,7 @@ llvm::Value* CodeGenerator::colByteStream(const Analyzer::ColumnVar* col_var,
   const auto stream_arg_name =
       "col_buf" + std::to_string(plan_state_->getLocalColumnId(col_var, fetch_column));
   auto* arg = get_arg_by_name(cgen_state_->row_func_, stream_arg_name);
-  CHECK(arg->getType() == llvm::Type::getInt8PtrTy(cgen_state_->context_));
+  CHECK(arg->getType() == typed_ptr_ty(get_int_type(8, cgen_state_->context_), 0));
   return arg;
 }
 
@@ -586,9 +585,10 @@ llvm::Value* CodeGenerator::posArg(const Analyzer::Expr* expr) const {
         cgen_state_->scan_idx_to_hash_pos_.find(col_var->get_rte_idx());
     CHECK(hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end());
     if (hash_pos_it->second->getType()->isPointerTy()) {
-      CHECK(hash_pos_it->second->getType()->getPointerElementType()->isIntegerTy(32));
-      llvm::Value* result = cgen_state_->ir_builder_.CreateLoad(
-          hash_pos_it->second->getType()->getPointerElementType(), hash_pos_it->second);
+      const auto i32_ty = get_int_type(32, cgen_state_->context_);
+      CHECK(i32_ty->isIntegerTy(32));
+      llvm::Value* result =
+          typed_load(cgen_state_->ir_builder_, i32_ty, hash_pos_it->second);
       result = cgen_state_->ir_builder_.CreateSExt(
           result, get_int_type(64, cgen_state_->context_));
       return result;
@@ -630,19 +630,15 @@ llvm::Value* CodeGenerator::codegenFragmentIdImpl(
   // get frag_id base ptr and ensure type
   auto* frag_id_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_id");
   CHECK(frag_id_ptr->getType()->isPointerTy());
-  CHECK(frag_id_ptr->getType()->getPointerElementType()->isIntegerTy(32));
+  const auto i32_ty = get_int_type(32, cgen_state_->context_);
   // offset for rte idx
-  auto frag_id_for_rte_idx_ptr = cgen_state_->ir_builder_.CreateGEP(
-      frag_id_ptr->getType()->getScalarType()->getPointerElementType(),
-      frag_id_ptr,
-      cgen_state_->llInt(rte_idx));
+  auto frag_id_for_rte_idx_ptr = typed_gep(
+      cgen_state_->ir_builder_, i32_ty, frag_id_ptr, cgen_state_->llInt(rte_idx));
   // get pointer and ensure type
   CHECK(frag_id_for_rte_idx_ptr->getType()->isPointerTy());
-  CHECK(frag_id_for_rte_idx_ptr->getType()->getPointerElementType()->isIntegerTy(32));
   // fetch the value
-  llvm::Value* value = cgen_state_->ir_builder_.CreateLoad(
-      frag_id_for_rte_idx_ptr->getType()->getPointerElementType(),
-      frag_id_for_rte_idx_ptr);
+  llvm::Value* value =
+      typed_load(cgen_state_->ir_builder_, i32_ty, frag_id_for_rte_idx_ptr);
   // sign-extend to i64 and return
   return cgen_state_->ir_builder_.CreateSExt(value,
                                              get_int_type(64, cgen_state_->context_));

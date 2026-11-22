@@ -196,18 +196,13 @@ llvm::Value* TreeModelPredictionMgr::codegen(
   auto regressor_local_storage_lv =
       builder.CreateAlloca(regressor_arr_type, nullptr, "Regressor_Local_Storage");
   auto idx_lv = cgen_state_ptr->llInt(0);
-  auto regressor_local_storage_gep = llvm::GetElementPtrInst::CreateInBounds(
-      regressor_local_storage_lv->getType()->getScalarType()->getPointerElementType(),
-      regressor_local_storage_lv,
-      {idx_lv, idx_lv},
-      "",
-      builder.GetInsertBlock());
+  auto regressor_local_storage_gep = typed_array_element_ptr(
+      builder, regressor_arr_type, regressor_local_storage_lv, idx_lv);
   for (int32_t reg_idx = 0; reg_idx < num_regressors; ++reg_idx) {
-    auto reg_ptr = builder.CreateGEP(
-        regressor_local_storage_lv->getType()->getScalarType()->getPointerElementType(),
-        regressor_local_storage_lv,
-        {cgen_state_ptr->llInt(0), cgen_state_ptr->llInt(reg_idx)},
-        "");
+    auto reg_ptr = typed_array_element_ptr(builder,
+                                           regressor_arr_type,
+                                           regressor_local_storage_lv,
+                                           cgen_state_ptr->llInt(reg_idx));
     builder.CreateStore(regressor_inputs[reg_idx], reg_ptr);
   }
   const double translated_null_value = inline_fp_null_value<double>();

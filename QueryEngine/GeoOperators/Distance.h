@@ -50,22 +50,20 @@ class Distance : public Codegen {
           CHECK_LT(arg_lvs_index, arg_lvs.size());
           auto lv = arg_lvs[arg_lvs_index++];
           // TODO: fast fixlen array buff for coords
-          auto array_buff_lv =
-              cgen_state->emitExternalCall("array_buff",
-                                           llvm::Type::getInt8PtrTy(cgen_state->context_),
-                                           {lv, pos_lvs[i]});
+          auto array_buff_lv = cgen_state->emitExternalCall(
+              "array_buff",
+              typed_ptr_ty(get_int_type(8, cgen_state->context_), 0),
+              {lv, pos_lvs[i]});
           auto const is_coords = (j == 0);
           if (!is_coords) {
             // cast additional columns to i32*
             array_buff_lv = builder.CreateBitCast(
-                array_buff_lv, llvm::Type::getInt32PtrTy(cgen_state->context_));
+                array_buff_lv, get_int_ptr_type(32, cgen_state->context_));
           }
           operand_lvs.push_back(array_buff_lv);
 
           const auto ptr_type = llvm::dyn_cast_or_null<llvm::PointerType>(lv->getType());
           CHECK(ptr_type);
-          const auto elem_type = ptr_type->getPointerElementType();
-          CHECK(elem_type);
           auto const shift = log2_bytes(is_coords ? 1 : 4);
           std::vector<llvm::Value*> array_sz_args{
               lv, pos_lvs[i], cgen_state->llInt(shift)};
@@ -102,11 +100,11 @@ class Distance : public Codegen {
           if (j == 0) {
             // cast alloca to i8*
             array_buff_lv = builder.CreateBitCast(
-                array_buff_lv, llvm::Type::getInt8PtrTy(cgen_state->context_));
+                array_buff_lv, typed_ptr_ty(get_int_type(8, cgen_state->context_), 0));
           } else {
             // cast additional columns to i32*
             array_buff_lv = builder.CreateBitCast(
-                array_buff_lv, llvm::Type::getInt32PtrTy(cgen_state->context_));
+                array_buff_lv, get_int_ptr_type(32, cgen_state->context_));
           }
           operand_lvs.push_back(array_buff_lv);
           if (is_nullable_ && is_coords_lv) {

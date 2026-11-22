@@ -8,6 +8,7 @@
 #include "CodegenHelper.h"
 #include "OutputBufferInitialization.h"
 
+#include <llvm/IR/Attributes.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -136,6 +137,7 @@ std::pair<llvm::ConstantInt*, llvm::ConstantInt*> CgenState::inlineIntMaxMin(
   }
 }
 
+// Pointer operands use PtrToInt + Trunc, never CreatePointerCast(ptr, integer ty).
 llvm::Value* CgenState::castToTypeIn(llvm::Value* val, const size_t dst_bits) {
   auto src_bits = val->getType()->getScalarSizeInBits();
   if (src_bits == dst_bits) {
@@ -145,9 +147,12 @@ llvm::Value* CgenState::castToTypeIn(llvm::Value* val, const size_t dst_bits) {
     return ir_builder_.CreateIntCast(
         val, get_int_type(dst_bits, context_), src_bits != 1);
   }
-  // real (not dictionary-encoded) strings; store the pointer to the payload
   if (val->getType()->isPointerTy()) {
-    return ir_builder_.CreatePointerCast(val, get_int_type(dst_bits, context_));
+    auto ptr_as_i64 = ir_builder_.CreatePtrToInt(val, get_int_type(64, context_));
+    if (dst_bits == 64) {
+      return ptr_as_i64;
+    }
+    return ir_builder_.CreateTrunc(ptr_as_i64, get_int_type(dst_bits, context_));
   }
 
   CHECK(val->getType()->isFloatTy() || val->getType()->isDoubleTy());
@@ -239,7 +244,7 @@ namespace {
 
 // clang-format off
 template <typename T>
-llvm::Type* getTy(llvm::LLVMContext& ctx) { return getTy<std::remove_pointer_t<T>>(ctx)->getPointerTo(); }
+llvm::Type* getTy(llvm::LLVMContext& ctx) { return llvm::PointerType::get(ctx, 0); }
 // Commented out to avoid -Wunused-function warnings, but enable as needed.
 // template<> llvm::Type* getTy<bool>(llvm::LLVMContext& ctx) { return llvm::Type::getInt1Ty(ctx); }
 //template<> llvm::Type* getTy<int8_t>(llvm::LLVMContext& ctx) { return llvm::Type::getInt8Ty(ctx); }
@@ -389,14 +394,38 @@ llvm::Value* CgenState::emitExternalCall(
   auto func_ty = llvm::FunctionType::get(ret_type, arg_types, false);
   llvm::AttributeList attrs;
   if (!fnattrs.empty()) {
-    std::vector<std::pair<unsigned, llvm::Attribute>> indexedAttrs;
-    indexedAttrs.reserve(fnattrs.size());
-    for (auto attr : fnattrs) {
-      indexedAttrs.emplace_back(llvm::AttributeList::FunctionIndex,
-                                llvm::Attribute::get(context_, attr));
+    std::vector<std::pair<unsigned, llvm::Attribute>> indexed_attrs;
+    indexed_attrs.reserve(fnattrs.size() + 1);
+    llvm::MemoryEffects memory_effects = llvm::MemoryEffects::unknown();
+    bool has_memory_effects = false;
+    for (const auto attr : fnattrs) {
+      // LLVM 17+ only allows readnone/readonly/writeonly on arguments; map the
+      // legacy function-level names to the memory() attribute instead.
+      switch (attr) {
+        case llvm::Attribute::ReadNone:
+          memory_effects = llvm::MemoryEffects::none();
+          has_memory_effects = true;
+          break;
+        case llvm::Attribute::ReadOnly:
+          memory_effects = llvm::MemoryEffects::readOnly();
+          has_memory_effects = true;
+          break;
+        case llvm::Attribute::WriteOnly:
+          memory_effects = llvm::MemoryEffects::writeOnly();
+          has_memory_effects = true;
+          break;
+        default:
+          indexed_attrs.emplace_back(llvm::AttributeList::FunctionIndex,
+                                     llvm::Attribute::get(context_, attr));
+          break;
+      }
     }
-    attrs = llvm::AttributeList::get(context_,
-                                      {&indexedAttrs.front(), indexedAttrs.size()});
+    if (has_memory_effects) {
+      indexed_attrs.emplace_back(
+          llvm::AttributeList::FunctionIndex,
+          llvm::Attribute::getWithMemoryEffects(context_, memory_effects));
+    }
+    attrs = llvm::AttributeList::get(context_, indexed_attrs);
   }
 
   auto func_p = module_->getOrInsertFunction(fname, func_ty, attrs);
@@ -415,17 +444,34 @@ llvm::Value* CgenState::emitExternalCall(
   CHECK(func);
   llvm::FunctionType* func_type = func_p.getFunctionType();
   CHECK(func_type);
+  // With opaque pointers, getOrInsertFunction() no longer bitcasts a mismatched
+  // declaration; it hands back the existing llvm::Function paired with the requested
+  // type, and the call we emit would then silently disagree with the callee's ABI.
+  CHECK(func->getFunctionType() == func_type)
+      << "Signature mismatch for '" << fname << "': callee is declared as "
+      << serialize_llvm_object(func->getFunctionType()) << " but the call site requests "
+      << serialize_llvm_object(func_type);
   if (has_struct_return) {
+    // Buffer-returning extension functions use the sret calling convention: void
+    // return type with the output struct passed as the first pointer argument.
+    CHECK(ret_type->isVoidTy());
+    CHECK(!args.empty());
     const auto arg_ti = func_type->getParamType(0);
-    CHECK(arg_ti->isPointerTy() && arg_ti->getPointerElementType()->isStructTy());
+    CHECK(arg_ti->isPointerTy());
+    const auto* sret_alloca = llvm::dyn_cast<llvm::AllocaInst>(args[0]);
+    CHECK(sret_alloca);
+    const auto struct_ty = sret_alloca->getAllocatedType();
+    CHECK(struct_ty->isStructTy());
     auto attr_list = func->getAttributes();
     llvm::AttrBuilder arr_arg_builder(context_, attr_list.getParamAttrs(0));
-    arr_arg_builder.addAttribute(llvm::Attribute::StructRet);
+    arr_arg_builder.addStructRetAttr(struct_ty);
     func->addParamAttrs(0, arr_arg_builder);
   }
   llvm::Value* result = ir_builder_.CreateCall(func_p, args);
-  // check the assumed type
-  CHECK_EQ(result->getType(), ret_type);
+  if (!ret_type->isVoidTy()) {
+    CHECK(result);
+    CHECK_EQ(result->getType(), ret_type);
+  }
   return result;
 }
 
@@ -437,7 +483,7 @@ bool CgenState::isCountDistinctOnEncodedDate(const Analyzer::Expr* expr) const {
 
 llvm::Value* CgenState::getStringView(llvm::Value* ptr, llvm::Value* len) {
     auto string_view_type = llvm::StructType::get(
-            llvm::Type::getInt8PtrTy(context_, 0),  // char*
+            typed_ptr_ty(get_int_type(8, context_), 0),  // char*
             llvm::Type::getInt64Ty(context_)        // uint64_t
     );
     llvm::Value* string_view_ptr_lv = ir_builder_.CreateAlloca(string_view_type);

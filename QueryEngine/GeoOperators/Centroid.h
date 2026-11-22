@@ -42,20 +42,18 @@ class Centroid : public Codegen {
     if (dynamic_cast<const Analyzer::ColumnVar*>(operand)) {
       for (size_t i = 0; i < arg_lvs.size(); i++) {
         auto lv = arg_lvs[i];
-        auto array_buff_lv =
-            cgen_state->emitExternalCall("array_buff",
-                                         llvm::Type::getInt8PtrTy(cgen_state->context_),
-                                         {lv, pos_lvs.front()});
+        auto array_buff_lv = cgen_state->emitExternalCall(
+            "array_buff",
+            typed_ptr_ty(get_int_type(8, cgen_state->context_), 0),
+            {lv, pos_lvs.front()});
         auto const is_coords = (i == 0);
         if (!is_coords) {
           array_buff_lv = builder.CreateBitCast(
-              array_buff_lv, llvm::Type::getInt32PtrTy(cgen_state->context_));
+              array_buff_lv, get_int_ptr_type(32, cgen_state->context_));
         }
         operand_lvs.push_back(array_buff_lv);
         const auto ptr_type = llvm::dyn_cast_or_null<llvm::PointerType>(lv->getType());
         CHECK(ptr_type);
-        const auto elem_type = ptr_type->getPointerElementType();
-        CHECK(elem_type);
         auto const shift = log2_bytes(is_coords ? 1 : 4);
         std::vector<llvm::Value*> array_sz_args{
             lv, pos_lvs.front(), cgen_state->llInt(shift)};
@@ -70,29 +68,21 @@ class Centroid : public Codegen {
       for (size_t i = 0; i < arg_lvs.size(); i++) {
         auto arg_lv = arg_lvs[i];
         if (i > 0 && arg_lv->getType()->isPointerTy()) {
-          arg_lv = builder.CreateBitCast(arg_lv,
-                                         llvm::Type::getInt32PtrTy(cgen_state->context_));
+          arg_lv =
+              builder.CreateBitCast(arg_lv, get_int_ptr_type(32, cgen_state->context_));
         }
         operand_lvs.push_back(arg_lv);
       }
     }
     CHECK_EQ(operand_lvs.size(),
              size_t(2 * operand_ti.get_physical_coord_cols()));  // array ptr and size
+    narrow_geo_size_slots_to_i32(builder, operand_lvs);
 
     // note that this block is the only one that differs from Area/Perimeter
     // use the points array size argument for nullability
     llvm::Value* null_check_operand_lv{nullptr};
     if (is_nullable_) {
       null_check_operand_lv = operand_lvs[1];
-      if (null_check_operand_lv->getType() !=
-          llvm::Type::getInt32Ty(cgen_state->context_)) {
-        CHECK(null_check_operand_lv->getType() ==
-              llvm::Type::getInt64Ty(cgen_state->context_));
-        // Geos functions come out 64-bit, cast down to 32 for now
-
-        null_check_operand_lv = builder.CreateTrunc(
-            null_check_operand_lv, llvm::Type::getInt32Ty(cgen_state->context_));
-      }
     }
 
     return std::make_tuple(operand_lvs, null_check_operand_lv);
@@ -116,12 +106,14 @@ class Centroid : public Codegen {
         builder.CreateAlloca(arr_type, nullptr, func_name + "_Local_Storage");
 
     llvm::Value* pt_compressed_local_storage_lv{NULL};
+    llvm::ArrayType* compressed_arr_type{nullptr};
+    llvm::Type* compressed_elem_ty{nullptr};
     // Allocate local storage for compressed centroid point
     if (ret_ti.get_compression() == kENCODING_GEOINT) {
-      auto elem_ty = llvm::Type::getInt32Ty(cgen_state->context_);
-      llvm::ArrayType* arr_type = llvm::ArrayType::get(elem_ty, 2);
+      compressed_elem_ty = llvm::Type::getInt32Ty(cgen_state->context_);
+      compressed_arr_type = llvm::ArrayType::get(compressed_elem_ty, 2);
       pt_compressed_local_storage_lv = builder.CreateAlloca(
-          arr_type, nullptr, func_name + "_Compressed_Local_Storage");
+          compressed_arr_type, nullptr, func_name + "_Compressed_Local_Storage");
     }
 
     func_name += spatial_type::suffix(operand_ti.get_type());
@@ -139,12 +131,8 @@ class Centroid : public Codegen {
     operand_lvs.push_back(cgen_state->llInt(output_srid));  // out srid
 
     auto idx_lv = cgen_state->llInt(0);
-    auto pt_local_storage_gep = llvm::GetElementPtrInst::CreateInBounds(
-        pt_local_storage_lv->getType()->getScalarType()->getPointerElementType(),
-        pt_local_storage_lv,
-        {idx_lv, idx_lv},
-        "",
-        builder.GetInsertBlock());
+    auto pt_local_storage_gep =
+        typed_array_element_ptr(builder, arr_type, pt_local_storage_lv, idx_lv);
     // Pass local storage to centroid function
     operand_lvs.push_back(pt_local_storage_gep);
     CHECK(ret_ti.get_type() == kPOINT);
@@ -156,42 +144,30 @@ class Centroid : public Codegen {
       // Compress centroid point if requested
       // Take values out of local storage, compress, store in compressed local storage
 
-      auto x_ptr = builder.CreateGEP(
-          pt_local_storage_lv->getType()->getScalarType()->getPointerElementType(),
-          pt_local_storage_lv,
-          {cgen_state->llInt(0), cgen_state->llInt(0)},
-          "x_ptr");
-      auto x_lv = builder.CreateLoad(x_ptr->getType()->getPointerElementType(), x_ptr);
+      auto x_ptr = typed_array_element_ptr(
+          builder, arr_type, pt_local_storage_lv, cgen_state->llInt(0));
+      auto x_lv = typed_load(builder, elem_ty, x_ptr);
       auto compressed_x_lv =
           cgen_state->emitExternalCall("compress_x_coord_geoint",
                                        llvm::Type::getInt32Ty(cgen_state->context_),
                                        {x_lv});
-      auto compressed_x_ptr =
-          builder.CreateGEP(pt_compressed_local_storage_lv->getType()
-                                ->getScalarType()
-                                ->getPointerElementType(),
-                            pt_compressed_local_storage_lv,
-                            {cgen_state->llInt(0), cgen_state->llInt(0)},
-                            "compressed_x_ptr");
+      auto compressed_x_ptr = typed_array_element_ptr(builder,
+                                                      compressed_arr_type,
+                                                      pt_compressed_local_storage_lv,
+                                                      cgen_state->llInt(0));
       builder.CreateStore(compressed_x_lv, compressed_x_ptr);
 
-      auto y_ptr = builder.CreateGEP(
-          pt_local_storage_lv->getType()->getScalarType()->getPointerElementType(),
-          pt_local_storage_lv,
-          {cgen_state->llInt(0), cgen_state->llInt(1)},
-          "y_ptr");
-      auto y_lv = builder.CreateLoad(y_ptr->getType()->getPointerElementType(), y_ptr);
+      auto y_ptr = typed_array_element_ptr(
+          builder, arr_type, pt_local_storage_lv, cgen_state->llInt(1));
+      auto y_lv = typed_load(builder, elem_ty, y_ptr);
       auto compressed_y_lv =
           cgen_state->emitExternalCall("compress_y_coord_geoint",
                                        llvm::Type::getInt32Ty(cgen_state->context_),
                                        {y_lv});
-      auto compressed_y_ptr =
-          builder.CreateGEP(pt_compressed_local_storage_lv->getType()
-                                ->getScalarType()
-                                ->getPointerElementType(),
-                            pt_compressed_local_storage_lv,
-                            {cgen_state->llInt(0), cgen_state->llInt(1)},
-                            "compressed_y_ptr");
+      auto compressed_y_ptr = typed_array_element_ptr(builder,
+                                                      compressed_arr_type,
+                                                      pt_compressed_local_storage_lv,
+                                                      cgen_state->llInt(1));
       builder.CreateStore(compressed_y_lv, compressed_y_ptr);
 
       ret_coords = pt_compressed_local_storage_lv;
@@ -200,19 +176,16 @@ class Centroid : public Codegen {
     }
 
     auto ret_ty = ret_ti.get_compression() == kENCODING_GEOINT
-                      ? llvm::Type::getInt32PtrTy(cgen_state->context_)
-                      : llvm::Type::getDoublePtrTy(cgen_state->context_);
+                      ? get_int_ptr_type(32, cgen_state->context_)
+                      : get_fp_ptr_type(64, cgen_state->context_);
     ret_coords = builder.CreateBitCast(ret_coords, ret_ty);
 
     if (is_nullable_) {
       CHECK(nullcheck_codegen);
       ret_coords = nullcheck_codegen->finalize(
-          llvm::ConstantPointerNull::get(
-              ret_ti.get_compression() == kENCODING_GEOINT
-                  ? llvm::PointerType::get(llvm::Type::getInt32Ty(cgen_state->context_),
-                                           0)
-                  : llvm::PointerType::get(llvm::Type::getDoubleTy(cgen_state->context_),
-                                           0)),
+          llvm::ConstantPointerNull::get(ret_ti.get_compression() == kENCODING_GEOINT
+                                             ? get_int_ptr_type(32, cgen_state->context_)
+                                             : get_fp_ptr_type(64, cgen_state->context_)),
           ret_coords);
     }
 
