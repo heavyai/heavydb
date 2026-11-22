@@ -41,6 +41,10 @@ extern bool g_enable_fsi;
 extern bool g_enable_ml_functions;
 extern bool g_restrict_ml_model_metadata_to_superusers;
 
+// Test only: fail an ALTER COLUMN to a geo type after the source column is renamed and
+// before the geo columns are added.
+bool g_test_alter_column_geo_failure_after_rename{false};
+
 namespace {
 
 void vacuum_table_if_required(const Catalog_Namespace::Catalog& catalog,
@@ -3036,6 +3040,10 @@ std::list<std::list<ColumnDescriptor>> AlterTableAlterColumnCommand::prepareGeoC
       std::string col_name = src_cd->columnName;
       auto uuid = boost::uuids::random_generator()();
       catalog.renameColumn(td, src_cd, col_name + "_" + boost::uuids::to_string(uuid));
+      if (g_test_alter_column_geo_failure_after_rename) {
+        throw std::runtime_error("Simulated failure after renaming column " + col_name +
+                                 ".");
+      }
 
       physical_geo_columns.emplace_back();
       std::list<ColumnDescriptor>& phy_geo_columns = physical_geo_columns.back();
