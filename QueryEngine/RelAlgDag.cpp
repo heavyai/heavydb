@@ -427,6 +427,33 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
   return {};
 }
 
+JoinInputColumn join_output_to_input_column(const RelJoin* join,
+                                            const size_t join_local_index) {
+  CHECK(join);
+  CHECK_EQ(size_t(2), join->inputCount());
+  CHECK_LT(join_local_index, join->size());
+  auto const* lhs = join->getInput(0);
+  auto const lhs_size = lhs->size();
+  if (join_local_index < lhs_size) {
+    return {lhs, join_local_index, 0};
+  }
+  return {join->getInput(1), join_local_index - lhs_size, 1};
+}
+
+std::optional<size_t> input_column_to_join_output(const RelJoin* join,
+                                                  const RelAlgNode* input,
+                                                  const size_t input_index) {
+  CHECK(join);
+  CHECK_EQ(size_t(2), join->inputCount());
+  if (input == join->getInput(0)) {
+    return input_index;
+  }
+  if (input == join->getInput(1)) {
+    return input_index + join->getInput(0)->size();
+  }
+  return std::nullopt;
+}
+
 bool RelProject::isIdentity() const {
   if (!isSimple()) {
     return false;
@@ -462,13 +489,8 @@ bool isRenamedInput(const RelAlgNode* node,
                     const std::string& new_name) {
   CHECK_LT(index, node->size());
   if (auto join = dynamic_cast<const RelJoin*>(node)) {
-    CHECK_EQ(size_t(2), join->inputCount());
-    const auto lhs_size = join->getInput(0)->size();
-    if (index < lhs_size) {
-      return isRenamedInput(join->getInput(0), index, new_name);
-    }
-    CHECK_GE(index, lhs_size);
-    return isRenamedInput(join->getInput(1), index - lhs_size, new_name);
+    const auto input_column = join_output_to_input_column(join, index);
+    return isRenamedInput(input_column.node, input_column.index, new_name);
   }
 
   if (auto scan = dynamic_cast<const RelScan*>(node)) {
@@ -785,14 +807,20 @@ std::set<std::pair<const RelAlgNode*, int>> get_equiv_cols(const RelAlgNode* nod
       if (auto input = dynamic_cast<const RexInput*>(project->getProjectAt(curr_col))) {
         const auto join_source = dynamic_cast<const RelJoin*>(only_source);
         if (join_source) {
-          CHECK_EQ(size_t(2), join_source->inputCount());
-          auto lhs = join_source->getInput(0);
-          CHECK((input->getIndex() < lhs->size() && lhs == input->getSourceNode()) ||
-                join_source->getInput(1) == input->getSourceNode());
+          // The RexInput is sourced at one of the join's inputs, so re-key it onto the
+          // join before the walk steps there. Left as input-local, a left column k and
+          // a right column k would both record (join, k), letting two different sort
+          // keys intersect and compare as equivalent collations.
+          const auto join_idx = input_column_to_join_output(
+              join_source, input->getSourceNode(), input->getIndex());
+          CHECK(join_idx) << "RexInput is not sourced at an input of the join below the "
+                             "project";
+          CHECK_LT(*join_idx, join_source->size());
+          curr_col = *join_idx;
         } else {
           CHECK_EQ(input->getSourceNode(), only_source);
+          curr_col = input->getIndex();
         }
-        curr_col = input->getIndex();
       } else {
         break;
       }

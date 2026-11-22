@@ -55,18 +55,19 @@ const RelProject* find_top_level_project_node(const RelAlgNode* curr_node) {
 }
 
 // After bind_inputs(), a RelProject over a RelJoin binds RexInputs to the join's
-// children (see get_node_output(RelJoin)), not the join itself. Convert that
-// child-local index to a join-local index so the RelJoin visitor can pick lhs vs
-// rhs. Also accept a RexInput already sourced at the join (injectInputColumn).
+// inputs (see get_node_output(RelJoin)), not the join itself. Convert that input-local
+// index to a join-local index so the RelJoin visitor can pick lhs vs rhs.
 uint32_t local_index_from_rex_input(const RexInput* input_node,
                                     const RelAlgNode& lhs_ra) {
   auto const* src = input_node->getSourceNode();
   if (auto const* join = dynamic_cast<const RelJoin*>(&lhs_ra)) {
-    if (src == join->getInput(0) || src == join) {
+    if (src == join) {
+      // Already join-local, as produced by injectInputColumn.
       return input_node->getIndex();
     }
-    if (src == join->getInput(1)) {
-      return input_node->getIndex() + static_cast<uint32_t>(join->getInput(0)->size());
+    if (auto const join_index =
+            input_column_to_join_output(join, src, input_node->getIndex())) {
+      return static_cast<uint32_t>(*join_index);
     }
   } else if (src == &lhs_ra) {
     return input_node->getIndex();
@@ -148,16 +149,11 @@ std::pair<const RelScan*, uint32_t> RelScanTree::getScanNodeForOutputIndex(
             }
             return current_tree_node->lhs;
           } else if constexpr (std::is_same_v<RelJoin, T>) {
-            auto const* lhs = current_node->getInput(0);
-            if (current_index < lhs->size()) {
-              // going down the left branch of the join.
-              // current_index can stay the same
-              return current_tree_node->lhs;
-            }
-            // going down the right branch of the join, so negate the size the left
-            // branch to make the index right-branch local
-            current_index -= lhs->size();
-            return current_tree_node->rhs;
+            auto const input_column =
+                join_output_to_input_column(current_node, current_index);
+            current_index = static_cast<uint32_t>(input_column.index);
+            return input_column.input_ordinal == 0 ? current_tree_node->lhs
+                                                   : current_tree_node->rhs;
           } else if constexpr (std::is_same_v<RelScan, T>) {
             // found the RelScan, return nullptr to stop the loop
             rel_scan = current_node;
@@ -213,12 +209,12 @@ void RelScanTree::injectInputColumn(const RelScan& table_scan_node,
                 output_column_name, std::make_unique<RexInput>(input_node, input_index));
             input_index = current_node->size() - 1;
           } else if constexpr (std::is_same_v<RelJoin, T>) {
-            // unwind the join. Was the original RelScan in the left or right hand side
-            // of the join?
-            auto const* rhs = current_node->getInput(1);
-            if (input_node == rhs) {
-              input_index += current_node->getInput(0)->size();
-            }
+            // unwind the join: re-key the index from the input the RelScan was found
+            // under onto the join's own output.
+            CHECK_GE(input_index, 0);
+            auto const join_index = input_column_to_join_output(
+                current_node, input_node, static_cast<size_t>(input_index));
+            input_index = static_cast<int>(join_index.value_or(input_index));
           } else {
             // do nothing to the index. RelFilter/RelSort preserve column index. RelScan
             // should never be hit,
