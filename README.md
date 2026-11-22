@@ -100,7 +100,7 @@ To run the check manually against the files changed on your branch:
 
 # Dependencies
 
-The maintained dependency scripts support Ubuntu 22.04 and Rocky
+The maintained dependency scripts support Ubuntu 22.04 and 24.04 and Rocky
 Linux 8.x. They install under `/usr/local/mapd-deps` and generate
 `/usr/local/mapd-deps/mapd-deps.sh`, which must be sourced before configuring
 HeavyDB:

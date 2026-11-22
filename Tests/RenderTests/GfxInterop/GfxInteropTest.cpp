@@ -89,7 +89,11 @@ class InteropTestBase
             << device_ctx->getGpuUUID() << ", " << device_ctx->getGpuId() << ", " << i;
 
         CUcontext cuda_ctx;
+#if CUDA_VERSION >= 13000
+        ASSERT_EQ(cuCtxCreate(&cuda_ctx, nullptr, 0, cuda_device), CUDA_SUCCESS);
+#else
         ASSERT_EQ(cuCtxCreate(&cuda_ctx, 0, cuda_device), CUDA_SUCCESS);
+#endif
         ASSERT_NE(nullptr, cuda_ctx);
 
         ASSERT_EQ(cuda_contexts_.try_emplace(itr->first, cuda_ctx).second, true)

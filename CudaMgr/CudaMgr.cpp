@@ -522,7 +522,12 @@ void CudaMgr::createDeviceContexts() {
   CHECK_EQ(device_contexts_.size(), size_t(0));
   device_contexts_.resize(device_count_);
   for (int d = 0; d < device_count_; ++d) {
+#if CUDA_VERSION >= 13000
+    CUresult status =
+        cuCtxCreate(&device_contexts_[d], nullptr, 0, device_properties_[d].device);
+#else
     CUresult status = cuCtxCreate(&device_contexts_[d], 0, device_properties_[d].device);
+#endif
     if (status != CUDA_SUCCESS) {
       // this is called from destructor so we need
       // to clean up

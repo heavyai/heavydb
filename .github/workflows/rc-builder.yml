@@ -52,7 +52,7 @@ on:
       images:
         description: 'GHCR build image(s), semicolon (;) separated'
         type: string
-        default: 'ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest;ghcr.io/heavyai/heavydb/core-build-rockylinux8-static-cuda12.9.2-x86_64:latest;ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-aarch64:latest;ghcr.io/heavyai/heavydb/core-build-rockylinux8-static-cuda12.9.2-aarch64:latest'
+        default: 'ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest;ghcr.io/heavyai/heavydb/core-build-rockylinux8-static-cuda12.9.2-x86_64:latest;ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-aarch64:latest;ghcr.io/heavyai/heavydb/core-build-rockylinux8-static-cuda12.9.2-aarch64:latest;ghcr.io/heavyai/heavydb/core-build-ubuntu24.04-static-cuda13.3.0-x86_64:latest;ghcr.io/heavyai/heavydb/core-build-ubuntu24.04-static-cuda13.3.0-aarch64:latest'
       recipes:
         description: 'Build recipes, semicolon (;) separated (compiler,render|norender,cuda|cpu,static|shared)'
         type: string
@@ -74,9 +74,13 @@ on:
           - all
         default: none
       base_product_image_name:
-        description: 'Runtime base image for the Ubuntu product Docker build; leave blank to auto-detect'
+        description: 'Runtime base image for Ubuntu 22.04 product Docker builds; leave blank to auto-detect from the deps image'
         type: string
         default: 'nvcr.io/nvidia/cuda:12.9.2-runtime-ubuntu22.04'
+      ubuntu24_product_image_name:
+        description: 'Runtime base image for Ubuntu 24.04 product Docker builds; leave blank to auto-detect from the deps image'
+        type: string
+        default: 'nvcr.io/nvidia/cuda:13.3.0-runtime-ubuntu24.04'
       rocky_product_image_name:
         description: 'Runtime base image for the Rocky product Docker build; leave blank to auto-detect'
         type: string
@@ -154,7 +158,7 @@ jobs:
                       distro = "rockylinux8"
                   elif "ubuntu" in image_name:
                       os_family = "ubuntu"
-                      distro = "ubuntu22.04"
+                      distro = "ubuntu24.04" if "ubuntu24.04" in image_name else "ubuntu22.04"
                   else:
                       print(f"ERROR: unrecognized image '{image}'", file=sys.stderr)
                       sys.exit(1)
@@ -261,8 +265,10 @@ jobs:
           product_base_flag=""
           if [ "${{ matrix.os_family }}" = "rocky" ] && [ -n "${{ inputs.rocky_product_image_name }}" ]; then
             product_base_flag="--product-base-image=${{ inputs.rocky_product_image_name }}"
-          elif [ "${{ matrix.os_family }}" != "rocky" ] && [ -n "${{ inputs.base_product_image_name }}" ]; then
+          elif [ "${{ matrix.distro }}" = "ubuntu22.04" ] && [ -n "${{ inputs.base_product_image_name }}" ]; then
             product_base_flag="--product-base-image=${{ inputs.base_product_image_name }}"
+          elif [ "${{ matrix.distro }}" = "ubuntu24.04" ] && [ -n "${{ inputs.ubuntu24_product_image_name }}" ]; then
+            product_base_flag="--product-base-image=${{ inputs.ubuntu24_product_image_name }}"
           fi
 
           dev-tools/dev.sh build $build_target \

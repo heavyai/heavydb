@@ -5,6 +5,9 @@
 
 #pragma once
 
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/tuple.h>
+
 #include "QueryRenderer/Utils/NumericUtils.h"
 
 namespace QueryRenderer {

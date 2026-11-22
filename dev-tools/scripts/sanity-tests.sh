@@ -21,7 +21,7 @@ compiles the test binaries, and runs the make test target.
 Options:
   --deps-image=<image>    Deps container image to run in. Auto-detected from
                           local Docker images if omitted.
-  --distro=ubuntu22.04|rockylinux8
+  --distro=ubuntu22.04|ubuntu24.04|rockylinux8
                           Filter deps image auto-detection. Ignored when
                           --deps-image is given.
   --output-dir=<path>     Build dir to test (must contain a completed build).

@@ -1,0 +1,10 @@
+--- a/vendor/lazperf/Extractor.hpp	2025-11-19 17:30:35.190544709 -0800
++++ b/vendor/lazperf/Extractor.hpp	2025-11-19 17:34:32.665411890 -0800
+@@ -35,6 +35,7 @@
+ #pragma once
+ 
+ #include <cstring>
++#include <cstdint>
+ #include <vector>
+ 
+ #include "portable_endian.hpp"
