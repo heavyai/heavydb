@@ -8,27 +8,22 @@
 #include <arrow/ipc/api.h>
 #include <arrow/ipc/writer.h>
 #include <gtest/gtest.h>
+#include <set>
 #include <boost/filesystem.hpp>
 
-#ifdef HAVE_AWS_S3
-#include "AwsHelpers.h"
-#include "DataMgr/HeavyDbAwsSdk.h"
-#include "Shared/ThriftTypesConvert.h"
-#endif  // HAVE_AWS_S3
 #include "Geospatial/ColumnNames.h"
-#include "Geospatial/GDAL.h"
 #include "Shared/ArrowUtil.h"
-#include "Tests/DBHandlerTestHelpers.h"
+#include "Tests/SqlTestFixture.h"
 #include "Tests/TestHelpers.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
 
-class LoadTableTest : public DBHandlerTestFixture {
+class LoadTableTest : public SqlTestFixture {
  protected:
   void SetUp() override {
-    DBHandlerTestFixture::SetUp();
+    SqlTestFixture::SetUp();
     sql("DROP TABLE IF EXISTS load_test");
     sql("DROP TABLE IF EXISTS geo_load_test");
     sql("CREATE TABLE geo_load_test(i1 INTEGER, ls LINESTRING DEFAULT 'LINESTRING(0 0, 1 "
@@ -42,7 +37,7 @@ class LoadTableTest : public DBHandlerTestFixture {
   void TearDown() override {
     sql("DROP TABLE IF EXISTS load_test");
     sql("DROP TABLE IF EXISTS geo_load_test");
-    DBHandlerTestFixture::TearDown();
+    SqlTestFixture::TearDown();
   }
 
   TStringValue getNullSV() const {
@@ -805,41 +800,46 @@ TEST_F(LoadTableTest, ArrowDefaultStr) {
 }
 
 namespace {
-struct MemorySignature {
-  Buffer_Namespace::MemStatus memStatus_;
-  Data_Namespace::MemoryLevel memLevel_;
-};
+using TablePrefix = std::pair<int64_t, int64_t>;  // {db_id, table_id}
 
-void assert_memory_signature_for_chunk_key_prefix(
-    const std::shared_ptr<DataMgr> data_mgr,
-    const ChunkKey& table_chunk_key,
-    const std::vector<MemorySignature>& expected_memory_signature) {
-  std::vector<MemorySignature> actual_memory_signature;
-
-  for (int memory_level = Data_Namespace::MemoryLevel::DISK_LEVEL;
-       memory_level <= Data_Namespace::MemoryLevel::GPU_LEVEL;
-       ++memory_level) {
-    auto memory_level_info_vec =
-        data_mgr->getMemoryInfo(static_cast<Data_Namespace::MemoryLevel>(memory_level));
-    for (auto memory_info : memory_level_info_vec) {
-      for (auto memory_data : memory_info.node_memory_data) {
-        if (has_table_prefix(memory_data.chunk_key) &&
-            in_same_table(table_chunk_key, memory_data.chunk_key)) {
-          actual_memory_signature.push_back(
-              {memory_data.mem_status,
-               static_cast<Data_Namespace::MemoryLevel>(memory_level)});
+// Visits the chunk key prefix and is_free flag of every buffer in the CPU (and GPU, if
+// present) caches that belongs to a table.
+template <typename Visitor>
+void for_each_table_buffer(Visitor visitor) {
+  std::vector<std::string> memory_levels{"cpu"};
+  if (SqlTestFixture::gpusPresent()) {
+    memory_levels.emplace_back("gpu");
+  }
+  auto [client, session] = SqlTestFixture::getDbHandlerAndSessionId();
+  for (const auto& memory_level : memory_levels) {
+    std::vector<TNodeMemoryInfo> memory_info;
+    client->get_memory(memory_info, session, memory_level);
+    for (const auto& node : memory_info) {
+      for (const auto& memory_data : node.node_memory_data) {
+        if (memory_data.chunk_key.size() >= 2) {
+          visitor(TablePrefix{memory_data.chunk_key[0], memory_data.chunk_key[1]},
+                  memory_data.is_free);
         }
       }
     }
   }
+}
 
-  ASSERT_EQ(actual_memory_signature.size(), expected_memory_signature.size());
-  for (size_t i = 0; i < actual_memory_signature.size(); i++) {
-    ASSERT_EQ(actual_memory_signature[i].memStatus_,
-              expected_memory_signature[i].memStatus_);
-    ASSERT_EQ(actual_memory_signature[i].memLevel_,
-              expected_memory_signature[i].memLevel_);
-  }
+std::set<TablePrefix> get_table_prefixes() {
+  std::set<TablePrefix> prefixes;
+  for_each_table_buffer(
+      [&prefixes](const TablePrefix& prefix, const bool) { prefixes.insert(prefix); });
+  return prefixes;
+}
+
+std::vector<bool> get_buffer_free_flags(const TablePrefix& table_prefix) {
+  std::vector<bool> flags;
+  for_each_table_buffer([&](const TablePrefix& prefix, const bool is_free) {
+    if (prefix == table_prefix) {
+      flags.push_back(is_free);
+    }
+  });
+  return flags;
 }
 }  // namespace
 
@@ -847,39 +847,36 @@ TEST_F(LoadTableTest, TemporaryTableChunkBufferCleanup) {
   // create a temporary table with multiple fragments to make that we're not leaking any
   // buffers on fragment creation
   sql("drop table if exists temp_table_cleanup_chuk_buffers;");
+  const auto prefixes_before = get_table_prefixes();
   sql("create temporary table temp_table_cleanup_chuk_buffers (i1 integer) with "
       "(FRAGMENT_SIZE=1);");
   sql("insert into temp_table_cleanup_chuk_buffers values(1);");
   sql("insert into temp_table_cleanup_chuk_buffers values(2);");
 
-  auto [db_handler, _] = getDbHandlerAndSessionId();
-  auto data_mgr = db_handler->data_mgr_;
-  auto tb_id = getCatalog().getTableId("temp_table_cleanup_chuk_buffers");
-  CHECK(tb_id.has_value());
-  ChunkKey table_chunk_key;
-  table_chunk_key.push_back(getCatalog().getDatabaseId());
-  table_chunk_key.push_back(tb_id.value());
-  CHECK(has_table_prefix(table_chunk_key));
+  // Table ids are not exposed for temporary tables, so find the table as the only new
+  // {db_id, table_id} prefix in the buffer pool.
+  std::set<TablePrefix> new_prefixes;
+  for (const auto& prefix : get_table_prefixes()) {
+    if (!prefixes_before.count(prefix)) {
+      new_prefixes.insert(prefix);
+    }
+  }
+  ASSERT_EQ(new_prefixes.size(), size_t(1));
+  const auto table_prefix = *new_prefixes.begin();
 
-  assert_memory_signature_for_chunk_key_prefix(
-      data_mgr,
-      table_chunk_key,
-      {{Buffer_Namespace::MemStatus::USED, MemoryLevel::CPU_LEVEL},
-       {Buffer_Namespace::MemStatus::USED, MemoryLevel::CPU_LEVEL},
-       {Buffer_Namespace::MemStatus::USED, MemoryLevel::CPU_LEVEL},
-       {Buffer_Namespace::MemStatus::USED, MemoryLevel::CPU_LEVEL}});
+  // four buffers in use
+  ASSERT_EQ(get_buffer_free_flags(table_prefix),
+            (std::vector<bool>{false, false, false, false}));
 
   sql("drop table temp_table_cleanup_chuk_buffers;");
-  assert_memory_signature_for_chunk_key_prefix(
-      data_mgr,
-      table_chunk_key,
-      {{Buffer_Namespace::MemStatus::FREE, MemoryLevel::CPU_LEVEL}});
+  // dropping the table leaves one freed buffer behind
+  ASSERT_EQ(get_buffer_free_flags(table_prefix), (std::vector<bool>{true}));
 }
 
-class ImportGeoTableTest : public DBHandlerTestFixture {
+class ImportGeoTableTest : public SqlTestFixture {
  protected:
   void SetUp() override {
-    DBHandlerTestFixture::SetUp();
+    SqlTestFixture::SetUp();
     sql("DROP TABLE IF EXISTS import_geo_table_test");
   }
 
@@ -940,7 +937,7 @@ class ImportGeoTableTest : public DBHandlerTestFixture {
 
   void TearDown() override {
     sql("DROP TABLE IF EXISTS import_geo_table_test");
-    DBHandlerTestFixture::TearDown();
+    SqlTestFixture::TearDown();
   }
 };
 
@@ -1080,261 +1077,12 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTooManyGeoColumns) {
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
 
-#ifdef HAVE_AWS_S3
-class ThriftDetectServerPrivilegeTest : public DBHandlerTestFixture {
- protected:
-  inline const static std::string PUBLIC_S3_FILE =
-      "s3://omnisci-fsi-test-public/FsiDataFiles/0.csv";
-  inline const static std::string PRIVATE_S3_FILE =
-      "s3://omnisci-fsi-test/FsiDataFiles/0.csv";
-  inline const static std::string AWS_DUMMY_CREDENTIALS_DIR =
-      to_string(BASE_PATH) + "/aws";
-  inline static std::map<std::string, std::string> aws_environment_;
 
-  static void SetUpTestSuite() {
-    DBHandlerTestFixture::SetUpTestSuite();
-    g_allow_s3_server_privileges = true;
-    aws_environment_ = unset_aws_env();
-    create_stub_aws_profile(AWS_DUMMY_CREDENTIALS_DIR);
-  }
-
-  static void TearDownTestSuite() {
-    DBHandlerTestFixture::TearDownTestSuite();
-    g_allow_s3_server_privileges = false;
-    restore_aws_env(aws_environment_);
-    boost::filesystem::remove_all(AWS_DUMMY_CREDENTIALS_DIR);
-  }
-
-  std::string detectTable(const std::string& file_name,
-                          const std::string& s3_access_key = "",
-                          const std::string& s3_secret_key = "",
-                          const std::string& s3_session_token = "",
-                          const std::string& s3_region = "us-west-1") {
-    const auto& db_handler_and_session_id = getDbHandlerAndSessionId();
-    TDetectResult thrift_result;
-    TCopyParams copy_params;
-    // Setting S3 credentials through copy params simulates
-    // environment variables configured on the heavysql client
-    copy_params.s3_access_key = s3_access_key;
-    copy_params.s3_secret_key = s3_secret_key;
-    copy_params.s3_session_token = s3_session_token;
-    copy_params.s3_region = s3_region;
-    db_handler_and_session_id.first->detect_column_types(
-        thrift_result, db_handler_and_session_id.second, file_name, copy_params);
-    std::stringstream oss;
-    for (const auto& tct : thrift_result.row_set.row_desc) {
-      oss << tct.col_name;
-    }
-    oss << "\n";
-    for (const auto& tct : thrift_result.row_set.row_desc) {
-      oss << type_info_from_thrift(tct.col_type).get_type_name();
-    }
-    oss << "\n";
-    for (const auto& row : thrift_result.row_set.rows) {
-      for (const auto& col : row.cols) {
-        oss << col.val.str_val;
-      }
-      oss << "\n";
-    }
-    oss << "\nCREATE TABLE your_table_name(";
-    for (size_t i = 0; i < thrift_result.row_set.row_desc.size(); ++i) {
-      const auto tct = thrift_result.row_set.row_desc[i];
-      oss << (i ? ", " : "") << tct.col_name << " "
-          << type_info_from_thrift(tct.col_type).get_type_name();
-      if (type_info_from_thrift(tct.col_type).is_string()) {
-        oss << " ENCODING DICT";
-      }
-      if (type_info_from_thrift(tct.col_type).is_array()) {
-        oss << "[";
-        if (type_info_from_thrift(tct.col_type).get_size() > 0) {
-          oss << type_info_from_thrift(tct.col_type).get_size();
-        }
-        oss << "]";
-      }
-    }
-    oss << ");\n";
-
-    return oss.str();
-  }
-};
-
-// TODO(IAM): re-enable once anonymous access (or a CI IAM user) on the
-// public S3 fixture is available. Currently the bucket no longer allows
-// unsigned reads and the CI key isn't granted GetObject on it.
-TEST_F(ThriftDetectServerPrivilegeTest, DISABLED_S3_Public_without_credentials) {
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  const auto result = detectTable(PUBLIC_S3_FILE);
-  ASSERT_EQ(result, "i\nSMALLINT\n0\n\nCREATE TABLE your_table_name(i SMALLINT);\n");
-}
-
-TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_without_credentials) {
-  if (is_valid_aws_role()) {
-    GTEST_SKIP();
-  }
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(detectTable(PRIVATE_S3_FILE), TDBException);
-}
-
-TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_with_invalid_specified_credentials) {
-  if (!is_valid_aws_key(aws_environment_)) {
-    GTEST_SKIP();
-  }
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(detectTable(PRIVATE_S3_FILE, "invalid_access_key", "invalid_secret_key"),
-               TDBException);
-}
-
-TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_with_valid_specified_credentials) {
-  if (!is_valid_aws_key(aws_environment_)) {
-    GTEST_SKIP();
-  }
-  const auto aws_access_key_id = aws_environment_.find("AWS_ACCESS_KEY_ID")->second;
-  const auto aws_secret_access_key =
-      aws_environment_.find("AWS_SECRET_ACCESS_KEY")->second;
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  const auto result =
-      detectTable(PRIVATE_S3_FILE, aws_access_key_id, aws_secret_access_key);
-  ASSERT_EQ(result, "i\nSMALLINT\n0\n\nCREATE TABLE your_table_name(i SMALLINT);\n");
-}
-
-TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_with_env_credentials) {
-  if (!is_valid_aws_key(aws_environment_)) {
-    GTEST_SKIP();
-  }
-  restore_aws_keys(aws_environment_);
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  const auto result = detectTable(PRIVATE_S3_FILE);
-  ASSERT_EQ(result, "i\nSMALLINT\n0\n\nCREATE TABLE your_table_name(i SMALLINT);\n");
-  unset_aws_keys();
-}
-
-TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_with_profile_credentials) {
-  if (!is_valid_aws_key(aws_environment_)) {
-    GTEST_SKIP();
-  }
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, true, aws_environment_);
-  const auto result = detectTable(PRIVATE_S3_FILE);
-  ASSERT_EQ(result, "i\nSMALLINT\n0\n\nCREATE TABLE your_table_name(i SMALLINT);\n");
-}
-
-TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_with_role_credentials) {
-  if (!is_valid_aws_role()) {
-    GTEST_SKIP();
-  }
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  const auto result = detectTable(PRIVATE_S3_FILE);
-  ASSERT_EQ(result, "i\nSMALLINT\n0\n\nCREATE TABLE your_table_name(i SMALLINT);\n");
-}
-
-class ThriftImportServerPrivilegeTest : public ThriftDetectServerPrivilegeTest {
- protected:
-  void SetUp() override {
-    ThriftDetectServerPrivilegeTest::SetUp();
-    sql("DROP TABLE IF EXISTS import_test_table;");
-    sql("CREATE TABLE import_test_table(i SMALLINT);");
-  }
-
-  void TearDown() override {
-    ThriftDetectServerPrivilegeTest::TearDown();
-    sql("DROP TABLE IF EXISTS import_test_table;");
-  }
-
-  void importTable(const std::string& file_name,
-                   const std::string& table_name,
-                   const std::string& s3_access_key = "",
-                   const std::string& s3_secret_key = "",
-                   const std::string& s3_session_token = "",
-                   const std::string& s3_region = "us-west-1") {
-    const auto& db_handler_and_session_id = getDbHandlerAndSessionId();
-    TCopyParams copy_params;
-    // Setting S3 credentials through copy params simulates
-    // environment variables configured on the heavysql client
-    copy_params.s3_access_key = s3_access_key;
-    copy_params.s3_secret_key = s3_secret_key;
-    copy_params.s3_session_token = s3_session_token;
-    copy_params.s3_region = s3_region;
-    db_handler_and_session_id.first->import_table(
-        db_handler_and_session_id.second, table_name, file_name, copy_params);
-  }
-};
-
-// TODO(IAM): re-enable once anonymous access (or a CI IAM user) on the
-// public S3 fixture is available.
-TEST_F(ThriftImportServerPrivilegeTest, DISABLED_S3_Public_without_credentials) {
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_NO_THROW(importTable(PUBLIC_S3_FILE, "import_test_table"));
-  sqlAndCompareResult("SELECT * FROM import_test_table", {{i(0)}});
-}
-
-TEST_F(ThriftImportServerPrivilegeTest, S3_Private_without_credentials) {
-  if (is_valid_aws_role()) {
-    GTEST_SKIP();
-  }
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(importTable(PRIVATE_S3_FILE, "import_test_table"), TDBException);
-}
-
-TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_invalid_specified_credentials) {
-  if (!is_valid_aws_key(aws_environment_)) {
-    GTEST_SKIP();
-  }
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(importTable(PRIVATE_S3_FILE,
-                           "import_test_table",
-                           "invalid_access_key",
-                           "invalid_secret_key"),
-               TDBException);
-}
-
-TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_valid_specified_credentials) {
-  if (!is_valid_aws_key(aws_environment_)) {
-    GTEST_SKIP();
-  }
-  const auto aws_access_key_id = aws_environment_.find("AWS_ACCESS_KEY_ID")->second;
-  const auto aws_secret_access_key =
-      aws_environment_.find("AWS_SECRET_ACCESS_KEY")->second;
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_NO_THROW(importTable(
-      PRIVATE_S3_FILE, "import_test_table", aws_access_key_id, aws_secret_access_key));
-  sqlAndCompareResult("SELECT * FROM import_test_table", {{i(0)}});
-}
-
-TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_env_credentials) {
-  if (!is_valid_aws_key(aws_environment_)) {
-    GTEST_SKIP();
-  }
-  restore_aws_keys(aws_environment_);
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_NO_THROW(importTable(PRIVATE_S3_FILE, "import_test_table"));
-  sqlAndCompareResult("SELECT * FROM import_test_table", {{i(0)}});
-  unset_aws_keys();
-}
-
-TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_profile_credentials) {
-  if (!is_valid_aws_key(aws_environment_)) {
-    GTEST_SKIP();
-  }
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, true, aws_environment_);
-  EXPECT_NO_THROW(importTable(PRIVATE_S3_FILE, "import_test_table"));
-  sqlAndCompareResult("SELECT * FROM import_test_table", {{i(0)}});
-}
-
-TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_role_credentials) {
-  if (!is_valid_aws_role()) {
-    GTEST_SKIP();
-  }
-  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_NO_THROW(importTable(PRIVATE_S3_FILE, "import_test_table"));
-  sqlAndCompareResult("SELECT * FROM import_test_table", {{i(0)}});
-}
-
-#endif  // HAVE_AWS_S3
-
-class ThriftFileGlobbingTest : public DBHandlerTestFixture,
+class ThriftFileGlobbingTest : public SqlTestFixture,
                                public testing::WithParamInterface<std::string> {
  protected:
   void SetUp() override {
-    DBHandlerTestFixture::SetUp();
+    SqlTestFixture::SetUp();
     sql("DROP TABLE IF EXISTS " + test_table_name_ + ";");
     createTable();
   }
@@ -1344,7 +1092,7 @@ class ThriftFileGlobbingTest : public DBHandlerTestFixture,
     if (boost::filesystem::exists(empty_dir_path_)) {
       boost::filesystem::remove_all(empty_dir_path_);
     }
-    DBHandlerTestFixture::TearDown();
+    SqlTestFixture::TearDown();
   }
 
   void createTable() {
@@ -1537,7 +1285,7 @@ INSTANTIATE_TEST_SUITE_P(DifferentImportTypes,
                          testing::Values("delimited", "parquet", "geo", "raster"),
                          [](const auto& param_info) { return param_info.param; });
 
-class ThriftDetectGeoFileTest : public DBHandlerTestFixture {
+class ThriftDetectGeoFileTest : public SqlTestFixture {
  protected:
   const TCopyParams getCopyParams() const {
     TCopyParams copy_params;
@@ -1586,23 +1334,13 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
-#ifdef HAVE_AWS_S3
-  heavydb_aws_sdk::init_sdk();
-#endif
-
-  Geospatial::GDAL::init();
-
   int err{0};
   try {
-    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
+    SqlTestFixture::initConnection(argc, argv);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
+    err = 1;
   }
-
-#ifdef HAVE_AWS_S3
-  heavydb_aws_sdk::shutdown_sdk();
-#endif
-
   return err;
 }

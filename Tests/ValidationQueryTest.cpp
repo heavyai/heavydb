@@ -3,15 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "DBHandlerTestHelpers.h"
+#include "SqlTestFixture.h"
 #include "TestHelpers.h"
 
 #include "Logger/Logger.h"
-#include "ThriftHandler/DBHandler.h"
 
 using namespace TestHelpers;
 
-class BaseTestFixture : public DBHandlerTestFixture {
+class BaseTestFixture : public SqlTestFixture {
  protected:
   void SetUp() override {}
 
@@ -252,28 +251,17 @@ TEST_F(ValidateQueryTest, QueryStepSkipping) {
 }
 #endif  // !HAVE_TSAN
 
-int main(int argc, char* argv[]) {
-  g_is_test_env = true;
-  ScopeGuard reset = [] { g_is_test_env = false; };
+int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
-  namespace po = boost::program_options;
-  po::options_description desc("Options");
-  logger::LogOptions log_options(argv[0]);
-  log_options.max_files_ = 0;  // stderr only by default
-  desc.add(log_options.get_options());
-
-  po::variables_map vm;
-  po::store(po::command_line_parser(argc, argv).options(desc).allow_unregistered().run(),
-            vm);
-  po::notify(vm);
+  testing::InitGoogleTest(&argc, argv);
 
   int err{0};
   try {
-    testing::InitGoogleTest(&argc, argv);
-    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
+    SqlTestFixture::initConnection(argc, argv);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
+    err = 1;
   }
   return err;
 }

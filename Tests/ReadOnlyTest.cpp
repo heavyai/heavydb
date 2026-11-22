@@ -6,22 +6,18 @@
 /**
  * @file ReadOnlyTest.cpp
  * @brief Test suite for read-only commands
+ *
+ * Thin-client test: connects to an already running heavydb that was started with
+ * --read-only (see scripts/ci/configs/tests/read-only.sh). It does not link the
+ * query engine.
  */
 
 #include <gtest/gtest.h>
 
-#include "DBHandlerTestHelpers.h"
-#include "Shared/SysDefinitions.h"
+#include "SqlTestFixture.h"
 #include "TestHelpers.h"
 
-class ReadOnlyTest : public DBHandlerTestFixture {
- public:
-  void SetUp() override { DBHandlerTestFixture::SetUp(); }
-
-  void TearDown() override { DBHandlerTestFixture::TearDown(); }
-
- private:
-};
+class ReadOnlyTest : public SqlTestFixture {};
 
 TEST_F(ReadOnlyTest, SELECT) {
   EXPECT_NO_THROW(sql("SELECT COUNT(*) FROM heavyai_us_states;"));
@@ -60,21 +56,16 @@ TEST_F(ReadOnlyTest, DROP) {
 }
 
 int main(int argc, char** argv) {
-  g_enable_fsi = false;
-  g_enable_system_tables = false;
-  g_read_only = true;
-  DBHandlerTestFixture::disk_cache_level_ = File_Namespace::DiskCacheLevel::none;
-
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  DBHandlerTestFixture::initTestArgs(argc, argv);
 
   int err{0};
   try {
-    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
+    SqlTestFixture::initConnection(argc, argv);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
+    err = 1;
   }
   return err;
 }
