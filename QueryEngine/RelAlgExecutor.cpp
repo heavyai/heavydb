@@ -3990,9 +3990,14 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
           // top-k sort query needs to get a global result before sorting, so we cannot
           // apply LIMIT value at this point
           if (has_limit_value && !top_k_sort_query &&
-              ra_exe_unit.scan_limit > ra_exe_unit.sort_info.limit.value()) {
-            ra_exe_unit.scan_limit = ra_exe_unit.sort_info.limit.value();
-            VLOG(1) << "Override scan limit to LIMIT value: " << ra_exe_unit.scan_limit;
+              ra_exe_unit.scan_limit >
+                  ra_exe_unit.sort_info.limit.value() +
+                      ra_exe_unit.sort_info.offset) {
+            ra_exe_unit.scan_limit =
+                ra_exe_unit.sort_info.limit.value() +
+                ra_exe_unit.sort_info.offset;
+            VLOG(1) << "Override scan limit to LIMIT+OFFSET value: "
+                    << ra_exe_unit.scan_limit;
           }
         }
       }
