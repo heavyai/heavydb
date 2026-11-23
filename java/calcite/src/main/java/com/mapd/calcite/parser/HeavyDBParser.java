@@ -1831,11 +1831,11 @@ public final class HeavyDBParser {
     return callCount;
   }
 
-  public void updateMetaData(String schema, String table) {
+  public void updateMetaData(String schema, String table, boolean statisticsOnly) {
     HEAVYDBLOGGER.debug("schema :" + schema + " table :" + table);
     HeavyDBSchema db = new HeavyDBSchema(
             dataDir, this, dbPort, null, sock_transport_properties, schema);
-    db.updateMetaData(schema, table);
+    db.updateMetaData(schema, table, statisticsOnly);
   }
 
   protected RelDataTypeSystem createTypeSystem() {

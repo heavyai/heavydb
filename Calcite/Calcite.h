@@ -114,7 +114,9 @@ class Calcite {
                           const std::string& calcite_session_id);
   std::vector<std::string> get_db_objects(const std::string ra);
   void inner_close_calcite_server(bool log);
-  virtual void updateMetadataImpl(const std::string& catalog, const std::string& table);
+  virtual void updateMetadataImpl(const std::string& catalog,
+                                  const std::string& table,
+                                  bool statistics_only);
   void refreshTableStatistics();
   std::pair<std::shared_ptr<CalciteServerClient>, std::shared_ptr<TTransport>> getClient(
       int port);

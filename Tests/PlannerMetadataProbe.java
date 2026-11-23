@@ -86,7 +86,7 @@ public class PlannerMetadataProbe {
     if (rewrites) equal(count, details.getNum_rows(), "native physical rows");
     // This JVM is the metadata consumer, not the fixture's Calcite process.
     // Deliver the same invalidation it receives through updateMetadata RPCs.
-    metadata.updateMetaData(database, "planner_counts");
+    metadata.updateMetaData(database, "planner_counts", true);
     HeavyDBTable table = table("planner_counts");
     equal(rewrites ? Double.valueOf(count) : null,
             table.getStatistic().getRowCount(),

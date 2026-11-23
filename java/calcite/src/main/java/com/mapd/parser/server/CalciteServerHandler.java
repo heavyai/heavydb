@@ -307,9 +307,9 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     server = s;
   }
 
-  // TODO: Add update type parameter to API.
   @Override
-  public void updateMetadata(String catalog, String table) throws TException {
+  public void updateMetadata(String catalog, String table, boolean statisticsOnly)
+          throws TException {
     HEAVYDBLOGGER.debug(
             "Received invalidation from server for " + catalog + " : " + table);
     long timer = System.currentTimeMillis();
@@ -324,7 +324,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     }
     CURRENT_PARSER.set(parser);
     try {
-      parser.updateMetaData(catalog, table);
+      parser.updateMetaData(catalog, table, statisticsOnly);
     } finally {
       CURRENT_PARSER.set(null);
       try {

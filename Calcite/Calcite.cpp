@@ -412,7 +412,7 @@ void Calcite::updateMetadata(std::string catalog, std::string table) {
     }
   }
   try {
-    updateMetadataImpl(catalog, table);
+    updateMetadataImpl(catalog, table, false);
   } catch (...) {
     std::lock_guard<std::mutex> lock(statistics_mutex_);
     dirty_statistics_.merge(pending);
@@ -420,11 +420,13 @@ void Calcite::updateMetadata(std::string catalog, std::string table) {
   }
 }
 
-void Calcite::updateMetadataImpl(const std::string& catalog, const std::string& table) {
+void Calcite::updateMetadataImpl(const std::string& catalog,
+                                 const std::string& table,
+                                 const bool statistics_only) {
   if (server_available_) {
     auto ms = measure<>::execution([&]() {
       auto clientP = getClient(remote_calcite_port_);
-      clientP.first->updateMetadata(catalog, table);
+      clientP.first->updateMetadata(catalog, table, statistics_only);
       clientP.second->close();
     });
     LOG(INFO) << "Time to updateMetadata " << ms << " (ms), catalog=\"" << catalog
@@ -456,7 +458,7 @@ void Calcite::refreshTableStatistics() {
     while (!pending.empty()) {
       const auto it = pending.begin();
       try {
-        updateMetadataImpl(it->first, it->second);
+        updateMetadataImpl(it->first, it->second, true);
       } catch (const apache::thrift::TException& e) {
         // Stale statistics may affect the plan, but must not fail an unrelated query.
         // Stop this snapshot so a failed service is not called once per dirty table.

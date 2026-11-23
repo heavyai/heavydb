@@ -33,9 +33,13 @@ class MetadataCalcite : public Calcite {
   MetadataCalcite() : Calcite(0, 0, "", 0, 0, false) {}
 
   std::function<void(const std::string&, const std::string&)> update;
+  std::vector<bool> statistics_scopes;
 
  private:
-  void updateMetadataImpl(const std::string& catalog, const std::string& table) override {
+  void updateMetadataImpl(const std::string& catalog,
+                          const std::string& table,
+                          const bool statistics_only) override {
+    statistics_scopes.push_back(statistics_only);
     update(catalog, table);
   }
 };
@@ -89,6 +93,19 @@ TEST_F(CalciteMetadataTest, CoalescesWritesAndLeavesCleanReadsAlone) {
   refresh();
   refresh();
   EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}}), updates);
+}
+
+TEST_F(CalciteMetadataTest, DistinguishesStatisticsRefreshFromSchemaInvalidation) {
+  Tables updates;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+  };
+  calcite_.markTableStatisticsDirty("db", "a");
+  refresh();
+  calcite_.updateMetadata("db", "a");
+  calcite_.updateMetadata("db", "");
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "a"}, {"db", ""}}), updates);
+  EXPECT_EQ((std::vector<bool>{true, false, false}), calcite_.statistics_scopes);
 }
 
 TEST_F(CalciteMetadataTest, RefreshDoesNotBlockWritersOrOtherPlanners) {

@@ -6,11 +6,20 @@ package com.mapd.calcite.parser;
 
 import static org.junit.Assert.*;
 
+import com.mapd.common.SockTransportProperties;
 import com.mapd.metadata.MetaConnect;
+import com.mapd.parser.server.CalciteServerHandler;
 
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.util.mapping.IntPair;
+import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.protocol.TField;
+import org.apache.thrift.protocol.TMessage;
+import org.apache.thrift.protocol.TMessageType;
+import org.apache.thrift.protocol.TStruct;
+import org.apache.thrift.protocol.TType;
+import org.apache.thrift.transport.TMemoryBuffer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -23,6 +32,7 @@ import java.sql.DriverManager;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -31,6 +41,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
+import ai.heavy.thrift.calciteserver.CalciteServer;
 import ai.heavy.thrift.server.TColumnType;
 import ai.heavy.thrift.server.TDatumType;
 import ai.heavy.thrift.server.TTableDetails;
@@ -64,6 +75,43 @@ public class MetaConnectTest {
   private static void invalidate(String database, String table) {
     // Invalidation comes through another connection in the server as well.
     new MetaConnect(-1, "", null, null, null, database).updateMetaData(database, table);
+  }
+
+  private static void invalidateStatistics(String database, String table) {
+    new MetaConnect(-1, "", null, null, null, database)
+            .updateMetaData(database, table, true);
+  }
+
+  private void invalidateOverThrift(String table, Boolean statisticsOnly) throws Exception {
+    CalciteServerHandler handler = new CalciteServerHandler(-1,
+            temporary.getRoot().getPath(),
+            "src/test/resources/ast/test_extension_functions.ast",
+            SockTransportProperties.getUnencryptedClient(),
+            "");
+    TMemoryBuffer request = new TMemoryBuffer(256);
+    TMemoryBuffer response = new TMemoryBuffer(256);
+    CalciteServer.Client client = new CalciteServer.Client(
+            new TBinaryProtocol(response), new TBinaryProtocol(request));
+    if (statisticsOnly != null) {
+      client.send_updateMetadata(DATABASE, table, statisticsOnly);
+    } else {
+      // A client built against the previous IDL sends no statistics field.
+      TBinaryProtocol protocol = new TBinaryProtocol(request);
+      protocol.writeMessageBegin(new TMessage("updateMetadata", TMessageType.CALL, 0));
+      protocol.writeStructBegin(new TStruct("updateMetadata_args"));
+      protocol.writeFieldBegin(new TField("catalog", TType.STRING, (short) 1));
+      protocol.writeString(DATABASE);
+      protocol.writeFieldEnd();
+      protocol.writeFieldBegin(new TField("table", TType.STRING, (short) 2));
+      protocol.writeString(table);
+      protocol.writeFieldEnd();
+      protocol.writeFieldStop();
+      protocol.writeStructEnd();
+      protocol.writeMessageEnd();
+    }
+    new CalciteServer.Processor<>(handler).process(
+            new TBinaryProtocol(request), new TBinaryProtocol(response));
+    client.recv_updateMetadata();
   }
 
   private static TTableDetails details(long rows) {
@@ -184,6 +232,168 @@ public class MetaConnectTest {
   }
 
   @Test
+  public void statisticsInvalidationPreservesUnchangedMetadata() throws Exception {
+    checkMetadataScopes(false, false);
+  }
+
+  @Test
+  public void thriftRoutesStatisticsAndSchemaInvalidation() throws Exception {
+    checkMetadataScopes(true, false);
+  }
+
+  @Test
+  public void thriftWithoutStatisticsFieldStillInvalidatesSchema() throws Exception {
+    checkMetadataScopes(true, null);
+  }
+
+  private void checkMetadataScopes(boolean useThrift, Boolean schemaScope) throws Exception {
+    File catalog = new File(temporary.newFolder("catalogs"), DATABASE);
+    try (Connection db = DriverManager.getConnection("jdbc:sqlite:" + catalog);
+            Statement sql = db.createStatement()) {
+      sql.execute("CREATE TABLE mapd_tables (tableid INT, name TEXT)");
+      sql.execute("CREATE TABLE mapd_views (tableid INT, sql TEXT)");
+      sql.execute("INSERT INTO mapd_tables VALUES (1, 'parent'), (2, 'child'),"
+              + " (3, 'view'), (4, 'unrelated')");
+      sql.execute("INSERT INTO mapd_views VALUES (3, 'SELECT 1;')");
+    }
+    AtomicInteger rows = new AtomicInteger(5);
+    MetaConnect connection = connection(name -> {
+      TTableDetails result = details(rows.get());
+      if (name.equals("view")) result.setView_sql("SELECT 1;");
+      if (name.equals("child")) {
+        result.setKey_metainfo("[{\"type\":\"FOREIGN KEY\",\"name\":\"fk\","
+                + "\"columns\":[\"id\"],\"foreign_table\":\"parent\","
+                + "\"foreign_columns\":[\"id\"],\"enforced\":false}]");
+        result.setForeign_key_column_ordinals(
+                Collections.singletonMap("fk", Collections.singletonList(0)));
+      }
+      return result;
+    });
+    Table parent = connection.getTable("parent");
+    Table child = connection.getTable("child");
+    Table view = connection.getTable("view");
+    Table unrelated = connection.getTable("unrelated");
+    Set<String> tables = connection.getTables();
+    assertEquals(4, tables.size());
+    assertEquals(1, child.getStatistic().getReferentialConstraints().size());
+
+    rows.set(8);
+    if (useThrift) {
+      invalidateOverThrift("PARENT", true);
+    } else {
+      invalidateStatistics(DATABASE.toUpperCase(), "PARENT");
+    }
+    assertNull(HeavyDBTable.getRowCountEstimate(Arrays.asList(DATABASE, "parent")));
+    assertSame(tables, connection.getTables());
+    assertSame(child, connection.getTable("child"));
+    assertSame(view, connection.getTable("view"));
+    assertSame(unrelated, connection.getTable("unrelated"));
+    Table refreshed = connection.getTable("parent");
+    assertNotSame(parent, refreshed);
+    assertEquals(Double.valueOf(8), refreshed.getStatistic().getRowCount());
+    assertEquals(Double.valueOf(8),
+            HeavyDBTable.getRowCountEstimate(Arrays.asList(DATABASE, "parent")));
+    assertEquals(Double.valueOf(5), parent.getStatistic().getRowCount());
+    assertEquals(Double.valueOf(5),
+            HeavyDBTable.getRowCountEstimate(Arrays.asList(DATABASE, "child")));
+
+    // DDL still retires dependent metadata, even after a statistics-only refresh.
+    if (useThrift) {
+      invalidateOverThrift("parent", schemaScope);
+    } else {
+      invalidate(DATABASE, "parent");
+    }
+    assertNotSame(refreshed, connection.getTable("parent"));
+    assertNotSame(child, connection.getTable("child"));
+    assertNotSame(view, connection.getTable("view"));
+    assertNotSame(tables, connection.getTables());
+    assertSame(unrelated, connection.getTable("unrelated"));
+  }
+
+  @Test
+  public void statisticsInvalidationRequiresTableName() {
+    MetaConnect connection = connection(name -> details(5));
+    Table child = connection.getTable("child");
+    assertThrows(IllegalArgumentException.class, () -> invalidateStatistics(DATABASE, ""));
+    assertCachedRows(connection, child, 5);
+  }
+
+  @Test
+  public void statisticsInvalidationRejectsInFlightCount() {
+    AtomicInteger fetches = new AtomicInteger();
+    MetaConnect connection = connection(name -> {
+      if (fetches.incrementAndGet() == 1) {
+        invalidateStatistics(DATABASE, "child");
+        return details(5);
+      }
+      return details(8);
+    });
+    assertCachedRows(connection, connection.getTable("child"), 8);
+    assertEquals(2, fetches.get());
+  }
+
+  @Test
+  public void statisticsInvalidationDoesNotRestartUnrelatedFetch() {
+    AtomicInteger fetches = new AtomicInteger();
+    MetaConnect connection = connection(name -> {
+      if (fetches.incrementAndGet() == 1) {
+        invalidateStatistics(DATABASE, "parent");
+      }
+      return details(8);
+    });
+    assertCachedRows(connection, connection.getTable("child"), 8);
+    assertEquals(1, fetches.get());
+  }
+
+  @Test
+  public void statisticsInvalidationInOtherDatabaseDoesNotRestartFetch() {
+    AtomicInteger fetches = new AtomicInteger();
+    MetaConnect connection = connection(name -> {
+      fetches.incrementAndGet();
+      invalidateStatistics(OTHER_DATABASE, "child");
+      return details(8);
+    });
+    assertCachedRows(connection, connection.getTable("child"), 8);
+    assertEquals(1, fetches.get());
+  }
+
+  @Test
+  public void schemaInvalidationStillRejectsFetchAfterStatisticsInvalidation() {
+    AtomicInteger fetches = new AtomicInteger();
+    MetaConnect connection = connection(name -> {
+      if (fetches.incrementAndGet() == 1) {
+        invalidateStatistics(DATABASE, "child");
+        invalidate(DATABASE, "parent");
+        return details(5);
+      }
+      return details(8);
+    });
+    assertCachedRows(connection, connection.getTable("child"), 8);
+    assertEquals(2, fetches.get());
+  }
+
+  @Test
+  public void failedStatisticsRefetchDoesNotRepublishOldCount() {
+    AtomicInteger fetches = new AtomicInteger();
+    MetaConnect connection = connection(name -> {
+      int attempt = fetches.incrementAndGet();
+      if (attempt == 2) throw new IllegalStateException("metadata fetch failed");
+      return details(attempt == 1 ? 5 : 8);
+    });
+    Table old = connection.getTable("child");
+    invalidateStatistics(DATABASE, "child");
+    try {
+      connection.getTable("child");
+      fail("Expected the fetch failure");
+    } catch (IllegalStateException expected) {
+      assertEquals("metadata fetch failed", expected.getMessage());
+    }
+    assertNull(HeavyDBTable.getRowCountEstimate(Arrays.asList(DATABASE, "child")));
+    assertEquals(Double.valueOf(5), old.getStatistic().getRowCount());
+    assertCachedRows(connection, connection.getTable("child"), 8);
+  }
+
+  @Test
   public void repeatedInvalidationsDoNotPublishIntermediateCounts() {
     AtomicInteger fetches = new AtomicInteger();
     MetaConnect connection = connection(name -> {
@@ -227,7 +437,8 @@ public class MetaConnectTest {
     }
   }
 
-  private void competingFetches(boolean invalidateDuringFetch) throws Exception {
+  private void competingFetches(boolean invalidateDuringFetch, boolean statisticsOnly)
+          throws Exception {
     CountDownLatch fetched = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
     ExecutorService workers = Executors.newFixedThreadPool(2);
@@ -248,7 +459,13 @@ public class MetaConnectTest {
       await(fetched);
       if (invalidateDuringFetch) {
         // Invalidation must complete while the metadata fetch remains blocked.
-        workers.submit(() -> invalidate(DATABASE, "child")).get(10, TimeUnit.SECONDS);
+        workers.submit(() -> {
+                 if (statisticsOnly) {
+                   invalidateStatistics(DATABASE, "child");
+                 } else {
+                   invalidate(DATABASE, "child");
+                 }
+               }).get(10, TimeUnit.SECONDS);
       }
       Table winner =
               workers.submit(() -> fast.getTable("child")).get(10, TimeUnit.SECONDS);
@@ -266,11 +483,16 @@ public class MetaConnectTest {
 
   @Test
   public void invalidatedFetchCannotOverwriteNewlyPublishedCount() throws Exception {
-    competingFetches(true);
+    competingFetches(true, false);
   }
 
   @Test
   public void concurrentMissesReturnThePublishedTableAndCount() throws Exception {
-    competingFetches(false);
+    competingFetches(false, false);
+  }
+
+  @Test
+  public void statisticsInvalidatedFetchCannotOverwriteNewCount() throws Exception {
+    competingFetches(true, true);
   }
 }

@@ -70,7 +70,7 @@ service CalciteServer {
    string getUserDefinedFunctionWhitelist()
    string getRuntimeExtensionFunctionWhitelist()
    void setRuntimeExtensionFunctions(1: list<extension_functions.TUserDefinedFunction> udfs, 2: list<extension_functions.TUserDefinedTableFunction> udtfs, 3:bool isruntime)
-   void updateMetadata(1: string catalog, 2:string table)
+   void updateMetadata(1: string catalog, 2:string table, 3:bool statistics_only = false)
    list<completion_hints.TCompletionHint> getCompletionHints(1:string user, 2:string passwd, 3:string catalog,
     4:list<string> visible_tables, 5:string sql, 6:i32 cursor)
 

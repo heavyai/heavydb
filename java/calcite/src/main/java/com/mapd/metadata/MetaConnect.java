@@ -36,6 +36,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -97,6 +98,7 @@ public class MetaConnect {
   private static final class TableCacheGeneration {
     // Guarded by this generation's monitor, shared by connections to the database.
     long value;
+    final Map<String, Long> statisticsVersions = new HashMap<>();
   }
 
   private static TableCacheGeneration tableCacheGeneration(String database) {
@@ -223,12 +225,15 @@ public class MetaConnect {
     TableCacheGeneration generation = tableCacheGeneration(default_db);
     while (true) {
       final long fetchedGeneration;
+      final long fetchedStatisticsGeneration;
       synchronized (generation) {
         cTable = DB_TABLE_DETAILS.get(dbTable);
         if (cTable != null) {
           return cTable;
         }
         fetchedGeneration = generation.value;
+        fetchedStatisticsGeneration =
+                generation.statisticsVersions.getOrDefault(dbTable.get(1), 0L);
       }
 
       // Neither the metadata RPC nor view SQL lookup may hold the publication lock.
@@ -238,7 +243,9 @@ public class MetaConnect {
               : getViewSql(tableName);
 
       synchronized (generation) {
-        if (fetchedGeneration != generation.value) {
+        if (fetchedGeneration != generation.value
+                || fetchedStatisticsGeneration
+                        != generation.statisticsVersions.getOrDefault(dbTable.get(1), 0L)) {
           continue;
         }
         cTable = DB_TABLE_DETAILS.get(dbTable);
@@ -967,10 +974,27 @@ public class MetaConnect {
   }
 
   public void updateMetaData(String schema, String table) {
+    updateMetaData(schema, table, false);
+  }
+
+  public void updateMetaData(String schema, String table, boolean statisticsOnly) {
+    if (statisticsOnly && table.isEmpty()) {
+      throw new IllegalArgumentException("Statistics invalidation requires a table name");
+    }
     TableCacheGeneration generation = tableCacheGeneration(schema);
     synchronized (generation) {
+      if (statisticsOnly) {
+        // Retire only this table's count, including fetches started before this write.
+        // Names, view definitions and foreign-key column positions have not changed.
+        generation.statisticsVersions.merge(table.toUpperCase(), 1L, Long::sum);
+        DB_TABLE_DETAILS.remove(
+                ImmutableList.of(schema.toUpperCase(), table.toUpperCase()));
+        HeavyDBTable.invalidateMetadata(schema, table);
+        return;
+      }
       // Dependent tables and views can still be in flight and absent from the cache.
       ++generation.value;
+      generation.statisticsVersions.clear();
       invalidateMetadataCaches(schema, table);
     }
   }
