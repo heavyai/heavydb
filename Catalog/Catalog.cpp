@@ -4815,6 +4815,14 @@ bool column_lists_match(const std::vector<std::string>& lhs,
   return true;
 }
 
+bool column_sets_match(const std::vector<std::string>& lhs,
+                       const std::vector<std::string>& rhs) {
+  return std::is_permutation(
+      lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), [](const auto& l, const auto& r) {
+        return boost::iequals(l, r);
+      });
+}
+
 bool is_unique_constraint(const TableConstraint& constraint) {
   return constraint.type == TableConstraintType::PrimaryKey ||
          constraint.type == TableConstraintType::Unique;
@@ -4871,9 +4879,17 @@ void validate_new_constraint_against_existing(
         existing_constraint.type == TableConstraintType::PrimaryKey) {
       throw std::runtime_error("Table " + table_name + " already has a primary key.");
     }
-    if (existing_constraint.type == normalized_constraint.type &&
-        column_lists_match(existing_constraint.column_names,
-                           normalized_constraint.column_names)) {
+    if (existing_constraint.type != normalized_constraint.type) {
+      continue;
+    }
+    // Unique keys are column sets; foreign keys retain their source-to-target order.
+    const bool same_columns =
+        is_unique_constraint(normalized_constraint)
+            ? column_sets_match(existing_constraint.column_names,
+                                normalized_constraint.column_names)
+            : column_lists_match(existing_constraint.column_names,
+                                 normalized_constraint.column_names);
+    if (same_columns) {
       if (normalized_constraint.type == TableConstraintType::ForeignKey) {
         const auto& existing_reference = existing_constraint.foreign_key_reference;
         const auto& new_reference = normalized_constraint.foreign_key_reference;
@@ -4896,7 +4912,7 @@ bool references_unique_constraint(
     const std::vector<std::string>& reference_column_names) {
   for (const auto& referenced_constraint : referenced_constraints) {
     if (is_unique_constraint(referenced_constraint) &&
-        column_lists_match(referenced_constraint.column_names, reference_column_names)) {
+        column_sets_match(referenced_constraint.column_names, reference_column_names)) {
       return true;
     }
   }
@@ -5009,6 +5025,17 @@ void validate_table_constraint_dependencies_for_constraint_drop(
   if (!is_unique_constraint(dropped_constraint)) {
     return;
   }
+  const auto existing_constraints = catalog.getTableConstraints(td);
+  if (std::any_of(existing_constraints.begin(),
+                  existing_constraints.end(),
+                  [&](const auto& constraint) {
+                    return is_unique_constraint(constraint) &&
+                           !constraint_names_match(constraint, dropped_constraint) &&
+                           column_sets_match(constraint.column_names,
+                                             dropped_constraint.column_names);
+                  })) {
+    return;
+  }
   for (const auto source_td : catalog.getAllTableMetadata()) {
     if (!source_td || source_td->shard >= 0) {
       continue;
@@ -5017,8 +5044,8 @@ void validate_table_constraint_dependencies_for_constraint_drop(
       if (constraint.type == TableConstraintType::ForeignKey &&
           constraint.foreign_key_reference &&
           boost::iequals(constraint.foreign_key_reference->table_name, td->tableName) &&
-          column_lists_match(constraint.foreign_key_reference->column_names,
-                             dropped_constraint.column_names)) {
+          column_sets_match(constraint.foreign_key_reference->column_names,
+                            dropped_constraint.column_names)) {
         throw std::runtime_error("Cannot drop constraint " +
                                  dropped_constraint.name.value_or("<unnamed>") +
                                  " on table " + td->tableName + " because foreign key " +

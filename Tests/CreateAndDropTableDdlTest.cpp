@@ -1224,6 +1224,224 @@ TEST_P(ForeignKeyIdentityTest, RejectsEquivalentDeclarationsWithDifferentNames) 
 
 INSTANTIATE_TEST_SUITE_P(CreateAndAlter, ForeignKeyIdentityTest, testing::Bool());
 
+class UniqueKeyMatchingTest : public TableConstraintTest,
+                              public testing::WithParamInterface<bool> {
+ protected:
+  void createWithConstraints(const std::string& table,
+                             const std::string& columns,
+                             const std::vector<std::string>& constraints) {
+    if (GetParam()) {
+      sql("CREATE TABLE " + table + " (" + columns + ");");
+      for (const auto& constraint : constraints) {
+        sql("ALTER TABLE " + table + " ADD " + constraint + ";");
+      }
+    } else {
+      sql("CREATE TABLE " + table + " (" + columns + ", " +
+          boost::algorithm::join(constraints, ", ") + ");");
+    }
+  }
+};
+
+TEST_P(UniqueKeyMatchingTest, ReorderedReferencesPreserveColumnPairs) {
+  for (const auto key : {"PRIMARY KEY", "UNIQUE"}) {
+    SCOPED_TRACE(key);
+    sql(std::string("CREATE TABLE key_parent (a INT NOT NULL, b BIGINT NOT NULL, ") +
+        key + "(a,b));");
+    createWithConstraints("key_child",
+                          "x INT, y BIGINT",
+                          {"CONSTRAINT child_fk FOREIGN KEY(y,x) "
+                           "REFERENCES KEY_PARENT(B,A)"});
+    auto& catalog = getCatalog();
+    const auto child = catalog.getMetadataForTable("key_child", false);
+    const auto constraints = catalog.getTableConstraints(child);
+    ASSERT_EQ(1u, constraints.size());
+    EXPECT_EQ((std::vector<std::string>{"y", "x"}), constraints[0].column_names);
+    ASSERT_TRUE(constraints[0].foreign_key_reference);
+    EXPECT_EQ((std::vector<std::string>{"b", "a"}),
+              constraints[0].foreign_key_reference->column_names);
+    EXPECT_EQ((std::vector<int32_t>{1, 0}),
+              catalog.getForeignKeyColumnOrdinals(child).at("child_fk"));
+    EXPECT_EQ(
+        (std::vector<std::string>{"a", "b"}),
+        catalog.getTableConstraints(catalog.getMetadataForTable("key_parent", false))[0]
+            .column_names);
+    const auto metadata = child->keyMetainfo;
+    const auto ddl = catalog.dumpCreateTable(child, false);
+    sql("DROP TABLE key_child;");
+    sql(ddl);
+    EXPECT_EQ(metadata, catalog.getMetadataForTable("key_child", false)->keyMetainfo);
+    sql("DROP TABLE key_child;");
+    sql("DROP TABLE key_parent;");
+  }
+}
+
+TEST_P(UniqueKeyMatchingTest, RejectsReorderedDuplicateUniqueKeys) {
+  if (GetParam()) {
+    sql("CREATE TABLE key_parent (a INT, b INT, CONSTRAINT first_key UNIQUE(a,b));");
+    const auto td = getCatalog().getMetadataForTable("key_parent", false);
+    const auto metadata = td->keyMetainfo;
+    queryAndAssertPartialException(
+        "ALTER TABLE key_parent ADD CONSTRAINT second_key UNIQUE(B,A);",
+        "Equivalent UNIQUE constraint already exists");
+    EXPECT_EQ(metadata, td->keyMetainfo);
+  } else {
+    queryAndAssertPartialException(
+        "CREATE TABLE key_parent (a INT, b INT, CONSTRAINT first_key UNIQUE(a,b), "
+        "CONSTRAINT second_key UNIQUE(B,A));",
+        "Equivalent UNIQUE constraint already exists");
+    EXPECT_EQ(nullptr, getCatalog().getMetadataForTable("key_parent", false));
+  }
+}
+
+TEST_P(UniqueKeyMatchingTest, DistinctKeysDoNotQualifyPartialOrSupersetReferences) {
+  createWithConstraints(
+      "key_parent", "a INT, b INT, c INT", {"UNIQUE(a,b)", "UNIQUE(b,c)"});
+  sql("CREATE TABLE key_child (x INT, y INT, z INT);");
+  for (const auto& columns :
+       {std::make_pair("x", "a"), std::make_pair("x,y,z", "a,b,c")}) {
+    queryAndAssertPartialException("ALTER TABLE key_child ADD FOREIGN KEY(" +
+                                       std::string(columns.first) +
+                                       ") REFERENCES key_parent(" + columns.second + ");",
+                                   "references non-unique columns");
+  }
+  EXPECT_TRUE(
+      getCatalog()
+          .getTableConstraints(getCatalog().getMetadataForTable("key_child", false))
+          .empty());
+  EXPECT_EQ(
+      2u,
+      getCatalog()
+          .getTableConstraints(getCatalog().getMetadataForTable("key_parent", false))
+          .size());
+}
+
+TEST_P(UniqueKeyMatchingTest, DifferentForeignKeyPairingsRemainDistinct) {
+  sql("CREATE TABLE key_parent (a INT, b INT, c INT, UNIQUE(a,b,c));");
+  createWithConstraints(
+      "key_child",
+      "x INT, y INT, z INT",
+      {"CONSTRAINT fk_abc FOREIGN KEY(x,y,z) REFERENCES key_parent(a,b,c)",
+       "CONSTRAINT fk_bac FOREIGN KEY(x,y,z) REFERENCES key_parent(b,a,c)",
+       "CONSTRAINT fk_zyx FOREIGN KEY(z,y,x) REFERENCES key_parent(a,b,c)"});
+  const auto child = getCatalog().getMetadataForTable("key_child", false);
+  const auto constraints = getCatalog().getTableConstraints(child);
+  ASSERT_EQ(3u, constraints.size());
+  EXPECT_EQ((std::vector<std::string>{"z", "y", "x"}), constraints[2].column_names);
+  const auto ordinals = getCatalog().getForeignKeyColumnOrdinals(child);
+  EXPECT_EQ((std::vector<int32_t>{0, 1, 2}), ordinals.at("fk_abc"));
+  EXPECT_EQ((std::vector<int32_t>{1, 0, 2}), ordinals.at("fk_bac"));
+  EXPECT_EQ((std::vector<int32_t>{0, 1, 2}), ordinals.at("fk_zyx"));
+  queryAndAssertPartialException(
+      "ALTER TABLE key_child ADD CONSTRAINT fk_duplicate FOREIGN KEY(X,Y,Z) "
+      "REFERENCES KEY_PARENT(B,A,C);",
+      "Equivalent FOREIGN KEY constraint already exists");
+}
+
+TEST_P(UniqueKeyMatchingTest, ReorderedSelfReferencePreservesColumnPairs) {
+  createWithConstraints(
+      "key_parent",
+      "a INT NOT NULL, b BIGINT NOT NULL, x INT, y BIGINT",
+      {"PRIMARY KEY(a,b)",
+       "CONSTRAINT self_fk FOREIGN KEY(y,x) REFERENCES key_parent(b,a)"});
+  const auto td = getCatalog().getMetadataForTable("key_parent", false);
+  EXPECT_EQ((std::vector<int32_t>{1, 0}),
+            getCatalog().getForeignKeyColumnOrdinals(td).at("self_fk"));
+}
+
+TEST_P(UniqueKeyMatchingTest, ReorderedReferenceStillChecksTypesPositionally) {
+  sql("CREATE TABLE key_parent (a INT, b BIGINT, UNIQUE(a,b));");
+  if (GetParam()) {
+    sql("CREATE TABLE key_child (x INT, y BIGINT);");
+  }
+  queryAndAssertPartialException(
+      std::string(GetParam() ? "ALTER TABLE key_child ADD "
+                             : "CREATE TABLE key_child (x INT, y BIGINT, ") +
+          "FOREIGN KEY(x,y) REFERENCES key_parent(b,a)" + (GetParam() ? ";" : ");"),
+      "has type");
+  const auto td = getCatalog().getMetadataForTable("key_child", false);
+  if (GetParam()) {
+    ASSERT_NE(nullptr, td);
+    EXPECT_TRUE(getCatalog().getTableConstraints(td).empty());
+  } else {
+    EXPECT_EQ(nullptr, td);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(CreateAndAlter, UniqueKeyMatchingTest, testing::Bool());
+
+class UniqueKeyDropTest : public TableConstraintTest,
+                          public testing::WithParamInterface<std::tuple<bool, bool>> {
+ protected:
+  void checkAlternativeKey(const bool self_reference) {
+    const auto [sharded, drop_primary] = GetParam();
+    sql(std::string("CREATE TABLE key_parent (a INT NOT NULL, b INT NOT NULL, c INT, ") +
+        "CONSTRAINT parent_pk PRIMARY KEY(a,b), CONSTRAINT parent_uq UNIQUE(b,a), "
+        "CONSTRAINT other_uq UNIQUE(b,c)" +
+        (sharded ? ", SHARD KEY(a)" : "") + ")" +
+        (sharded ? " WITH (SHARD_COUNT=2)" : "") + ";");
+    const std::string child_name = self_reference ? "key_parent" : "key_child";
+    if (!self_reference) {
+      sql("CREATE TABLE key_child (a INT, b INT);");
+    }
+    const std::string columns = drop_primary ? "a,b" : "b,a";
+    sql("ALTER TABLE " + child_name +
+        " ADD CONSTRAINT child_fk FOREIGN KEY(a,b) "
+        "REFERENCES key_parent(" +
+        columns + ");");
+    auto& catalog = getCatalog();
+    const auto parent = catalog.getMetadataForTable("key_parent", false);
+    const auto child = catalog.getMetadataForTable(child_name, false);
+    const auto ordinals = catalog.getForeignKeyColumnOrdinals(child);
+    const std::string dropped = drop_primary ? "parent_pk" : "parent_uq";
+    const std::string remaining = drop_primary ? "parent_uq" : "parent_pk";
+    sql("ALTER TABLE key_parent DROP CONSTRAINT " + dropped + ";");
+    const auto constraints = catalog.getTableConstraints(parent);
+    ASSERT_EQ(self_reference ? 3u : 2u, constraints.size());
+    EXPECT_EQ(remaining, constraints[0].name.value());
+    const auto metadata = parent->keyMetainfo;
+    queryAndAssertPartialException(
+        "ALTER TABLE key_parent DROP CONSTRAINT " + remaining + ";",
+        "because foreign key child_fk on table " + child_name + " depends on it.");
+    EXPECT_EQ(metadata, parent->keyMetainfo);
+    EXPECT_EQ(ordinals, catalog.getForeignKeyColumnOrdinals(child));
+    auto tables = catalog.getPhysicalTablesDescriptors(parent);
+    if (sharded) {
+      tables.push_back(parent);
+    }
+    for (const auto td : tables) {
+      EXPECT_EQ(metadata, td->keyMetainfo);
+      auto& connector = catalog.getSqliteConnector();
+      connector.query_with_text_params(
+          "SELECT key_metainfo FROM mapd_tables WHERE tableid = ?",
+          std::vector<std::string>{std::to_string(td->tableId)});
+      EXPECT_EQ(metadata, connector.getData<std::string>(0, 0));
+    }
+    sql("ALTER TABLE " + child_name + " DROP CONSTRAINT child_fk;");
+    sql("ALTER TABLE key_parent DROP CONSTRAINT " + remaining + ";");
+  }
+};
+
+TEST_P(UniqueKeyDropTest, ExternalReferenceRetainsAnAlternativeKey) {
+  checkAlternativeKey(false);
+}
+
+TEST_P(UniqueKeyDropTest, SelfReferenceRetainsAnAlternativeKey) {
+  checkAlternativeKey(true);
+}
+
+INSTANTIATE_TEST_SUITE_P(ShardedAndPrimary,
+                         UniqueKeyDropTest,
+                         testing::Combine(testing::Bool(), testing::Bool()));
+
+TEST_F(TableConstraintTest, UniqueKeyCanReplaceReferencedPrimaryKey) {
+  sql("CREATE TABLE key_parent (id INT, CONSTRAINT parent_pk PRIMARY KEY(id), "
+      "CONSTRAINT parent_uq UNIQUE(id));");
+  sql("CREATE TABLE key_child (id INT, FOREIGN KEY(id) REFERENCES key_parent(id));");
+  sql("ALTER TABLE key_parent DROP CONSTRAINT parent_pk;");
+  queryAndAssertPartialException("ALTER TABLE key_parent DROP CONSTRAINT parent_uq;",
+                                 "depends on it");
+}
+
 TEST_F(TableConstraintTest, ShowCreateRoundTripsConstraints) {
   sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, code INT, "
       "CONSTRAINT parent_pk PRIMARY KEY(id), CONSTRAINT parent_uq UNIQUE(code));");
