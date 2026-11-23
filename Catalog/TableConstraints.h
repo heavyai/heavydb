@@ -22,9 +22,12 @@
 #ifndef TABLE_CONSTRAINTS_H
 #define TABLE_CONSTRAINTS_H
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
+
+class SqliteConnector;
 
 namespace Catalog_Namespace {
 
@@ -56,6 +59,25 @@ std::string append_table_constraint_to_key_metainfo(const std::string& key_metai
 
 std::string remove_table_constraint_from_key_metainfo(const std::string& key_metainfo,
                                                       const std::string& constraint_name);
+
+struct StoredConstraint {
+  std::string definition;
+  std::optional<std::string> parent;
+  size_t preceding_directives;
+};
+struct SplitKeyMetadata {
+  std::string directives;
+  std::vector<StoredConstraint> constraints;
+};
+SplitKeyMetadata split_key_metadata(const std::string& metadata);
+void initialize_constraint_storage(SqliteConnector& db);
+void insert_constraint_records(
+    SqliteConnector& db,
+    int owner,
+    bool temporary,
+    const std::vector<StoredConstraint>& constraints,
+    const std::function<int(const std::string&)>& resolve_parent);
+void delete_constraint_records(SqliteConnector& db, int owner, bool temporary);
 
 }  // namespace Catalog_Namespace
 

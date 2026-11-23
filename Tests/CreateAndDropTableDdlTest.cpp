@@ -938,7 +938,7 @@ TEST_F(TableConstraintTest, ShardConstraintsFollowLogicalAddAndDrop) {
     for (const auto shard : shards) {
       EXPECT_EQ(count, getCatalog().getTableConstraints(shard).size());
       auto& sqlite = getCatalog().getSqliteConnector();
-      sqlite.query("SELECT key_metainfo FROM mapd_tables WHERE tableid=" +
+      sqlite.query("SELECT key_metainfo FROM mapd_table_key_metadata WHERE tableid=" +
                    std::to_string(shard->tableId));
       EXPECT_EQ(shard->keyMetainfo, sqlite.getData<std::string>(0, 0));
     }
@@ -969,9 +969,9 @@ TEST_F(TableConstraintTest, ShardUpdateFailureRollsBackEveryDescriptor) {
   ASSERT_EQ(size_t(4), tables.size());
   auto& sqlite = getCatalog().getSqliteConnector();
   sqlite.query(
-      "CREATE TRIGGER fail_constraint_shard BEFORE UPDATE OF key_metainfo ON mapd_tables "
-      "WHEN NEW.tableid=" +
-      std::to_string(tables[1]->tableId) +
+      "CREATE TRIGGER fail_constraint_shard BEFORE INSERT ON mapd_constraints "
+      "WHEN NEW.owner=" +
+      std::to_string(td->tableId) +
       " BEGIN SELECT RAISE(ABORT, 'injected shard update failure'); END;");
   ScopeGuard cleanup = [&] { sqlite.query("DROP TRIGGER fail_constraint_shard;"); };
   EXPECT_ANY_THROW(
@@ -979,10 +979,26 @@ TEST_F(TableConstraintTest, ShardUpdateFailureRollsBackEveryDescriptor) {
   tables.push_back(td);
   for (const auto table : tables) {
     EXPECT_TRUE(getCatalog().getTableConstraints(table).empty());
-    sqlite.query("SELECT key_metainfo FROM mapd_tables WHERE tableid=" +
+    sqlite.query("SELECT key_metainfo FROM mapd_table_key_metadata WHERE tableid=" +
                  std::to_string(table->tableId));
     EXPECT_EQ(table->keyMetainfo, sqlite.getData<std::string>(0, 0));
   }
+}
+
+TEST_F(TableConstraintTest, TemporaryForeignKeysProtectParentsOnlyForTheirLifetime) {
+  sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, PRIMARY KEY(id));");
+  sql("CREATE TEMPORARY TABLE constraint_review_child (id INT, CONSTRAINT temp_fk "
+      "FOREIGN KEY(id) REFERENCES constraint_review_parent(id));");
+  queryAndAssertPartialException("DROP TABLE constraint_review_parent;",
+                                 "foreign key temp_fk on table constraint_review_child");
+  sql("ALTER TABLE constraint_review_child DROP CONSTRAINT temp_fk;");
+  sql("ALTER TABLE constraint_review_child ADD CONSTRAINT replacement "
+      "FOREIGN KEY(id) REFERENCES constraint_review_parent(id);");
+  queryAndAssertPartialException(
+      "DROP TABLE constraint_review_parent;",
+      "foreign key replacement on table constraint_review_child");
+  sql("DROP TABLE constraint_review_child;");
+  sql("DROP TABLE constraint_review_parent;");
 }
 
 TEST_F(TableConstraintTest, ShardedSelfReferenceAllowsDrop) {
@@ -1144,7 +1160,7 @@ TEST_F(TableConstraintTest, ConstraintChangesPersistInCatalog) {
   const auto persisted = [&] {
     auto& connector = catalog.getSqliteConnector();
     connector.query_with_text_params(
-        "SELECT key_metainfo FROM mapd_tables WHERE tableid = ?",
+        "SELECT key_metainfo FROM mapd_table_key_metadata WHERE tableid = ?",
         std::vector<std::string>{std::to_string(td->tableId)});
     return connector.getData<std::string>(0, 0);
   };
@@ -1270,7 +1286,7 @@ TEST_P(ConstraintNameReservationTest, ExplicitNamesTakePriorityInEitherOrder) {
       EXPECT_EQ(metadata, table->keyMetainfo);
       auto& connector = catalog.getSqliteConnector();
       connector.query_with_text_params(
-          "SELECT key_metainfo FROM mapd_tables WHERE tableid = ?",
+          "SELECT key_metainfo FROM mapd_table_key_metadata WHERE tableid = ?",
           std::vector<std::string>{std::to_string(table->tableId)});
       EXPECT_EQ(metadata, connector.getData<std::string>(0, 0));
     }
@@ -1356,7 +1372,7 @@ TEST_F(TableConstraintTest, AlterGeneratedConstraintNamesAvoidExistingNames) {
   EXPECT_EQ(metadata, td->keyMetainfo);
   auto& connector = catalog.getSqliteConnector();
   connector.query_with_text_params(
-      "SELECT key_metainfo FROM mapd_tables WHERE tableid = ?",
+      "SELECT key_metainfo FROM mapd_table_key_metadata WHERE tableid = ?",
       std::vector<std::string>{std::to_string(td->tableId)});
   EXPECT_EQ(metadata, connector.getData<std::string>(0, 0));
 }
@@ -1549,7 +1565,7 @@ class UniqueKeyDropTest : public TableConstraintTest,
       EXPECT_EQ(metadata, td->keyMetainfo);
       auto& connector = catalog.getSqliteConnector();
       connector.query_with_text_params(
-          "SELECT key_metainfo FROM mapd_tables WHERE tableid = ?",
+          "SELECT key_metainfo FROM mapd_table_key_metadata WHERE tableid = ?",
           std::vector<std::string>{std::to_string(td->tableId)});
       EXPECT_EQ(metadata, connector.getData<std::string>(0, 0));
     }
@@ -2609,8 +2625,9 @@ class SelfReferencingRenameTest : public TableConstraintTest,
       EXPECT_EQ(name, table->tableName);
       EXPECT_EQ(keys, table->keyMetainfo);
       auto& sqlite = catalog.getSqliteConnector();
-      sqlite.query("SELECT name, key_metainfo FROM mapd_tables WHERE tableid=" +
-                   std::to_string(id));
+      sqlite.query(
+          "SELECT name, key_metainfo FROM mapd_table_key_metadata WHERE tableid=" +
+          std::to_string(id));
       ASSERT_EQ(size_t(1), sqlite.getNumRows());
       EXPECT_EQ(name, sqlite.getData<std::string>(0, 0));
       EXPECT_EQ(keys, sqlite.getData<std::string>(0, 1));
@@ -2665,7 +2682,7 @@ TEST_P(SelfReferencingRenameTest, DropRenameAndRecreatePreservesSelfReference) {
     EXPECT_EQ("staff", fk.foreign_key_reference->table_name);
     EXPECT_EQ((std::vector<std::string>{"id"}), fk.foreign_key_reference->column_names);
     auto& sqlite = catalog.getSqliteConnector();
-    sqlite.query("SELECT key_metainfo FROM mapd_tables WHERE tableid=" +
+    sqlite.query("SELECT key_metainfo FROM mapd_table_key_metadata WHERE tableid=" +
                  std::to_string(table->tableId));
     ASSERT_EQ(size_t(1), sqlite.getNumRows());
     EXPECT_EQ(table->keyMetainfo, sqlite.getData<std::string>(0, 0));

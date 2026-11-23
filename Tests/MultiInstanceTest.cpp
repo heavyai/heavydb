@@ -714,6 +714,42 @@ TEST_F(TableTest, CreateAlreadyExists) {
   assert_results_equal({}, run_on_all_servers(select(name)));
 }
 
+TEST_F(TableTest, IncomingForeignKeyIsVisibleAcrossServers) {
+  sql_execute("CREATE TABLE obj_1 (id INT NOT NULL, PRIMARY KEY(id));", 0);
+  sql_execute(
+      "CREATE TABLE obj_0 (id INT, CONSTRAINT cross_fk FOREIGN KEY(id) "
+      "REFERENCES obj_1(id));",
+      1);
+  try {
+    sql_execute("DROP TABLE obj_1;", 0);
+    FAIL() << "Server 0 dropped the parent of a foreign key created on server 1";
+  } catch (const TDBException& e) {
+    EXPECT_NE(std::string::npos, e.error_msg.find("foreign key cross_fk on table obj_0"));
+  }
+  sql_execute("ALTER TABLE obj_0 DROP CONSTRAINT cross_fk;", 0);
+  EXPECT_NO_THROW(sql_execute("DROP TABLE obj_1;", 1));
+}
+
+TEST_F(TableTest, LocalForeignKeyCannotDependOnSharedParent) {
+  sql_execute("CREATE TABLE obj_1 (id INT NOT NULL, PRIMARY KEY(id));", 0);
+  try {
+    sql_execute(
+        "CREATE TEMPORARY TABLE obj_0 (id INT, FOREIGN KEY(id) REFERENCES obj_1(id));",
+        1);
+    FAIL() << "A shared parent cannot see another server's temporary children";
+  } catch (const TDBException& e) {
+    EXPECT_NE(std::string::npos,
+              e.error_msg.find(
+                  "Temporary tables cannot reference shared persistent table obj_1"));
+  }
+  sql_execute("CREATE TEMPORARY TABLE obj_0 (id INT);", 1);
+  EXPECT_THROW(
+      sql_execute("ALTER TABLE obj_0 ADD FOREIGN KEY(id) REFERENCES obj_1(id);", 1),
+      TDBException);
+  sql_execute("DROP TABLE obj_0;", 1);
+  EXPECT_NO_THROW(sql_execute("DROP TABLE obj_1;", 0));
+}
+
 TEST_F(TableTest, Alter) {
   EXPECT_NO_THROW(sql_execute(create(type(), name, schema)));
   assert_results_equal({}, run_on_all_servers(select(name)));

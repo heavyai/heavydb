@@ -1206,6 +1206,7 @@ void Catalog::reloadCatalogMetadataUnlocked(
 
   sqliteConnector_.reset(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
                          currentDB_.dbName);
+  initialize_constraint_storage(sqliteConnector_);
 
   // Notice when tables or columns have been created, dropped, or changed by other nodes.
   // Needed so that users will see reasonably-correct lists of what objects exist.
@@ -1250,6 +1251,13 @@ void Catalog::reloadCatalogMetadataUnlocked(
   // Reload tables.
   for (auto const& reload_table_id : reload_table_ids) {
     reloadTableMetadataUnlocked(reload_table_id);
+  }
+
+  // Reopening SQLite discards TEMP records. Rebuild only for surviving local tables.
+  for (const auto& [id, td] : tableDescriptorMapById_) {
+    if (table_is_temporary(td) && td->shard < 0) {
+      insertConstraintRecords(*td, split_key_metadata(td->keyMetainfo).constraints);
+    }
   }
 
   ////////// NON-TABLES //////////
@@ -1355,7 +1363,9 @@ std::unique_ptr<TableDescriptor> Catalog::getTableFromStorage(const int table_id
   std::string table_query(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
       "max_chunk_size, frag_page_size, "
-      "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid, "
+      "max_rows, partitions, shard_column_id, shard, num_shards, "
+      "(SELECT m.key_metainfo FROM mapd_table_key_metadata m WHERE "
+      "m.tableid=mapd_tables.tableid), userid, "
       "sort_column_id, storage_type, max_rollback_epochs, is_system_table, comment "
       "FROM mapd_tables WHERE tableid = ?");
 
@@ -1377,7 +1387,9 @@ void Catalog::buildTablesMapUnlocked() {
   std::string tableQuery(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
       "max_chunk_size, frag_page_size, "
-      "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid, "
+      "max_rows, partitions, shard_column_id, shard, num_shards, "
+      "(SELECT m.key_metainfo FROM mapd_table_key_metadata m WHERE "
+      "m.tableid=mapd_tables.tableid), userid, "
       "sort_column_id, storage_type, max_rollback_epochs, is_system_table, comment "
       "from mapd_tables");
   sqliteConnector_.query(tableQuery);
@@ -1599,6 +1611,7 @@ void Catalog::buildMaps(const std::map<int32_t, std::string>& user_name_by_user_
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
 
+  initialize_constraint_storage(sqliteConnector_);
   buildDictionaryMapUnlocked();
   buildTablesMapUnlocked();
 
@@ -3207,6 +3220,7 @@ void Catalog::createTable(
   }
 
   td.nColumns = columns.size();
+  const auto keys = split_key_metadata(td.keyMetainfo);
   // TODO(sy): don't take disk locks or touch sqlite connector for temporary tables
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
@@ -3232,7 +3246,7 @@ void Catalog::createTable(
                                    td.storageType,
                                    std::to_string(td.maxRollbackEpochs),
                                    std::to_string(td.is_system_table),
-                                   td.keyMetainfo});
+                                   keys.directives});
 
       // now get the auto generated tableid
       sqliteConnector_.query_with_text_param(
@@ -3371,6 +3385,9 @@ void Catalog::createTable(
     }
 
     addTableToMap(&td, cds, dds);
+    if (isLogicalTable) {
+      insertConstraintRecords(td, keys.constraints);
+    }
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
   } catch (std::exception& e) {
     end_transaction_or_abort(
@@ -4928,6 +4945,19 @@ bool references_unique_constraint(
   return false;
 }
 
+void validate_foreign_key_lifetime(const TableDescriptor* child,
+                                   const TableDescriptor* parent) {
+  if (table_is_temporary(parent) && !table_is_temporary(child)) {
+    throw std::runtime_error("Persistent tables cannot reference temporary table " +
+                             parent->tableName + ".");
+  }
+  if (g_multi_instance && table_is_temporary(child) && !table_is_temporary(parent)) {
+    throw std::runtime_error(
+        "Temporary tables cannot reference shared persistent table " + parent->tableName +
+        " in multi-instance mode.");
+  }
+}
+
 bool constraint_uses_source_column(const TableConstraint& constraint,
                                    const std::string& column_name) {
   return std::any_of(constraint.column_names.begin(),
@@ -4945,11 +4975,7 @@ bool foreign_key_references_table(const TableConstraint& constraint,
 }
 
 bool foreign_key_references_column(const TableConstraint& constraint,
-                                   const std::string& table_name,
                                    const std::string& column_name) {
-  if (!foreign_key_references_table(constraint, table_name)) {
-    return false;
-  }
   return std::any_of(constraint.foreign_key_reference->column_names.begin(),
                      constraint.foreign_key_reference->column_names.end(),
                      [&column_name](const auto& referenced_column) {
@@ -4960,43 +4986,34 @@ bool foreign_key_references_column(const TableConstraint& constraint,
 void validate_table_constraint_dependencies_for_drop(const Catalog& catalog,
                                                      const TableDescriptor* td) {
   CHECK(td);
-  for (const auto source_td : catalog.getAllTableMetadata()) {
-    if (!source_td || source_td->shard >= 0 || source_td->tableId == td->tableId) {
+  for (const auto& [source, constraint] :
+       catalog.getReferencingConstraints(td->tableId)) {
+    if (source == td->tableName) {
       continue;
     }
-    for (const auto& constraint : catalog.getTableConstraints(source_td)) {
-      if (foreign_key_references_table(constraint, td->tableName)) {
-        throw std::runtime_error("Cannot drop table " + td->tableName +
-                                 " because foreign key " +
-                                 constraint.name.value_or("<unnamed>") + " on table " +
-                                 source_td->tableName + " references it.");
-      }
-    }
+    throw std::runtime_error("Cannot drop table " + td->tableName +
+                             " because foreign key " +
+                             constraint.name.value_or("<unnamed>") + " on table " +
+                             source + " references it.");
   }
 }
 
 void validate_table_constraint_dependencies_for_rename(const Catalog& catalog,
                                                        const TableDescriptor* td) {
   CHECK(td);
-  for (const auto source_td : catalog.getAllTableMetadata()) {
-    if (!source_td || source_td->shard >= 0) {
-      continue;
+  for (const auto& [source, constraint] :
+       catalog.getReferencingConstraints(td->tableId)) {
+    if (source == td->tableName) {
+      throw std::runtime_error(
+          "Renaming table " + td->tableName + " with self-referencing foreign key " +
+          constraint.name.value_or("<unnamed>") +
+          " is not supported. Drop the constraint before renaming and recreate it "
+          "afterward.");
     }
-    for (const auto& constraint : catalog.getTableConstraints(source_td)) {
-      if (foreign_key_references_table(constraint, td->tableName)) {
-        if (source_td->tableId == td->tableId) {
-          throw std::runtime_error(
-              "Renaming table " + td->tableName + " with self-referencing foreign key " +
-              constraint.name.value_or("<unnamed>") +
-              " is not supported. Drop the constraint before renaming and recreate it "
-              "afterward.");
-        }
-        throw std::runtime_error("Cannot rename table " + td->tableName +
-                                 " because foreign key " +
-                                 constraint.name.value_or("<unnamed>") + " on table " +
-                                 source_td->tableName + " references it.");
-      }
-    }
+    throw std::runtime_error("Cannot rename table " + td->tableName +
+                             " because foreign key " +
+                             constraint.name.value_or("<unnamed>") + " on table " +
+                             source + " references it.");
   }
 }
 
@@ -5007,22 +5024,21 @@ void validate_table_constraint_dependencies_for_column_change(
     const std::string& operation) {
   CHECK(td);
   CHECK(cd);
-  for (const auto source_td : catalog.getAllTableMetadata()) {
-    if (!source_td || source_td->shard >= 0) {
-      continue;
+  const auto reject = [&](const std::string& source, const TableConstraint& constraint) {
+    throw std::runtime_error("Cannot " + operation + " column " + td->tableName + "." +
+                             cd->columnName + " because constraint " +
+                             constraint.name.value_or("<unnamed>") + " on table " +
+                             source + " depends on it.");
+  };
+  for (const auto& constraint : catalog.getTableConstraints(td)) {
+    if (constraint_uses_source_column(constraint, cd->columnName)) {
+      reject(td->tableName, constraint);
     }
-    for (const auto& constraint : catalog.getTableConstraints(source_td)) {
-      const bool uses_source_column =
-          source_td->tableId == td->tableId &&
-          constraint_uses_source_column(constraint, cd->columnName);
-      const bool uses_referenced_column =
-          foreign_key_references_column(constraint, td->tableName, cd->columnName);
-      if (uses_source_column || uses_referenced_column) {
-        throw std::runtime_error("Cannot " + operation + " column " + td->tableName +
-                                 "." + cd->columnName + " because constraint " +
-                                 constraint.name.value_or("<unnamed>") + " on table " +
-                                 source_td->tableName + " depends on it.");
-      }
+  }
+  for (const auto& [source, constraint] :
+       catalog.getReferencingConstraints(td->tableId)) {
+    if (foreign_key_references_column(constraint, cd->columnName)) {
+      reject(source, constraint);
     }
   }
 }
@@ -5045,27 +5061,60 @@ void validate_table_constraint_dependencies_for_constraint_drop(
                   })) {
     return;
   }
-  for (const auto source_td : catalog.getAllTableMetadata()) {
-    if (!source_td || source_td->shard >= 0) {
-      continue;
-    }
-    for (const auto& constraint : catalog.getTableConstraints(source_td)) {
-      if (constraint.type == TableConstraintType::ForeignKey &&
-          constraint.foreign_key_reference &&
-          boost::iequals(constraint.foreign_key_reference->table_name, td->tableName) &&
-          column_sets_match(constraint.foreign_key_reference->column_names,
-                            dropped_constraint.column_names)) {
-        throw std::runtime_error("Cannot drop constraint " +
-                                 dropped_constraint.name.value_or("<unnamed>") +
-                                 " on table " + td->tableName + " because foreign key " +
-                                 constraint.name.value_or("<unnamed>") + " on table " +
-                                 source_td->tableName + " depends on it.");
-      }
+  for (const auto& [source, constraint] :
+       catalog.getReferencingConstraints(td->tableId)) {
+    if (column_sets_match(constraint.foreign_key_reference->column_names,
+                          dropped_constraint.column_names)) {
+      throw std::runtime_error("Cannot drop constraint " +
+                               dropped_constraint.name.value_or("<unnamed>") +
+                               " on table " + td->tableName + " because foreign key " +
+                               constraint.name.value_or("<unnamed>") + " on table " +
+                               source + " depends on it.");
     }
   }
 }
 
 }  // namespace
+
+void Catalog::insertConstraintRecords(const TableDescriptor& td,
+                                      const std::vector<StoredConstraint>& constraints) {
+  insert_constraint_records(
+      sqliteConnector_,
+      td.tableId,
+      table_is_temporary(&td),
+      constraints,
+      [&](const std::string& name) {
+        const auto parent = getMutableMetadataForTableUnlocked(name);
+        if (!parent || parent->shard >= 0 ||
+            (table_is_temporary(parent) && !table_is_temporary(&td))) {
+          throw std::runtime_error("Invalid referenced table " + name + " for " +
+                                   td.tableName + ".");
+        }
+        return parent->tableId;
+      });
+}
+
+std::vector<std::pair<std::string, TableConstraint>> Catalog::getReferencingConstraints(
+    int parent_id) const {
+  cat_sqlite_lock lock(this);
+  sqliteConnector_.query_with_text_param(
+      "SELECT owner,definition FROM mapd_constraints WHERE parent=?1 UNION ALL "
+      "SELECT owner,definition FROM mapd_temp_constraints WHERE parent=?1 "
+      "ORDER BY owner",
+      std::to_string(parent_id));
+  std::vector<std::pair<std::string, TableConstraint>> result;
+  for (size_t i = 0; i < sqliteConnector_.getNumRows(); ++i) {
+    const auto source = tableDescriptorMapById_.at(sqliteConnector_.getData<int>(i, 0));
+    auto keys = parse_table_constraints_from_key_metainfo(
+        "[" + sqliteConnector_.getData<std::string>(i, 1) + "]");
+    if (keys.size() != 1 || !keys.front().foreign_key_reference) {
+      throw std::runtime_error("Invalid indexed foreign key on table " +
+                               source->tableName + ".");
+    }
+    result.emplace_back(source->tableName, std::move(keys.front()));
+  }
+  return result;
+}
 
 std::vector<TableConstraint> Catalog::getTableConstraints(
     const TableDescriptor* td) const {
@@ -5150,10 +5199,7 @@ TableConstraint Catalog::normalizeTableConstraint(
                              " does not exist.");
   }
   reference.table_name = foreign_td->tableName;
-  if (table_is_temporary(foreign_td) && !table_is_temporary(td)) {
-    throw std::runtime_error("Persistent tables cannot reference temporary table " +
-                             reference.table_name + ".");
-  }
+  validate_foreign_key_lifetime(td, foreign_td);
   reference.column_names =
       normalize_constraint_columns(*this, foreign_td, reference.column_names);
   if (reference.column_names.size() != normalized_constraint.column_names.size()) {
@@ -5243,9 +5289,8 @@ std::vector<TableConstraint> Catalog::normalizeTableConstraintsForCreate(
     }
 
     reference.table_name = self_reference ? td->tableName : foreign_td->tableName;
-    if (!self_reference && table_is_temporary(foreign_td) && !table_is_temporary(td)) {
-      throw std::runtime_error("Persistent tables cannot reference temporary table " +
-                               reference.table_name + ".");
+    if (!self_reference) {
+      validate_foreign_key_lifetime(td, foreign_td);
     }
     reference.column_names =
         self_reference
@@ -5340,11 +5385,9 @@ void Catalog::updateTableConstraintMetadata(
   const auto context = "ALTER TABLE " + td->tableName + " " + operation;
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    for (const auto& [table_id, metadata] : updated_metadata) {
-      sqliteConnector_.query_with_text_params(
-          "UPDATE mapd_tables SET key_metainfo = ? WHERE tableid = ?",
-          std::vector<std::string>{metadata, std::to_string(table_id)});
-    }
+    delete_constraint_records(sqliteConnector_, td->tableId, table_is_temporary(td));
+    insertConstraintRecords(
+        *td, split_key_metadata(updated_metadata.at(td->tableId)).constraints);
   } catch (const std::exception&) {
     end_transaction_or_abort(sqliteConnector_, "ROLLBACK TRANSACTION", context);
     throw;
@@ -5433,6 +5476,7 @@ void Catalog::eraseTableMetadata(const TableDescriptor* td) {
 
 void Catalog::executeDropTableSqliteQueries(const TableDescriptor* td) {
   const int tableId = td->tableId;
+  delete_constraint_records(sqliteConnector_, tableId, table_is_temporary(td));
   sqliteConnector_.query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?",
                                          std::to_string(tableId));
   sqliteConnector_.query_with_text_params(
@@ -6429,7 +6473,9 @@ TableDescriptor* Catalog::createTableFromDiskUnlocked(int32_t table_id) {
   std::string query(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
       "max_chunk_size, frag_page_size, max_rows, partitions, shard_column_id, shard, "
-      "num_shards, key_metainfo, userid, sort_column_id, storage_type, "
+      "num_shards, "
+      "(SELECT m.key_metainfo FROM mapd_table_key_metadata m WHERE "
+      "m.tableid=mapd_tables.tableid), userid, sort_column_id, storage_type, "
       "max_rollback_epochs, is_system_table from mapd_tables WHERE tableid = " +
       std::to_string(table_id));
   sqliteConnector_.query(query);

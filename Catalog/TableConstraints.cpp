@@ -21,7 +21,10 @@
 
 #include "Catalog/TableConstraints.h"
 #include "Shared/JsonUtils.h"
+#include "SqliteConnector/SqliteConnector.h"
 
+#include <map>
+#include <set>
 #include <stdexcept>
 
 #include <rapidjson/document.h>
@@ -205,6 +208,195 @@ std::string remove_table_constraint_from_key_metainfo(
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   remaining_entries.Accept(writer);
   return buffer.GetString();
+}
+
+SplitKeyMetadata split_key_metadata(const std::string& metadata) {
+  auto document = parse_key_metainfo_document(metadata);
+  SplitKeyMetadata result;
+  rapidjson::Value directives(rapidjson::kArrayType);
+  for (auto& entry : document.GetArray()) {
+    const auto constraint = table_constraint_from_json(entry);
+    if (!constraint) {
+      directives.PushBack(entry, document.GetAllocator());
+      continue;
+    }
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    entry.Accept(writer);
+    result.constraints.push_back(
+        {buffer.GetString(),
+         constraint->foreign_key_reference
+             ? std::make_optional(constraint->foreign_key_reference->table_name)
+             : std::nullopt,
+         directives.Size()});
+  }
+  if (result.constraints.empty()) {
+    result.directives = metadata;
+  } else {
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    directives.Accept(writer);
+    result.directives = buffer.GetString();
+  }
+  return result;
+}
+
+namespace {
+std::string constraint_table(bool temporary) {
+  return temporary ? "mapd_temp_constraints" : "mapd_constraints";
+}
+
+void create_constraint_table(SqliteConnector& db, bool temporary) {
+  const auto table = constraint_table(temporary);
+  db.query(
+      std::string("CREATE ") + (temporary ? "TEMP " : "") + "TABLE IF NOT EXISTS " +
+      table +
+      "(owner INTEGER NOT NULL, position INTEGER NOT NULL, parent INTEGER, "
+      "preceding_directives INTEGER NOT NULL, definition TEXT NOT NULL, "
+      "CHECK ((parent IS NOT NULL) IS (upper(definition ->> 'type') = 'FOREIGN KEY')), "
+      "PRIMARY KEY(owner,position)) WITHOUT ROWID");
+  db.query("CREATE INDEX IF NOT EXISTS " + table + "_by_parent ON " + table +
+           "(parent) WHERE parent IS NOT NULL");
+}
+}  // namespace
+
+void delete_constraint_records(SqliteConnector& db, int owner, bool temporary) {
+  db.query_with_text_param(
+      "DELETE FROM " + constraint_table(temporary) + " WHERE owner = ?",
+      std::to_string(owner));
+}
+
+void insert_constraint_records(
+    SqliteConnector& db,
+    int owner,
+    bool temporary,
+    const std::vector<StoredConstraint>& constraints,
+    const std::function<int(const std::string&)>& resolve_parent) {
+  size_t position = 0;
+  for (const auto& entry : constraints) {
+    db.query_with_text_params(
+        "INSERT INTO " + constraint_table(temporary) +
+            "(owner,position,parent,preceding_directives,definition) "
+            "VALUES (?,?,NULLIF(?,''),?,?)",
+        std::vector<std::string>{
+            std::to_string(owner),
+            std::to_string(position++),
+            entry.parent ? std::to_string(resolve_parent(*entry.parent)) : "",
+            std::to_string(entry.preceding_directives),
+            entry.definition});
+  }
+}
+
+void initialize_constraint_storage(SqliteConnector& db) {
+  create_constraint_table(db, true);
+  db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='mapd_constraints'");
+  if (db.getNumRows()) {
+    return;
+  }
+  db.query("BEGIN TRANSACTION");
+  try {
+    create_constraint_table(db, false);
+    db.query("SELECT tableid, name, shard, key_metainfo FROM mapd_tables");
+    struct OldTable {
+      int id;
+      std::string name;
+      bool physical;
+      SplitKeyMetadata keys;
+    };
+    std::map<int, OldTable> tables;
+    std::map<std::string, int> logical_ids;
+    for (size_t i = 0; i < db.getNumRows(); ++i) {
+      const auto id = db.getData<int>(i, 0);
+      const auto name = db.getData<std::string>(i, 1);
+      const bool physical = !db.isNull(i, 2) && db.getData<int>(i, 2) >= 0;
+      if (!physical) {
+        logical_ids.emplace(boost::to_upper_copy(name), id);
+      }
+      try {
+        auto keys = split_key_metadata(db.getData<std::string>(i, 3));
+        if (!keys.constraints.empty()) {
+          tables.emplace(id, OldTable{id, name, physical, std::move(keys)});
+        }
+      } catch (const std::runtime_error& e) {
+        throw std::runtime_error("Cannot migrate constraint metadata for table " + name +
+                                 ": " + e.what());
+      }
+    }
+    // Only discard a physical copy when it agrees with the logical declaration.
+    db.query("SELECT physical_table_id,logical_table_id FROM mapd_logical_to_physical");
+    std::set<int> mapped;
+    for (size_t i = 0; i < db.getNumRows(); ++i) {
+      const auto shard_id = db.getData<int>(i, 0);
+      mapped.insert(shard_id);
+      const auto shard = tables.find(shard_id);
+      const auto logical = tables.find(db.getData<int>(i, 1));
+      if (shard == tables.end() && logical == tables.end()) {
+        continue;
+      }
+      if (shard == tables.end() || logical == tables.end() ||
+          !std::equal(shard->second.keys.constraints.begin(),
+                      shard->second.keys.constraints.end(),
+                      logical->second.keys.constraints.begin(),
+                      logical->second.keys.constraints.end(),
+                      [](const auto& a, const auto& b) {
+                        return a.definition == b.definition;
+                      })) {
+        throw std::runtime_error(
+            "Cannot migrate inconsistent constraints on physical table " +
+            std::to_string(shard_id) + ".");
+      }
+    }
+    for (const auto& item : tables) {
+      const auto& table = item.second;
+      if (table.physical && !mapped.count(table.id)) {
+        throw std::runtime_error("Cannot migrate constraints on unmapped shard " +
+                                 table.name + ".");
+      }
+      if (!table.physical) {
+        insert_constraint_records(
+            db, table.id, false, table.keys.constraints, [&](const std::string& name) {
+              const auto it = logical_ids.find(boost::to_upper_copy(name));
+              if (it == logical_ids.end()) {
+                throw std::runtime_error("Cannot migrate foreign key on " + table.name +
+                                         ": referenced table " + name + " is missing.");
+              }
+              return it->second;
+            });
+      }
+      db.query_with_text_params(
+          "UPDATE mapd_tables SET key_metainfo=? WHERE tableid=?",
+          std::vector<std::string>{table.keys.directives, std::to_string(table.id)});
+    }
+    db.query(
+        "CREATE INDEX IF NOT EXISTS mapd_physical_table_lookup ON "
+        "mapd_logical_to_physical(physical_table_id)");
+    // The Thrift and embedded Calcite readers expose the original ordered JSON array.
+    // Shards project the logical declaration, not another persisted copy.
+    db.query(R"sql(CREATE VIEW mapd_table_key_metadata AS
+      SELECT t.tableid, t.name,
+        CASE WHEN coalesce(t.key_metainfo,'') IN ('','[]') AND NOT EXISTS
+                    (SELECT 1 FROM mapd_constraints WHERE owner=coalesce(p.logical_table_id,t.tableid))
+                  THEN t.key_metainfo
+        WHEN NOT json_valid(coalesce(nullif(t.key_metainfo,''),'[]')) THEN t.key_metainfo
+        WHEN json_type(coalesce(nullif(t.key_metainfo,''),'[]')) != 'array' THEN t.key_metainfo
+        ELSE (SELECT json_group_array(json(value)) FROM (
+          SELECT t.key_metainfo -> d.key AS value, d.key AS slot, 1 AS directive, 0 AS pos
+            FROM json_each(coalesce(nullif(t.key_metainfo,''),'[]')) d
+            WHERE CASE WHEN d.type='object' THEN
+              coalesce(upper(d.value ->> 'type'),'') NOT IN ('FOREIGN KEY','PRIMARY KEY','UNIQUE')
+              ELSE 1 END
+          UNION ALL
+          SELECT definition, preceding_directives, 0, position FROM mapd_constraints
+            WHERE owner=coalesce(p.logical_table_id,t.tableid)
+          ORDER BY slot,directive,pos))
+        END AS key_metainfo
+      FROM mapd_tables t LEFT JOIN mapd_logical_to_physical p
+        ON p.physical_table_id=t.tableid)sql");
+    db.query("END TRANSACTION");
+  } catch (...) {
+    end_transaction_or_abort(db, "ROLLBACK TRANSACTION", "migrating table constraints");
+    throw;
+  }
 }
 
 }  // namespace Catalog_Namespace

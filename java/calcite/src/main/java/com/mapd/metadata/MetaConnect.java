@@ -556,7 +556,7 @@ public class MetaConnect {
   private String getKeyMetainfo(int tableId) {
     try (Statement stmt = catConn.createStatement();
             ResultSet rs = stmt.executeQuery(String.format(
-                    "SELECT key_metainfo FROM mapd_tables where tableid = %d;",
+                    "SELECT key_metainfo FROM mapd_table_key_metadata where tableid = %d;",
                     tableId))) {
       if (rs.next()) {
         return rs.getString("key_metainfo");

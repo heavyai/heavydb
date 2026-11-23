@@ -65,7 +65,7 @@ class TableConstraintTransactionTest : public testing::Test {
     bf::remove_all(dir_);
   }
 
-  void initializeCatalog(bool drop) {
+  void openCatalog(bool fresh) {
     bf::create_directories(dir_ / shared::kCatalogDirectoryName);
     bf::create_directories(dir_ / shared::kDataDirectoryName);
     bf::create_directories(dir_ / shared::kLockfilesDirectoryName /
@@ -77,11 +77,13 @@ class TableConstraintTransactionTest : public testing::Test {
     auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(
         (dir_ / shared::kDataDirectoryName).string(), parameters, nullptr, false);
     calcite_ = std::make_shared<MetadataOnlyCalcite>();
-    SysCatalog::instance().init(dir_.string(), data_mgr, auth_, calcite_, true, {});
+    SysCatalog::instance().init(dir_.string(), data_mgr, auth_, calcite_, fresh, {});
     catalog_ = SysCatalog::instance().getCatalog(shared::kDefaultDbName);
+  }
 
+  const TableDescriptor* createTable(const std::string& name) {
     TableDescriptor table;
-    table.tableName = "constraint_txn_test";
+    table.tableName = name;
     table.userId = shared::kRootUserId;
     table.isView = false;
     table.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
@@ -93,8 +95,15 @@ class TableConstraintTransactionTest : public testing::Test {
     ColumnDescriptor column;
     column.columnName = "id";
     column.columnType = SQLTypeInfo(kINT, true);
-    catalog_->createTable(table, {column}, {}, true);
-    td_ = catalog_->getMetadataForTable(table.tableName, false);
+    auto other = column;
+    other.columnName = "other";
+    catalog_->createTable(table, {column, other}, {}, true);
+    return catalog_->getMetadataForTable(table.tableName, false);
+  }
+
+  void initializeCatalog(bool drop) {
+    openCatalog(true);
+    td_ = createTable("constraint_txn_test");
     CHECK(td_);
     if (drop) {
       catalog_->addTableConstraint(td_, constraint());
@@ -121,7 +130,7 @@ class TableConstraintTransactionTest : public testing::Test {
     initializeCatalog(drop);
     SqliteConnector reader(shared::kDefaultDbName, catalogDirectory());
     reader.query("BEGIN TRANSACTION");
-    reader.query("SELECT key_metainfo FROM mapd_tables");
+    reader.query("SELECT key_metainfo FROM mapd_table_key_metadata");
     changeConstraint(drop);
   }
 
@@ -138,7 +147,8 @@ class TableConstraintTransactionTest : public testing::Test {
   void checkStoredConstraint(bool present) {
     SqliteConnector reader(shared::kDefaultDbName, catalogDirectory());
     reader.query(
-        "SELECT key_metainfo FROM mapd_tables WHERE name = 'constraint_txn_test'");
+        "SELECT key_metainfo FROM mapd_table_key_metadata WHERE name = "
+        "'constraint_txn_test'");
     ASSERT_EQ(reader.getNumRows(), size_t(1));
     const auto constraints = Catalog_Namespace::parse_table_constraints_from_key_metainfo(
         reader.getData<std::string>(0, 0));
@@ -215,6 +225,137 @@ TEST_F(TableConstraintTransactionTest, AddConstraintRollsBackFailedUpdate) {
 
 TEST_F(TableConstraintTransactionTest, DropConstraintRollsBackFailedUpdate) {
   checkUpdateFailure(true);
+}
+
+TEST_F(TableConstraintTransactionTest, DamagedChildDoesNotBlockUnrelatedDdlAfterRestart) {
+  openCatalog(true);
+  const auto parent = createTable("parent");
+  const auto child = createTable("child");
+  const auto unrelated = createTable("unrelated");
+  catalog_->addTableConstraint(parent, constraint());
+  catalog_->addTableConstraint(unrelated, constraint());
+  catalog_->addTableConstraint(child,
+                               {TableConstraintType::ForeignKey,
+                                "child_fk",
+                                {"id"},
+                                Catalog_Namespace::ForeignKeyReference{"parent", {"id"}},
+                                false});
+  catalog_.reset();
+  SysCatalog::destroy();
+  {
+    SqliteConnector db(shared::kDefaultDbName, catalogDirectory());
+    db.query("UPDATE mapd_tables SET key_metainfo='not json' WHERE name='child'");
+  }
+  openCatalog(false);
+  const auto reloaded_parent = catalog_->getMetadataForTable("parent", false);
+  const auto reloaded_child = catalog_->getMetadataForTable("child", false);
+  const auto reloaded_other = catalog_->getMetadataForTable("unrelated", false);
+  ASSERT_NE(nullptr, reloaded_parent);
+  ASSERT_NE(nullptr, reloaded_child);
+  ASSERT_NE(nullptr, reloaded_other);
+  ASSERT_EQ("not json", reloaded_child->keyMetainfo);
+  try {
+    catalog_->dropTable(reloaded_parent);
+    FAIL() << "lost the incoming foreign key";
+  } catch (const std::runtime_error& e) {
+    EXPECT_EQ(
+        "Cannot drop table parent because foreign key child_fk on table child references "
+        "it.",
+        std::string(e.what()));
+  }
+  EXPECT_THROW(catalog_->dropTableConstraint(reloaded_parent, "id_unique"),
+               std::runtime_error);
+  EXPECT_THROW(catalog_->renameTable(reloaded_parent, "renamed_parent"),
+               std::runtime_error);
+  auto col = catalog_->getMetadataForColumn(reloaded_other->tableId, "other");
+  ASSERT_NE(nullptr, col);
+  ASSERT_NO_THROW(catalog_->renameColumn(reloaded_other, col, "spare"));
+  col = catalog_->getMetadataForColumn(reloaded_other->tableId, "spare");
+  ASSERT_NE(nullptr, col);
+  ASSERT_NO_THROW(catalog_->dropColumnTransactional(*reloaded_other, *col));
+  ASSERT_NO_THROW(catalog_->renameTable(reloaded_other, "renamed_other"));
+  ASSERT_NO_THROW(catalog_->dropTable(reloaded_other));
+  ASSERT_NO_THROW(catalog_->dropTable(reloaded_child));
+  EXPECT_NO_THROW(catalog_->dropTable(reloaded_parent));
+}
+
+TEST_F(TableConstraintTransactionTest, FailedAlterPreservesIncomingForeignKey) {
+  openCatalog(true);
+  const auto parent = createTable("parent");
+  const auto child = createTable("child");
+  catalog_->addTableConstraint(parent, constraint());
+  catalog_->addTableConstraint(child,
+                               {TableConstraintType::ForeignKey,
+                                "fk",
+                                {"id"},
+                                Catalog_Namespace::ForeignKeyReference{"parent", {"id"}},
+                                false});
+  auto& db = catalog_->getSqliteConnector();
+  db.query(
+      "CREATE TRIGGER fail_second_record BEFORE INSERT ON mapd_constraints "
+      "WHEN NEW.position=1 BEGIN SELECT RAISE(ABORT,'injected failure'); END");
+  EXPECT_THROW(catalog_->addTableConstraint(child, constraint()), std::runtime_error);
+  ASSERT_EQ(1u, catalog_->getTableConstraints(child).size());
+  const auto keys = catalog_->getReferencingConstraints(parent->tableId);
+  ASSERT_EQ(1u, keys.size());
+  EXPECT_EQ("child", keys[0].first);
+  EXPECT_EQ("fk", keys[0].second.name);
+  EXPECT_THROW(catalog_->dropTable(parent), std::runtime_error);
+  catalog_->dropTableConstraint(child, "fk");
+  EXPECT_NO_THROW(catalog_->dropTable(parent));
+}
+
+TEST_F(TableConstraintTransactionTest, MigratesLegacyReferencesAtomically) {
+  // Use a separate database with the pre-migration schema, not a mock of the index.
+  const std::string fk =
+      R"({"type":"FOREIGN KEY","name":"fk","columns":["id"],"foreign_table":"p","foreign_columns":["id"]})";
+  const std::string directive = R"({"type":"SHARD KEY","name":"id"})";
+  const auto metadata = "[" + fk + "," + directive + "]";
+  {
+    SqliteConnector db("legacy", dir_.string());
+    db.query(
+        "CREATE TABLE mapd_tables(tableid INTEGER PRIMARY KEY,name TEXT,shard "
+        "INTEGER,key_metainfo TEXT)");
+    db.query(
+        "CREATE TABLE mapd_logical_to_physical(physical_table_id "
+        "INTEGER,logical_table_id INTEGER)");
+    db.query_with_text_param(
+        "INSERT INTO mapd_tables VALUES (1,'p',-1,?),(4,'broken',-1,'not json')",
+        R"([{"type":"PRIMARY KEY","name":"pk","columns":["id"]}])");
+    db.query_with_text_param(
+        "INSERT INTO mapd_tables VALUES (2,'c',-1,?1),(3,'c_shard',0,?1)", metadata);
+    db.query("INSERT INTO mapd_logical_to_physical VALUES (3,2)");
+    EXPECT_THROW(Catalog_Namespace::initialize_constraint_storage(db),
+                 std::runtime_error);
+    db.query("SELECT name FROM sqlite_master WHERE name='mapd_constraints'");
+    EXPECT_EQ(0u, db.getNumRows());
+    db.query("SELECT key_metainfo FROM mapd_tables WHERE tableid=2");
+    EXPECT_EQ(metadata, db.getData<std::string>(0, 0));
+    db.query("UPDATE mapd_tables SET key_metainfo='[]' WHERE tableid=4");
+    // Fail after the parent's declaration has already moved. Neither half may commit.
+    db.query("UPDATE mapd_tables SET name='missing' WHERE tableid=1");
+    EXPECT_THROW(Catalog_Namespace::initialize_constraint_storage(db),
+                 std::runtime_error);
+    db.query("SELECT key_metainfo FROM mapd_tables WHERE tableid=1");
+    EXPECT_NE(std::string::npos, db.getData<std::string>(0, 0).find("PRIMARY KEY"));
+    db.query("UPDATE mapd_tables SET name='p' WHERE tableid=1");
+  }
+  {
+    SqliteConnector db("legacy", dir_.string());
+    Catalog_Namespace::initialize_constraint_storage(db);
+    db.query("SELECT owner,parent FROM mapd_constraints WHERE parent IS NOT NULL");
+    ASSERT_EQ(1u, db.getNumRows());
+    EXPECT_EQ(2, db.getData<int>(0, 0));
+    EXPECT_EQ(1, db.getData<int>(0, 1));
+    db.query("SELECT key_metainfo FROM mapd_tables WHERE tableid IN (2,3)");
+    ASSERT_EQ(2u, db.getNumRows());
+    EXPECT_EQ("[" + directive + "]", db.getData<std::string>(0, 0));
+    EXPECT_EQ("[" + directive + "]", db.getData<std::string>(1, 0));
+    db.query("SELECT key_metainfo FROM mapd_table_key_metadata WHERE tableid IN (2,3)");
+    ASSERT_EQ(2u, db.getNumRows());
+    EXPECT_EQ(metadata, db.getData<std::string>(0, 0));
+    EXPECT_EQ(metadata, db.getData<std::string>(1, 0));
+  }
 }
 
 int main(int argc, char** argv) {

@@ -181,6 +181,8 @@ class Catalog final {
   void markTableStatisticsDirty(int table_id) const;
   void removeFragmenterForTable(const int table_id) const;
   std::vector<TableConstraint> getTableConstraints(const TableDescriptor* td) const;
+  std::vector<std::pair<std::string, TableConstraint>> getReferencingConstraints(
+      int parent_id) const;
   std::map<std::string, std::vector<int32_t>> getForeignKeyColumnOrdinals(
       const TableDescriptor* td) const;
   void validateColumnConstraintDependencies(const TableDescriptor* td,
@@ -829,7 +831,7 @@ class Catalog final {
   CustomExpressionMapById custom_expr_map_by_id_;
   TableDictColumnsMap dict_columns_by_table_id_;
 
-  SqliteConnector sqliteConnector_;
+  mutable SqliteConnector sqliteConnector_;
   const DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
 
@@ -889,6 +891,8 @@ class Catalog final {
   void gatherTableConstraintInfo(std::vector<std::string>& definitions,
                                  const TableDescriptor* td,
                                  bool for_archive) const;
+  void insertConstraintRecords(const TableDescriptor& td,
+                               const std::vector<StoredConstraint>& constraints);
   void updateTableConstraintMetadata(
       const TableDescriptor* td,
       const std::function<std::string(const std::string&)>& update,
