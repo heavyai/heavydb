@@ -2218,6 +2218,112 @@ TEST_F(TableConstraintTest, SelfReferentialConstraintAllowsTableDrop) {
   EXPECT_NO_THROW(sql("DROP TABLE test_self_constraint_drop;"));
 }
 
+class SelfReferencingRenameTest : public TableConstraintTest,
+                                  public testing::WithParamInterface<bool> {
+ protected:
+  void SetUp() override {
+    TableConstraintTest::SetUp();
+    sql(std::string("CREATE TABLE emp (id INT NOT NULL, manager INT, PRIMARY KEY(id), "
+                    "CONSTRAINT emp_mgr_fkey FOREIGN KEY(manager) REFERENCES emp(id)") +
+        (GetParam() ? ", SHARD KEY(id)) WITH (SHARD_COUNT=2);" : ");"));
+    sql("INSERT INTO emp VALUES (1,1),(2,1);");
+  }
+
+  void expectRenameRejected(const std::string& query) {
+    auto& catalog = getCatalog();
+    const auto td = catalog.getMetadataForTable("emp", false);
+    ASSERT_NE(nullptr, td);
+    auto tables = catalog.getPhysicalTablesDescriptors(td, false);
+    if (GetParam()) {
+      tables.push_back(td);
+    }
+    std::vector<std::tuple<int, std::string, std::string>> original;
+    for (const auto table : tables) {
+      original.emplace_back(table->tableId, table->tableName, table->keyMetainfo);
+    }
+
+    queryAndAssertException(
+        query,
+        "Renaming table emp with self-referencing foreign key emp_mgr_fkey is not "
+        "supported. Drop the constraint before renaming and recreate it afterward.");
+
+    EXPECT_EQ(nullptr, catalog.getMetadataForTable("staff", false));
+    for (const auto& [id, name, keys] : original) {
+      const auto table = catalog.getMetadataForTable(id, false);
+      ASSERT_NE(nullptr, table);
+      EXPECT_EQ(name, table->tableName);
+      EXPECT_EQ(keys, table->keyMetainfo);
+      auto& sqlite = catalog.getSqliteConnector();
+      sqlite.query("SELECT name, key_metainfo FROM mapd_tables WHERE tableid=" +
+                   std::to_string(id));
+      ASSERT_EQ(size_t(1), sqlite.getNumRows());
+      EXPECT_EQ(name, sqlite.getData<std::string>(0, 0));
+      EXPECT_EQ(keys, sqlite.getData<std::string>(0, 1));
+    }
+    sqlAndCompareResult("SELECT id, manager FROM emp ORDER BY id;",
+                        {{i(1), i(1)}, {i(2), i(1)}});
+  }
+};
+
+TEST_P(SelfReferencingRenameTest, AlterTableExplainsRestrictionWithoutChangingMetadata) {
+  expectRenameRejected("ALTER TABLE emp RENAME TO staff;");
+}
+
+TEST_P(SelfReferencingRenameTest, RenameTableExplainsRestrictionWithoutChangingMetadata) {
+  expectRenameRejected("RENAME TABLE emp TO staff;");
+}
+
+TEST_P(SelfReferencingRenameTest, BatchRenameRejectsBeforeChangingAnyTable) {
+  sql("CREATE TABLE unrelated (id INT);");
+  sql("INSERT INTO unrelated VALUES (3);");
+  const auto id = getCatalog().getMetadataForTable("unrelated", false)->tableId;
+  expectRenameRejected("RENAME TABLE unrelated TO moved, emp TO staff;");
+  const auto td = getCatalog().getMetadataForTable("unrelated", false);
+  ASSERT_NE(nullptr, td);
+  EXPECT_EQ(id, td->tableId);
+  EXPECT_EQ(nullptr, getCatalog().getMetadataForTable("moved", false));
+  sqlAndCompareResult("SELECT id FROM unrelated;", {{i(3)}});
+}
+
+TEST_P(SelfReferencingRenameTest, DropRenameAndRecreatePreservesSelfReference) {
+  sql("ALTER TABLE emp DROP CONSTRAINT emp_mgr_fkey;");
+  sql("ALTER TABLE emp RENAME TO staff;");
+  sql("ALTER TABLE staff ADD CONSTRAINT emp_mgr_fkey "
+      "FOREIGN KEY(manager) REFERENCES staff(id);");
+
+  auto& catalog = getCatalog();
+  EXPECT_EQ(nullptr, catalog.getMetadataForTable("emp", false));
+  const auto td = catalog.getMetadataForTable("staff", false);
+  ASSERT_NE(nullptr, td);
+  auto tables = catalog.getPhysicalTablesDescriptors(td, false);
+  if (GetParam()) {
+    tables.push_back(td);
+  }
+  for (const auto table : tables) {
+    const auto constraints = catalog.getTableConstraints(table);
+    ASSERT_EQ(size_t(2), constraints.size());
+    const auto& fk = constraints.back();
+    EXPECT_EQ(Catalog_Namespace::TableConstraintType::ForeignKey, fk.type);
+    EXPECT_EQ(std::optional<std::string>{"emp_mgr_fkey"}, fk.name);
+    EXPECT_EQ((std::vector<std::string>{"manager"}), fk.column_names);
+    ASSERT_TRUE(fk.foreign_key_reference);
+    EXPECT_EQ("staff", fk.foreign_key_reference->table_name);
+    EXPECT_EQ((std::vector<std::string>{"id"}), fk.foreign_key_reference->column_names);
+    auto& sqlite = catalog.getSqliteConnector();
+    sqlite.query("SELECT key_metainfo FROM mapd_tables WHERE tableid=" +
+                 std::to_string(table->tableId));
+    ASSERT_EQ(size_t(1), sqlite.getNumRows());
+    EXPECT_EQ(table->keyMetainfo, sqlite.getData<std::string>(0, 0));
+  }
+  EXPECT_EQ((std::vector<int32_t>{0}),
+            catalog.getForeignKeyColumnOrdinals(td).at("emp_mgr_fkey"));
+  sqlAndCompareResult("SELECT id, manager FROM staff ORDER BY id;",
+                      {{i(1), i(1)}, {i(2), i(1)}});
+  EXPECT_NO_THROW(sql("DROP TABLE staff;"));
+}
+
+INSTANTIATE_TEST_SUITE_P(NativeTables, SelfReferencingRenameTest, testing::Bool());
+
 TEST_F(TableConstraintTest, DropConstraintReleasesDependencies) {
   sql("DROP TABLE IF EXISTS test_drop_constraint_child;");
   sql("DROP TABLE IF EXISTS test_drop_constraint_parent;");

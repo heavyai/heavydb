@@ -4959,6 +4959,13 @@ void validate_table_constraint_dependencies_for_rename(const Catalog& catalog,
     }
     for (const auto& constraint : catalog.getTableConstraints(source_td)) {
       if (foreign_key_references_table(constraint, td->tableName)) {
+        if (source_td->tableId == td->tableId) {
+          throw std::runtime_error(
+              "Renaming table " + td->tableName + " with self-referencing foreign key " +
+              constraint.name.value_or("<unnamed>") +
+              " is not supported. Drop the constraint before renaming and recreate it "
+              "afterward.");
+        }
         throw std::runtime_error("Cannot rename table " + td->tableName +
                                  " because foreign key " +
                                  constraint.name.value_or("<unnamed>") + " on table " +
