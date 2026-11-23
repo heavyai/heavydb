@@ -582,6 +582,24 @@ TEST_F(PlannerRuleCoverage, LeftJoinCountDistributionRequiresUniqueLeftKeyAndFor
       << unconstrained_plan;
 }
 
+TEST_F(PlannerRuleCoverage, EmbeddedCatalogPreservesSelfReferencingKeyPositions) {
+  run_ddl_statement(
+      "CREATE TABLE planner_self_fk (g POINT, a INT NOT NULL, b INT NOT NULL, "
+      "x INT, y INT, PRIMARY KEY (b,a), FOREIGN KEY (x,y) "
+      "REFERENCES planner_self_fk (b,a));");
+  ScopeGuard drop_table = [&] { run_ddl_statement("DROP TABLE planner_self_fk;"); };
+  const auto distribution_plan = [](const std::string& predicate) {
+    return rel_alg_plan(
+        "SELECT n, COUNT(*) FROM (SELECT p.a, p.b, COUNT(c.x) AS n "
+        "FROM planner_self_fk p LEFT JOIN planner_self_fk c ON " +
+        predicate + " GROUP BY p.a, p.b) counts GROUP BY n");
+  };
+  const auto matched = distribution_plan("c.x=p.b AND c.y=p.a");
+  EXPECT_NE(std::string::npos, matched.find(R"("relOp": "LogicalUnion")")) << matched;
+  const auto swapped = distribution_plan("c.x=p.a AND c.y=p.b");
+  EXPECT_EQ(std::string::npos, swapped.find(R"("relOp": "LogicalUnion")")) << swapped;
+}
+
 TEST_F(PlannerRuleCoverage, ExperimentalQueryRewritesAreOptIn) {
   // Use a shape that is valid for the rewrite so this test isolates the opt-in gate;
   // nullable grouped arguments are covered separately below.
