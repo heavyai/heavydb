@@ -227,7 +227,20 @@ target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES}
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS CreateAndDropTableDdlTest)
 
+find_package(Java REQUIRED COMPONENTS Runtime Development)
+set(STATISTICS_TEST_JAR ${CMAKE_BINARY_DIR}/bin/calcite-1.41.0-SNAPSHOT-jar-with-dependencies.jar)
+set(STATISTICS_TEST_CLASSES ${CMAKE_CURRENT_BINARY_DIR}/java)
+add_custom_command(
+  OUTPUT ${STATISTICS_TEST_CLASSES}/com/mapd/calcite/parser/PlannerMetadataProbe.class
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${STATISTICS_TEST_CLASSES}
+  COMMAND ${Java_JAVAC_EXECUTABLE} -source 8 -target 8
+    -cp ${STATISTICS_TEST_JAR} -d ${STATISTICS_TEST_CLASSES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/PlannerMetadataProbe.java
+  DEPENDS mapd_java_components ${STATISTICS_TEST_JAR} PlannerMetadataProbe.java
+  VERBATIM)
+add_custom_target(planner_metadata_probe DEPENDS ${STATISTICS_TEST_CLASSES}/com/mapd/calcite/parser/PlannerMetadataProbe.class)
 add_executable(TableStatisticsTest TableStatisticsTest.cpp CalciteMetadataTest.cpp)
+add_dependencies(TableStatisticsTest planner_metadata_probe)
 target_link_libraries(TableStatisticsTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 add_test(TableStatisticsTest TableStatisticsTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS TableStatisticsTest)

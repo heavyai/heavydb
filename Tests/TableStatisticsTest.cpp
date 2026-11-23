@@ -4,10 +4,19 @@
  */
 
 #include <gtest/gtest.h>
+#include <boost/process.hpp>
+#include <future>
+#include <thread>
 #include <tuple>
+
+#include <thrift/protocol/TBinaryProtocol.h>
+#include <thrift/server/TThreadedServer.h>
+#include <thrift/transport/TBufferTransports.h>
+#include <thrift/transport/TServerSocket.h>
 
 #include "DBHandlerTestHelpers.h"
 #include "LogCaptureTestHelper.h"
+#include "Shared/heavyai_path.h"
 #include "TestHelpers.h"
 
 using namespace TestHelpers;
@@ -266,6 +275,109 @@ TEST_P(TableStatisticsTest, FailedEpochBatchRetainsSuccessfulShardInvalidation) 
 INSTANTIATE_TEST_SUITE_P(NativeTables,
                          TableStatisticsTest,
                          testing::Combine(testing::Bool(), testing::Bool()));
+
+namespace {
+namespace ts = apache::thrift::server;
+namespace tt = apache::thrift::transport;
+namespace tp = apache::thrift::protocol;
+
+class ListeningEvent : public ts::TServerEventHandler {
+ public:
+  void preServe() override { ready.set_value(); }
+  std::promise<void> ready;
+};
+
+class PlannerMetadataTest : public DBHandlerTestFixture,
+                            public testing::WithParamInterface<std::tuple<bool, bool>> {
+ protected:
+  void runProbe(const std::string& scenario) {
+    const auto [rewrites, sharded] = GetParam();
+    const auto old_rewrites = system_parameters_.enable_experimental_query_rewrites;
+    const auto old_vacuum_selectivity = g_vacuum_min_selectivity;
+    system_parameters_.enable_experimental_query_rewrites = rewrites;
+    g_vacuum_min_selectivity = 1.1;
+    ScopeGuard restore = [&] {
+      system_parameters_.enable_experimental_query_rewrites = old_rewrites;
+      g_vacuum_min_selectivity = old_vacuum_selectivity;
+    };
+
+    auto [handler, session] = getDbHandlerAndSessionId();
+    // The fixture owns the handler. Keep it alive until all Thrift workers stop.
+    auto processor = std::make_shared<HeavyProcessor>(
+        std::shared_ptr<DBHandler>(handler, [](DBHandler*) {}));
+    auto socket = std::make_shared<tt::TServerSocket>("127.0.0.1", 0);
+    ts::TThreadedServer server(processor,
+                               socket,
+                               std::make_shared<tt::TBufferedTransportFactory>(),
+                               std::make_shared<tp::TBinaryProtocolFactory>());
+    auto events = std::make_shared<ListeningEvent>();
+    auto ready = events->ready.get_future();
+    server.setServerEventHandler(events);
+    std::exception_ptr server_error;
+    std::thread worker([&] {
+      try {
+        server.serve();
+      } catch (...) {
+        server_error = std::current_exception();
+        try {
+          events->ready.set_exception(server_error);
+        } catch (const std::future_error&) {
+          // Startup completed; report the server exception after joining below.
+        }
+      }
+    });
+    ScopeGuard stop = [&] {
+      if (worker.joinable()) {
+        server.stop();
+        worker.join();
+      }
+    };
+    ASSERT_EQ(std::future_status::ready, ready.wait_for(std::chrono::seconds(30)));
+    ready.get();
+
+    const auto root = heavyai::get_root_abs_path();
+    const auto classpath = root + "/Tests/java:" + root +
+                           "/bin/calcite-1.41.0-SNAPSHOT-jar-with-dependencies.jar";
+    boost::process::child probe(boost::process::search_path("java"),
+                                "-cp",
+                                classpath,
+                                "com.mapd.calcite.parser.PlannerMetadataProbe",
+                                std::to_string(socket->getPort()),
+                                shared::kDefaultDbName,
+                                scenario,
+                                rewrites ? "true" : "false",
+                                sharded ? "true" : "false");
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(300);
+    while (probe.running() && std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    if (probe.running()) {
+      probe.terminate();
+      probe.wait();
+      FAIL() << "Java metadata probe timed out: " << scenario;
+    }
+    probe.wait();
+    EXPECT_EQ(0, probe.exit_code()) << "Java metadata probe failed: " << scenario;
+    server.stop();
+    worker.join();
+    if (server_error) {
+      std::rethrow_exception(server_error);
+    }
+  }
+};
+
+TEST_P(PlannerMetadataTest, RowCountsReachJavaStatisticsOverThrift) {
+  runProbe("rows");
+}
+
+TEST_P(PlannerMetadataTest, ForeignKeysReachJavaStatisticsOverThrift) {
+  runProbe("keys");
+}
+
+INSTANTIATE_TEST_SUITE_P(NativeTables,
+                         PlannerMetadataTest,
+                         testing::Combine(testing::Bool(), testing::Bool()));
+}  // namespace
 
 int main(int argc, char** argv) {
   // INFO is needed for the metadata-RPC assertions, without changing logging
