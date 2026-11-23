@@ -4832,10 +4832,21 @@ bool constraint_names_match(const TableConstraint& lhs, const TableConstraint& r
   return lhs.name && rhs.name && boost::iequals(*lhs.name, *rhs.name);
 }
 
-std::string generated_constraint_name(
-    const std::string& table_name,
-    const TableConstraint& constraint,
-    const std::vector<TableConstraint>& existing_constraints) {
+std::vector<std::string> get_constraint_names(
+    const std::vector<TableConstraint>& constraints) {
+  std::vector<std::string> names;
+  names.reserve(constraints.size());
+  for (const auto& constraint : constraints) {
+    if (constraint.name && !constraint.name->empty()) {
+      names.emplace_back(*constraint.name);
+    }
+  }
+  return names;
+}
+
+std::string generated_constraint_name(const std::string& table_name,
+                                      const TableConstraint& constraint,
+                                      const std::vector<std::string>& reserved_names) {
   const auto suffix = [&] {
     switch (constraint.type) {
       case TableConstraintType::PrimaryKey:
@@ -4853,12 +4864,10 @@ std::string generated_constraint_name(
   auto candidate = base_name;
   size_t suffix_number = 2;
   const auto name_exists = [&](const std::string& name) {
-    return std::any_of(existing_constraints.begin(),
-                       existing_constraints.end(),
-                       [&](const auto& existing_constraint) {
-                         return existing_constraint.name &&
-                                boost::iequals(*existing_constraint.name, name);
-                       });
+    return std::any_of(
+        reserved_names.begin(), reserved_names.end(), [&](const auto& reserved_name) {
+          return boost::iequals(reserved_name, name);
+        });
   };
   while (name_exists(candidate)) {
     candidate = base_name + "_" + std::to_string(suffix_number++);
@@ -5121,7 +5130,7 @@ TableConstraint Catalog::normalizeTableConstraint(
   const auto existing_constraints = getTableConstraints(td);
   if (!normalized_constraint.name || normalized_constraint.name->empty()) {
     normalized_constraint.name = generated_constraint_name(
-        td->tableName, normalized_constraint, existing_constraints);
+        td->tableName, normalized_constraint, get_constraint_names(existing_constraints));
   }
   validate_new_constraint_against_existing(
       td->tableName, existing_constraints, normalized_constraint);
@@ -5183,6 +5192,8 @@ std::vector<TableConstraint> Catalog::normalizeTableConstraintsForCreate(
 
   std::vector<TableConstraint> normalized_constraints;
   normalized_constraints.reserve(constraints.size());
+  // Explicit names take priority even when their declarations appear later.
+  auto reserved_names = get_constraint_names(constraints);
 
   for (const auto& constraint : constraints) {
     TableConstraint normalized_constraint = constraint;
@@ -5190,8 +5201,9 @@ std::vector<TableConstraint> Catalog::normalizeTableConstraintsForCreate(
     normalized_constraint.column_names =
         normalize_constraint_columns(td->tableName, columns, constraint.column_names);
     if (!normalized_constraint.name || normalized_constraint.name->empty()) {
-      normalized_constraint.name = generated_constraint_name(
-          td->tableName, normalized_constraint, normalized_constraints);
+      normalized_constraint.name =
+          generated_constraint_name(td->tableName, normalized_constraint, reserved_names);
+      reserved_names.emplace_back(*normalized_constraint.name);
     }
     validate_new_constraint_against_existing(
         td->tableName, normalized_constraints, normalized_constraint);

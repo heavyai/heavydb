@@ -1224,6 +1224,143 @@ TEST_P(ForeignKeyIdentityTest, RejectsEquivalentDeclarationsWithDifferentNames) 
 
 INSTANTIATE_TEST_SUITE_P(CreateAndAlter, ForeignKeyIdentityTest, testing::Bool());
 
+class ConstraintNameReservationTest
+    : public TableConstraintTest,
+      public testing::WithParamInterface<std::tuple<std::string, bool, bool>> {};
+
+TEST_P(ConstraintNameReservationTest, ExplicitNamesTakePriorityInEitherOrder) {
+  const auto [kind, explicit_first, sharded] = GetParam();
+  const std::string suffix = kind == "PRIMARY KEY" ? "pkey"
+                             : kind == "UNIQUE"    ? "key"
+                                                   : "fkey";
+  const std::string base_name = "name_child_a_" + suffix;
+  sql("CREATE TABLE name_parent (id INT, PRIMARY KEY(id));");
+  for (const auto& explicit_name : {base_name, boost::to_upper_copy(base_name)}) {
+    SCOPED_TRACE(explicit_name);
+    const auto unnamed =
+        kind + "(a)" + (kind == "FOREIGN KEY" ? " REFERENCES name_parent(id)" : "");
+    const auto named = "CONSTRAINT " + explicit_name + " UNIQUE(b)";
+    const auto declarations =
+        explicit_first ? named + ", " + unnamed : unnamed + ", " + named;
+    sql("CREATE TABLE name_child (a INT NOT NULL, b INT, " + declarations +
+        (sharded ? ", SHARD KEY(a)" : "") + ")" +
+        (sharded ? " WITH (SHARD_COUNT=2)" : "") + ";");
+    auto& catalog = getCatalog();
+    const auto td = catalog.getMetadataForTable("name_child", false);
+    const auto constraints = catalog.getTableConstraints(td);
+    ASSERT_EQ(2u, constraints.size());
+    const auto& explicit_constraint = constraints[explicit_first ? 0 : 1];
+    const auto& generated_constraint = constraints[explicit_first ? 1 : 0];
+    EXPECT_EQ(explicit_name, explicit_constraint.name.value());
+    EXPECT_EQ((std::vector<std::string>{"b"}), explicit_constraint.column_names);
+    EXPECT_EQ(base_name + "_2", generated_constraint.name.value());
+    EXPECT_EQ((std::vector<std::string>{"a"}), generated_constraint.column_names);
+    if (kind == "FOREIGN KEY") {
+      ASSERT_TRUE(generated_constraint.foreign_key_reference);
+      EXPECT_EQ("name_parent", generated_constraint.foreign_key_reference->table_name);
+      EXPECT_EQ((std::vector<int32_t>{0}),
+                catalog.getForeignKeyColumnOrdinals(td).at(base_name + "_2"));
+    }
+    const auto metadata = td->keyMetainfo;
+    auto tables = catalog.getPhysicalTablesDescriptors(td);
+    if (sharded) {
+      tables.push_back(td);
+    }
+    for (const auto table : tables) {
+      EXPECT_EQ(metadata, table->keyMetainfo);
+      auto& connector = catalog.getSqliteConnector();
+      connector.query_with_text_params(
+          "SELECT key_metainfo FROM mapd_tables WHERE tableid = ?",
+          std::vector<std::string>{std::to_string(table->tableId)});
+      EXPECT_EQ(metadata, connector.getData<std::string>(0, 0));
+    }
+    const auto ddl = catalog.dumpCreateTable(td, false);
+    sql("DROP TABLE name_child;");
+    sql(ddl);
+    EXPECT_EQ(metadata, catalog.getMetadataForTable("name_child", false)->keyMetainfo);
+    sql("DROP TABLE name_child;");
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    KeyKindOrderAndSharding,
+    ConstraintNameReservationTest,
+    testing::Combine(testing::Values("PRIMARY KEY", "UNIQUE", "FOREIGN KEY"),
+                     testing::Bool(),
+                     testing::Bool()));
+
+TEST_F(TableConstraintTest, GeneratedForeignKeyNamesSkipReservedAndGeneratedSuffixes) {
+  sql("CREATE TABLE name_parent_a (id INT, PRIMARY KEY(id));");
+  sql("CREATE TABLE name_parent_b (id INT, PRIMARY KEY(id));");
+  sql("CREATE TABLE name_child (a INT, b INT, c INT, "
+      "FOREIGN KEY(a) REFERENCES name_parent_a(id), "
+      "FOREIGN KEY(a) REFERENCES name_parent_b(id), "
+      "CONSTRAINT name_child_a_fkey UNIQUE(b), "
+      "CONSTRAINT name_child_a_fkey_2 UNIQUE(c));");
+  auto& catalog = getCatalog();
+  const auto td = catalog.getMetadataForTable("name_child", false);
+  const auto constraints = catalog.getTableConstraints(td);
+  ASSERT_EQ(4u, constraints.size());
+  EXPECT_EQ("name_child_a_fkey_3", constraints[0].name.value());
+  EXPECT_EQ("name_child_a_fkey_4", constraints[1].name.value());
+  EXPECT_EQ("name_child_a_fkey", constraints[2].name.value());
+  EXPECT_EQ("name_child_a_fkey_2", constraints[3].name.value());
+  ASSERT_TRUE(constraints[0].foreign_key_reference);
+  ASSERT_TRUE(constraints[1].foreign_key_reference);
+  EXPECT_EQ("name_parent_a", constraints[0].foreign_key_reference->table_name);
+  EXPECT_EQ("name_parent_b", constraints[1].foreign_key_reference->table_name);
+  const auto ordinals = catalog.getForeignKeyColumnOrdinals(td);
+  EXPECT_EQ((std::vector<int32_t>{0}), ordinals.at("name_child_a_fkey_3"));
+  EXPECT_EQ((std::vector<int32_t>{0}), ordinals.at("name_child_a_fkey_4"));
+}
+
+TEST_F(TableConstraintTest, UncontestedGeneratedConstraintNamesAreUnchanged) {
+  sql("CREATE TABLE name_parent (id INT, PRIMARY KEY(id));");
+  sql("CREATE TABLE name_child (a INT, b INT, c INT, PRIMARY KEY(a), UNIQUE(b), "
+      "FOREIGN KEY(c) REFERENCES name_parent(id));");
+  const auto constraints = getCatalog().getTableConstraints(
+      getCatalog().getMetadataForTable("name_child", false));
+  ASSERT_EQ(3u, constraints.size());
+  EXPECT_EQ("name_child_a_pkey", constraints[0].name.value());
+  EXPECT_EQ("name_child_b_key", constraints[1].name.value());
+  EXPECT_EQ("name_child_c_fkey", constraints[2].name.value());
+}
+
+TEST_F(TableConstraintTest, DuplicateExplicitConstraintNamesStillRejectCreate) {
+  for (const auto name : {"named_key", "NAMED_KEY"}) {
+    SCOPED_TRACE(name);
+    queryAndAssertPartialException(
+        "CREATE TABLE name_child (a INT, b INT, CONSTRAINT named_key UNIQUE(a), "
+        "CONSTRAINT " +
+            std::string(name) + " UNIQUE(b));",
+        "already exists on table name_child");
+    EXPECT_EQ(nullptr, getCatalog().getMetadataForTable("name_child", false));
+  }
+}
+
+TEST_F(TableConstraintTest, AlterGeneratedConstraintNamesAvoidExistingNames) {
+  sql("CREATE TABLE name_child (a INT, b INT, c INT, d INT, "
+      "CONSTRAINT NAME_CHILD_A_KEY UNIQUE(b), "
+      "CONSTRAINT name_child_a_key_2 UNIQUE(c));");
+  sql("ALTER TABLE name_child ADD UNIQUE(a);");
+  auto& catalog = getCatalog();
+  const auto td = catalog.getMetadataForTable("name_child", false);
+  const auto constraints = catalog.getTableConstraints(td);
+  ASSERT_EQ(3u, constraints.size());
+  EXPECT_EQ("name_child_a_key_3", constraints[2].name.value());
+  EXPECT_EQ((std::vector<std::string>{"a"}), constraints[2].column_names);
+  const auto metadata = td->keyMetainfo;
+  queryAndAssertPartialException(
+      "ALTER TABLE name_child ADD CONSTRAINT name_child_a_key UNIQUE(d);",
+      "already exists on table name_child");
+  EXPECT_EQ(metadata, td->keyMetainfo);
+  auto& connector = catalog.getSqliteConnector();
+  connector.query_with_text_params(
+      "SELECT key_metainfo FROM mapd_tables WHERE tableid = ?",
+      std::vector<std::string>{std::to_string(td->tableId)});
+  EXPECT_EQ(metadata, connector.getData<std::string>(0, 0));
+}
+
 class UniqueKeyMatchingTest : public TableConstraintTest,
                               public testing::WithParamInterface<bool> {
  protected:
