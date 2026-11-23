@@ -64,7 +64,7 @@ class TableStatisticsTest : public DBHandlerTestFixture,
     EXPECT_EQ(count, details.num_rows);
   }
 
-  void expectDeferredRefresh(LogCapture& log, int64_t count) {
+  void expectDeferredRefresh(LogCapture& log, int64_t count, int64_t physical_count) {
     // The mutation must not perform a metadata RPC under its locks.
     EXPECT_FALSE(log.contains(kMetadataRefresh));
     if (!system_parameters_.enable_experimental_query_rewrites) {
@@ -75,9 +75,24 @@ class TableStatisticsTest : public DBHandlerTestFixture,
     expectVisibleRows(count);
     EXPECT_TRUE(log.contains("(ms), catalog=\"" + getCatalog().getCurrentDB().dbName +
                              "\", table=\"statistics_maintenance\""));
-    expectPhysicalRows(count);
+    expectPhysicalRows(physical_count);
     expectVisibleRows(count);
     EXPECT_FALSE(log.contains(kMetadataRefresh));
+  }
+
+  void expectDeferredRefresh(LogCapture& log, int64_t count) {
+    expectDeferredRefresh(log, count, count);
+  }
+
+  void expectNoRefresh(LogCapture& log, int64_t count, int64_t physical_count) {
+    EXPECT_FALSE(log.contains(kMetadataRefresh));
+    expectVisibleRows(count);
+    EXPECT_FALSE(log.contains(kMetadataRefresh));
+    // A write with rewrites off must not leave a redundant marker for later.
+    system_parameters_.enable_experimental_query_rewrites = true;
+    expectVisibleRows(count);
+    EXPECT_FALSE(log.contains(kMetadataRefresh));
+    expectPhysicalRows(physical_count);
   }
 
   // Observe the real Calcite invalidation rather than only a fresh native count.
@@ -100,7 +115,7 @@ TEST_P(TableStatisticsTest, TruncateInvalidatesBeforeNextRewrite) {
 
 TEST_P(TableStatisticsTest, VacuumInvalidatesOnlyWhenPhysicalCountChanges) {
   sql("DELETE FROM statistics_maintenance WHERE id <= 2;");
-  expectVisibleRows(4);   // Drain DELETE's pending refresh before OPTIMIZE.
+  expectVisibleRows(4);
   expectPhysicalRows(6);  // Deleted slots still contribute to the estimate.
 
   system_parameters_.enable_experimental_query_rewrites = std::get<1>(GetParam());
@@ -110,6 +125,65 @@ TEST_P(TableStatisticsTest, VacuumInvalidatesOnlyWhenPhysicalCountChanges) {
 
   sql("OPTIMIZE TABLE statistics_maintenance WITH (VACUUM='true');");
   expectVisibleRows(4);
+  EXPECT_FALSE(log.contains(kMetadataRefresh));
+}
+
+TEST_P(TableStatisticsTest, FixedWidthUpdateDoesNotInvalidateRowCount) {
+  sql("ALTER TABLE statistics_maintenance ADD COLUMN val INT DEFAULT 0;");
+  expectVisibleRows(6);
+  for (const auto* predicate : {"id > 0", "id < 0"}) {
+    SCOPED_TRACE(predicate);
+    system_parameters_.enable_experimental_query_rewrites = std::get<1>(GetParam());
+    LogCapture log;
+    sql(std::string("UPDATE statistics_maintenance SET val = id * 10 WHERE ") +
+        predicate + ";");
+    expectNoRefresh(log, 6, 6);
+    sqlAndCompareResult("SELECT id, val FROM statistics_maintenance ORDER BY id;",
+                        {{i(1), i(10)},
+                         {i(2), i(20)},
+                         {i(3), i(30)},
+                         {i(4), i(40)},
+                         {i(5), i(50)},
+                         {i(6), i(60)}});
+    EXPECT_FALSE(log.contains(kMetadataRefresh));
+  }
+}
+
+TEST_P(TableStatisticsTest, DeleteWithoutVacuumDoesNotInvalidateRowCount) {
+  for (const auto* predicate : {"id <= 2", "id < 0"}) {
+    SCOPED_TRACE(predicate);
+    system_parameters_.enable_experimental_query_rewrites = std::get<1>(GetParam());
+    LogCapture log;
+    sql(std::string("DELETE FROM statistics_maintenance WHERE ") + predicate + ";");
+    expectNoRefresh(log, 4, 6);
+    sqlAndCompareResult("SELECT id FROM statistics_maintenance ORDER BY id;",
+                        {{i(3)}, {i(4)}, {i(5)}, {i(6)}});
+    EXPECT_FALSE(log.contains(kMetadataRefresh));
+  }
+}
+
+TEST_P(TableStatisticsTest, VariableWidthUpdateInvalidatesAppendedRows) {
+  sql("ALTER TABLE statistics_maintenance ADD COLUMN label TEXT ENCODING NONE;");
+  expectVisibleRows(6);
+  system_parameters_.enable_experimental_query_rewrites = std::get<1>(GetParam());
+  LogCapture log;
+  sql("UPDATE statistics_maintenance SET label = 'updated' WHERE id <= 2;");
+  // Replacement rows are appended; the two deleted versions remain until vacuum.
+  expectDeferredRefresh(log, 6, 8);
+  sqlAndCompareResult(
+      "SELECT id, label FROM statistics_maintenance WHERE id <= 2 ORDER BY id;",
+      {{i(1), "updated"}, {i(2), "updated"}});
+  EXPECT_FALSE(log.contains(kMetadataRefresh));
+}
+
+TEST_P(TableStatisticsTest, DeleteWithAutomaticVacuumInvalidatesRowCount) {
+  g_vacuum_min_selectivity = 0.0;
+  system_parameters_.enable_experimental_query_rewrites = std::get<1>(GetParam());
+  LogCapture log;
+  sql("DELETE FROM statistics_maintenance WHERE id <= 2;");
+  expectDeferredRefresh(log, 4);
+  sqlAndCompareResult("SELECT id FROM statistics_maintenance ORDER BY id;",
+                      {{i(3)}, {i(4)}, {i(5)}, {i(6)}});
   EXPECT_FALSE(log.contains(kMetadataRefresh));
 }
 

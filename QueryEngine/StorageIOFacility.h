@@ -126,7 +126,6 @@ class StorageIOFacility {
         // If commitUpdate() did not checkpoint, checkpoint here to persist table data.
         catalog.checkpointWithAutoRollback(table_descriptor_->tableId);
       }
-      catalog.markTableStatisticsDirty(table_descriptor_->tableId);
     }
 
     auto tableIsTemporary() const { return table_is_temporary_; }
