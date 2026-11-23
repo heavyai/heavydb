@@ -2412,6 +2412,25 @@ TEST_F(Select, LimitAndOffset) {
   }
 }
 
+TEST_F(Select, LimitAndOffsetAbovePreflightCountThreshold) {
+  // Regression test: when the filtered-count preflight sizes the output
+  // buffer for an unordered LIMIT/OFFSET projection, the scan_limit override
+  // must clamp to LIMIT + OFFSET. Clamping to LIMIT alone makes the scan
+  // materialize only LIMIT rows, so dropFirstN(OFFSET) silently returns
+  // max(0, LIMIT - OFFSET) rows.
+  CHECK(g_num_rows >= 10);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Lower the preflight-count threshold via hint so the 10-row test table
+    // exercises the filtered_count_all scan_limit override.
+    const auto rows = run_multiple_agg(
+        "SELECT /*+ g_preflight_count_query_threshold(2) */ * FROM test LIMIT 2 "
+        "OFFSET 5;",
+        dt);
+    ASSERT_EQ(size_t(2), rows->rowCount());
+  }
+}
+
 TEST_F(Select, LimitAndOffsetFromSubquery) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
