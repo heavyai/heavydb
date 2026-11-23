@@ -516,6 +516,13 @@ public final class HeavyDBParser {
     this.dbUser = dbUser;
   }
 
+  private boolean allowExperimentalRewrites(HeavyDBParserOptions options) {
+    // Row policies are injected after the first optimization phase. A key can
+    // describe the whole table without describing the rows visible to this user.
+    return options.isExperimentalQueryRewritesEnabled()
+            && (dbUser.getRestrictions() == null || dbUser.getRestrictions().isEmpty());
+  }
+
   public static class ProcessResult {
     public String json_str;
     public SqlIdentifierCapturer capturer;
@@ -542,7 +549,7 @@ public final class HeavyDBParser {
   public String buildRATreeAndPerformQueryOptimization(
           String query, final HeavyDBParserOptions parserOptions) throws IOException {
     final boolean previousMetadataState = HeavyDBTable.setOptimizerMetadataEnabled(
-            parserOptions.isExperimentalQueryRewritesEnabled());
+            allowExperimentalRewrites(parserOptions));
     final boolean previousConstraintTrustState =
             HeavyDBTable.setTrustUnenforcedTableConstraints(
                     parserOptions.trustUnenforcedTableConstraints());
@@ -580,7 +587,7 @@ public final class HeavyDBParser {
     callCount++;
 
     final boolean previousMetadataState = HeavyDBTable.setOptimizerMetadataEnabled(
-            parserOptions.isExperimentalQueryRewritesEnabled());
+            allowExperimentalRewrites(parserOptions));
     final boolean previousConstraintTrustState =
             HeavyDBTable.setTrustUnenforcedTableConstraints(
                     parserOptions.trustUnenforcedTableConstraints());
@@ -1253,7 +1260,7 @@ public final class HeavyDBParser {
             relRootNode.project(),
             parserOptions.isViewOptimizeEnabled(),
             foundView,
-            parserOptions.isExperimentalQueryRewritesEnabled());
+            allowExperimentalRewrites(parserOptions));
     relRootNode = replaceIsTrue(planner.getTypeFactory(),
             new RelRoot(rootNode,
                     relRootNode.validatedRowType,

@@ -600,6 +600,32 @@ TEST_F(PlannerRuleCoverage, EmbeddedCatalogPreservesSelfReferencingKeyPositions)
   EXPECT_EQ(std::string::npos, swapped.find(R"("relOp": "LogicalUnion")")) << swapped;
 }
 
+TEST_F(PlannerRuleCoverage, LeftJoinCountDistributionIsSkippedForRowLevelSecurity) {
+  const std::string query = R"sql(
+      SELECT n, COUNT(*) FROM (
+        SELECT c.c_custkey, COUNT(o.o_orderkey) AS n
+        FROM planner_customer_pk c
+        LEFT JOIN planner_orders_fk o ON c.c_custkey = o.o_custkey
+        GROUP BY c.c_custkey
+      ) counts GROUP BY n
+  )sql";
+  const auto unrestricted = rel_alg_plan(query);
+  ASSERT_NE(std::string::npos, unrestricted.find(R"("relOp": "LogicalUnion")"))
+      << unrestricted;
+
+  auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+  const auto catalog = QR::get()->getCatalog();
+  sys_catalog.createPolicy(
+      *catalog, {"planner_customer_pk", "c_custkey"}, TEST_USER, {"1"});
+  ScopeGuard cleanup = [&] {
+    sys_catalog.dropPolicy(*catalog, {"planner_customer_pk", "c_custkey"}, TEST_USER);
+  };
+  const auto restricted = rel_alg_plan(query);
+  EXPECT_NE(std::string::npos, restricted.find(R"("joinType": "left")")) << restricted;
+  EXPECT_EQ(std::string::npos, restricted.find(R"("relOp": "LogicalUnion")"))
+      << restricted;
+}
+
 TEST_F(PlannerRuleCoverage, ExperimentalQueryRewritesAreOptIn) {
   // Use a shape that is valid for the rewrite so this test isolates the opt-in gate;
   // nullable grouped arguments are covered separately below.
