@@ -796,6 +796,10 @@ HeavyDB validates the referenced tables, columns, types, and presence of a decla
 referenced unique key at DDL time. It also blocks schema operations that would leave
 recorded dependencies dangling.
 
+Persistent foreign keys work across servers sharing a catalog. In multi-instance mode,
+a temporary table cannot reference a persistent parent: another server could drop the
+parent without seeing the temporary child.
+
 On CREATE TABLE, PRIMARY KEY implies NOT NULL for its columns. ALTER TABLE ADD PRIMARY
 KEY requires those columns to be NOT NULL already; it does not silently change the
 nullability of populated storage. Existing nullable declarations are not migrated.
@@ -1745,16 +1749,24 @@ from the target host's capacity and workload needs.
 | Result-reduction pipeline | No | Not applicable | Restart with flag false |
 | Prefetch/bypass/jump/peer copy | No | Not applicable | Restart with prior settings |
 | Cubin cache | Separate disposable files | Older binary ignores unless configured to same path | Stop server and remove cache files |
-| Declarative constraints | Yes, catalog `key_metainfo` | Older planner ignores the new proofs and may not protect dependency DDL | Drop constraints before downgrade if old software will mutate schema/data |
+| Declarative constraints | Yes, catalog constraint records | A binary without FK support can drop or rename a referenced object | Keep the migrated catalog out of reach of older writers; see below |
 | Advisory manifests | Extra checksummed files | Ordinary table data remains authoritative | Disable flag; retain required manifests for sidecar-only tables |
 | Fragment size | Yes, table layout and fragment boundaries | Supported | Create and reload a table with the prior `FRAGMENT_SIZE`; `OPTIMIZE TABLE` does not refragment it |
 | Native compression | Per-chunk metadata/payload format | Fails fast on a compressed chunk | `OPTIMIZE TABLE t WITH (STORAGE_COMPRESSION='NONE');` under new binary |
 | Sidecar-only metadata | FileMgr v3 plus mandatory manifest | Fails fast on table format v3 | Set rollback epochs above zero and checkpoint/optimize under new binary |
 
-Once constraints are declared, keep writable catalog access on a binary that understands
-their dependency semantics. An older binary can make schema or data changes that
-invalidate those declarations; dropping the constraints before such a downgrade avoids
-leaving stale metadata for a later upgrade.
+Before upgrading, take a consistent snapshot of the catalog and table data together.
+For a writable rollback, restore that snapshot with its matching binary. To test an
+older binary, use a separate copy rather than giving it write access to the migrated
+catalog.
+
+Re-upgrading reads the stored declarations; it does not replay intervening DDL or
+repair broken references. For example, if an older binary drops and recreates
+`parent`, the same name does not prove it is the original table. If an older binary
+has already changed the schema, do not rely on the declarations until you have
+checked them against the intended schema and [validated the data](#constraint-validation-queries)
+with `--trust-unenforced-table-constraints=false`. Turning trust off changes planning;
+it does not repair catalog metadata.
 
 ## Correctness validation without a production-data copy
 
