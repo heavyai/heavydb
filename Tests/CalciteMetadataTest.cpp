@@ -9,10 +9,8 @@
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <functional>
 #include <future>
-#include <mutex>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -47,28 +45,19 @@ class MetadataCalcite : public Calcite {
 class PausedUpdate {
  public:
   void pause() {
-    std::unique_lock<std::mutex> lock(mutex_);
-    entered_ = true;
-    condition_.notify_all();
-    condition_.wait(lock, [this] { return released_; });
+    entered_.set_value();
+    released_.get_future().wait();
   }
 
   bool waitForEntry() {
-    std::unique_lock<std::mutex> lock(mutex_);
-    return condition_.wait_for(lock, 5s, [this] { return entered_; });
+    return entered_.get_future().wait_for(5s) == std::future_status::ready;
   }
 
-  void release() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    released_ = true;
-    condition_.notify_all();
-  }
+  void release() { released_.set_value(); }
 
  private:
-  std::mutex mutex_;
-  std::condition_variable condition_;
-  bool entered_{false};
-  bool released_{false};
+  std::promise<void> entered_;
+  std::promise<void> released_;
 };
 
 }  // namespace
