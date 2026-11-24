@@ -32,6 +32,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -39,6 +40,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -473,8 +475,6 @@ public class MetaConnect {
   }
 
   private TTableDetails get_table_detail_SQL(String tableName) {
-    TTableDetails td = new TTableDetails();
-    td.getRow_descIterator();
     int id = getTableId(tableName);
     if (id == -1) {
       try {
@@ -490,13 +490,28 @@ public class MetaConnect {
       }
     }
 
-    // read data from table
+    TTableDetails td = getColumnDetails(id);
+    if (isView(tableName)) {
+      td.setView_sqlIsSet(true);
+      td.setView_sql(getViewSqlViaSql(id));
+    }
+    String keyMetainfo = getKeyMetainfo(id);
+    if (keyMetainfo != null) {
+      td.setKey_metainfo(keyMetainfo);
+      if (!keyMetainfo.isEmpty() && !keyMetainfo.equals("[]")) {
+        loadForeignKeyOrdinals(id, td);
+      }
+    }
+    return td;
+  }
+
+  private TTableDetails getColumnDetails(int id) {
+    TTableDetails td = new TTableDetails();
     Statement stmt = null;
     ResultSet rs = null;
     try {
       stmt = catConn.createStatement();
       HEAVYDBLOGGER.debug("table id is " + id);
-      HEAVYDBLOGGER.debug("table name is " + tableName);
       String query = String.format("SELECT * FROM mapd_columns where tableid = %d and "
                       + "not is_deletedcol order by columnid;",
               id);
@@ -578,15 +593,43 @@ public class MetaConnect {
         }
       }
     }
-    if (isView(tableName)) {
-      td.setView_sqlIsSet(true);
-      td.setView_sql(getViewSqlViaSql(id));
-    }
-    String keyMetainfo = getKeyMetainfo(id);
-    if (keyMetainfo != null) {
-      td.setKey_metainfo(keyMetainfo);
-    }
     return td;
+  }
+
+  private void loadForeignKeyOrdinals(int id, TTableDetails td) {
+    String query = "SELECT c.parent, c.definition ->> 'name', col.value "
+            + "FROM mapd_constraints c, json_each(c.definition, '$.foreign_columns') col "
+            + "WHERE c.owner = coalesce((SELECT logical_table_id FROM "
+            + "mapd_logical_to_physical WHERE physical_table_id = ?1), ?1) "
+            + "AND c.parent IS NOT NULL ORDER BY c.parent, c.position, col.key";
+    try (PreparedStatement stmt = catConn.prepareStatement(query)) {
+      stmt.setInt(1, id);
+      try (ResultSet rs = stmt.executeQuery()) {
+        Map<String, List<Integer>> keys = new HashMap<>();
+        Map<String, Integer> ordinals = new HashMap<>();
+        int previousParent = -1;
+        while (rs.next()) {
+          int parent = rs.getInt(1);
+          if (parent != previousParent) {
+            // Read the same visible column layout Calcite uses, not the parent's keys.
+            // Two tables may reference each other.
+            TTableDetails columns = parent == id ? td : getColumnDetails(parent);
+            ordinals.clear();
+            for (int i = 0; i < columns.getRow_descSize(); ++i) {
+              ordinals.put(columns.getRow_desc().get(i).col_name.toUpperCase(Locale.ROOT), i);
+            }
+            previousParent = parent;
+          }
+          keys.computeIfAbsent(rs.getString(2), ignored -> new ArrayList<>())
+                  .add(ordinals.getOrDefault(rs.getString(3).toUpperCase(Locale.ROOT), -1));
+        }
+        if (!keys.isEmpty()) {
+          td.setForeign_key_column_ordinals(keys);
+        }
+      }
+    } catch (SQLException ex) {
+      throw new RuntimeException("Error reading foreign key ordinals for table " + id, ex);
+    }
   }
 
   private String getKeyMetainfo(int tableId) {

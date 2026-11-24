@@ -1809,6 +1809,36 @@ TEST_P(ForeignKeyMetadataTest, UnresolvedForeignKeyDoesNotHideChildOrSiblingKey)
 
 INSTANTIATE_TEST_SUITE_P(TableDetailsEndpoints, ForeignKeyMetadataTest, testing::Bool());
 
+TEST_F(TableConstraintTest, LeftJoinCountDistributionHonorsRowPolicy) {
+  sql("CREATE TABLE policy_customers (id INT NOT NULL, PRIMARY KEY(id));");
+  sql("CREATE TABLE policy_orders (id INT NOT NULL, customer INT NOT NULL, "
+      "FOREIGN KEY(customer) REFERENCES policy_customers(id));");
+  sql("INSERT INTO policy_customers VALUES (1), (2), (3), (4);");
+  sql("INSERT INTO policy_orders VALUES (10,1), (11,1), (12,2);");
+  createTestUser();
+  ScopeGuard drop_user = [&] { dropTestUser(); };
+  sql("GRANT SELECT ON TABLE policy_customers TO test_user;");
+  sql("GRANT SELECT ON TABLE policy_orders TO test_user;");
+  sql("CREATE POLICY ON COLUMN policy_customers.id TO test_user VALUES (1,3);");
+  login("test_user", "test_pass");
+  const auto old_rewrites = system_parameters_.enable_experimental_query_rewrites;
+  const auto old_trust = system_parameters_.trust_unenforced_table_constraints;
+  ScopeGuard restore = [&] {
+    system_parameters_.enable_experimental_query_rewrites = old_rewrites;
+    system_parameters_.trust_unenforced_table_constraints = old_trust;
+  };
+  system_parameters_.trust_unenforced_table_constraints = true;
+  for (const bool rewrites : {false, true}) {
+    SCOPED_TRACE(rewrites);
+    system_parameters_.enable_experimental_query_rewrites = rewrites;
+    sqlAndCompareResult(
+        "SELECT n, COUNT(*) FROM (SELECT c.id, COUNT(o.id) AS n "
+        "FROM policy_customers c LEFT JOIN policy_orders o ON c.id=o.customer "
+        "GROUP BY c.id) counts GROUP BY n ORDER BY n;",
+        {{i(0), i(1)}, {i(2), i(1)}});
+  }
+}
+
 TEST_F(TableConstraintTest, ForeignKeyRequiresReferencedTablePrivileges) {
   sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, PRIMARY KEY(id));");
   createTestUser();
