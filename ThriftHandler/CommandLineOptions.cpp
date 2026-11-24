@@ -1014,7 +1014,8 @@ void CommandLineOptions::fillDeveloperOptions() {
           ->default_value(system_parameters.trust_unenforced_table_constraints)
           ->implicit_value(true),
       "Allow Calcite to use declarative but unenforced PRIMARY KEY, UNIQUE, and "
-      "FOREIGN KEY constraints as optimizer proofs. Only enable this when existing "
+      "FOREIGN KEY constraints as optimizer proofs. Requires "
+      "--enable-experimental-query-rewrites. Only enable this when existing "
       "and future table data satisfies every declared constraint.");
   desc.add_options()("enable-columnar-output",
                      po::value<bool>(&g_enable_columnar_output)
