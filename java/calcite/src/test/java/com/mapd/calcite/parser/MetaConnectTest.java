@@ -10,8 +10,12 @@ import com.mapd.common.SockTransportProperties;
 import com.mapd.metadata.MetaConnect;
 import com.mapd.parser.server.CalciteServerHandler;
 
+import org.apache.calcite.plan.RelOptTable;
+import org.apache.calcite.plan.RelOptUtil;
+import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.Table;
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.util.mapping.IntPair;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TField;
@@ -39,6 +43,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import ai.heavy.thrift.calciteserver.CalciteServer;
@@ -308,6 +313,93 @@ public class MetaConnectTest {
     assertNotSame(view, connection.getTable("view"));
     assertNotSame(tables, connection.getTables());
     assertSame(unrelated, connection.getTable("unrelated"));
+  }
+
+  @Test
+  public void expandedViewsFollowTheirBaseTableStatistics() throws Exception {
+    File catalog = new File(temporary.newFolder("catalogs"), DATABASE);
+    try (Connection db = DriverManager.getConnection("jdbc:sqlite:" + catalog);
+            Statement sql = db.createStatement()) {
+      sql.execute("CREATE TABLE mapd_tables (tableid INT, name TEXT)");
+      sql.execute("CREATE TABLE mapd_views (tableid INT, sql TEXT)");
+      sql.execute(
+              "INSERT INTO mapd_tables VALUES (1,'base_t'), (2,'inner_v'), (3,'outer_v')");
+      sql.execute("INSERT INTO mapd_views VALUES (2,'SELECT id FROM base_t;'),"
+              + "(3,'SELECT id FROM inner_v;')");
+    }
+    AtomicInteger rows = new AtomicInteger(0);
+    AtomicReference<Runnable> whileBindingScan = new AtomicReference<>();
+    MetaConnect connection = connection(name -> {
+      TTableDetails td = details(rows.get());
+      if (name.equals("base_t")) {
+        TColumnType column = td.row_desc.get(0);
+        column.setCol_type(new TTypeInfo(column.col_type) {
+          @Override
+          public TDatumType getType() {
+            Runnable hook = whileBindingScan.getAndSet(null);
+            if (hook != null) hook.run();
+            return super.getType();
+          }
+        });
+      } else {
+        td.setView_sql("view");
+      }
+      return td;
+    });
+    connection.getTables();
+    connection.getTable("base_t");
+    HeavyDBView inner = (HeavyDBView) connection.getTable("inner_v");
+    HeavyDBView outer = (HeavyDBView) connection.getTable("outer_v");
+    HeavyDBParser parser = new HeavyDBParser(temporary.getRoot().getPath(),
+            ()
+                    -> new HeavyDBSqlOperatorTable(SqlStdOperatorTable.instance()),
+            -1,
+            null);
+    parser.setUser(new HeavyDBUser("admin", "", DATABASE, -1, Collections.emptyList()));
+    HeavyDBParser.CURRENT_PARSER.set(parser);
+    try {
+      RelNode original = outer.toRel(null, null);
+      assertEquals(Double.valueOf(0), scanRows(original));
+      invalidateStatistics(OTHER_DATABASE, "base_t");
+      invalidateStatistics(DATABASE, "unrelated");
+      assertSame(original, outer.toRel(null, null));
+
+      rows.set(6);
+      invalidateStatistics(DATABASE, "BASE_T");
+      assertEquals(Double.valueOf(6),
+              connection.getTable("base_t").getStatistic().getRowCount());
+      RelNode refreshed = outer.toRel(null, null);
+      assertEquals(Double.valueOf(6), scanRows(refreshed));
+      assertEquals(Double.valueOf(6), scanRows(inner.toRel(null, null)));
+      assertSame(refreshed, outer.toRel(null, null));
+      assertEquals(Double.valueOf(0),
+              scanRows(original)); // Existing planners keep their snapshot.
+
+      // Replace the source while Calcite binds it, before the view plan is published.
+      rows.set(7);
+      invalidateStatistics(DATABASE, "base_t");
+      connection.getTable("base_t");
+      whileBindingScan.set(() -> {
+        rows.set(8);
+        invalidateStatistics(DATABASE, "base_t");
+        connection.getTable("base_t");
+      });
+      outer.toRel(null, null);
+      assertNull(whileBindingScan.get());
+      assertEquals(Double.valueOf(8), scanRows(outer.toRel(null, null)));
+    } finally {
+      HeavyDBParser.CURRENT_PARSER.remove();
+    }
+  }
+
+  private static Double scanRows(RelNode root) {
+    Set<RelOptTable> tables = RelOptUtil.findTables(root);
+    assertEquals(1, tables.size());
+    return tables.iterator()
+            .next()
+            .unwrap(HeavyDBTable.class)
+            .getStatistic()
+            .getRowCount();
   }
 
   @Test

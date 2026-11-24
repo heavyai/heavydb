@@ -183,6 +183,32 @@ public class MetaConnect {
     return this.parser;
   }
 
+  // A view expansion keeps the table objects it was planned against. Snapshot
+  // the resolved base tables before planning so an overlapping refresh cannot
+  // make an old expansion appear current.
+  public static final class ViewSources {
+    private final Map<List<String>, Table> snapshot = new HashMap<>();
+
+    public ViewSources(Set<? extends List<String>> sources) {
+      for (List<String> source : sources) {
+        // SqlIdentifierCapturer returns [table, database].
+        List<String> key = ImmutableList.of(
+                source.get(1).toUpperCase(), source.get(0).toUpperCase());
+        snapshot.put(key, DB_TABLE_DETAILS.get(key));
+      }
+    }
+
+    public boolean isCurrent() {
+      for (Entry<List<String>, Table> entry : snapshot.entrySet()) {
+        if (entry.getValue() == null
+                || DB_TABLE_DETAILS.get(entry.getKey()) != entry.getValue()) {
+          return false;
+        }
+      }
+      return true;
+    }
+  }
+
   String getCatalogFileName(String catalog) {
     String path = dataDir + "/" + CATALOG_DIR_NAME;
     File directory = new File(path);
