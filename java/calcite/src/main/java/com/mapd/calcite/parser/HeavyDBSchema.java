@@ -89,8 +89,8 @@ public class HeavyDBSchema implements Schema {
     throw new UnsupportedOperationException("Not supported yet.");
   }
 
-  void updateMetaData(String schema, String table) {
-    metaConnect.updateMetaData(schema, table);
+  void updateMetaData(String schema, String table, boolean statisticsOnly) {
+    metaConnect.updateMetaData(schema, table, statisticsOnly);
   }
 
   @Override

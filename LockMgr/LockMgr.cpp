@@ -166,10 +166,7 @@ TableLockMgrImpl<T>::getClusterTableMutex(const ChunkKey& table_key) const {
   // such as the list of tables that exist, dashboards, etc. This is accomplished by
   // read locking, and immediately unlocking, dcatalogMutex_, so
   // cat->reloadCatalogMetadataUnlocked() will be called.
-  auto cb_reload_catalog_metadata = [table_key](bool write) {
-    if constexpr (T::kind == "insert") {
-      CHECK(write);  // The insert lock is for writing, never for reading.
-    }
+  auto cb_reload_catalog_metadata = [table_key](bool /*write*/) {
     auto cat =
         Catalog_Namespace::SysCatalog::instance().getCatalog(table_key[CHUNK_KEY_DB_IDX]);
     CHECK(cat);

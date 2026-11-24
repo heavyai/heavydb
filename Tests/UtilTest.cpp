@@ -4,6 +4,7 @@
  */
 
 #include "Shared/Intervals.h"
+#include "Shared/JsonUtils.h"
 #include "Shared/StringTransform.h"
 #include "TestHelpers.h"
 #include "Utils/Regexp.h"
@@ -15,6 +16,159 @@
 #include <array>
 #include <atomic>
 #include <future>
+
+namespace {
+template <typename T>
+void check_json_round_trip(const T& expected) {
+  rapidjson::Document document;
+  json_utils::set_value(document, expected, document.GetAllocator());
+  const auto serialized = json_utils::write_to_string(document);
+  const auto parsed = json_utils::read_from_string(serialized);
+  ASSERT_FALSE(parsed.HasParseError());
+  T actual{};
+  json_utils::get_value(parsed, actual);
+  EXPECT_EQ(expected, actual);
+}
+}  // namespace
+
+TEST(JsonUtils, ScalarRoundTrips) {
+  check_json_round_trip(std::numeric_limits<size_t>::max());
+  check_json_round_trip(std::numeric_limits<int>::min());
+  check_json_round_trip(std::numeric_limits<int>::max());
+  check_json_round_trip(std::numeric_limits<int64_t>::min());
+  check_json_round_trip(std::numeric_limits<int64_t>::max());
+  check_json_round_trip(std::string("quoted \"column\""));
+  check_json_round_trip(std::string{});
+  check_json_round_trip(true);
+  check_json_round_trip(false);
+  check_json_round_trip(kTEXT);
+  check_json_round_trip(kENCODING_DICT);
+}
+
+TEST(JsonUtils, ScalarTypeErrorsThrow) {
+  const auto check_invalid = [](auto original, const auto& document) {
+    auto result = original;
+    EXPECT_THROW(json_utils::get_value(document, result), json_utils::json_schema_error);
+    EXPECT_EQ(original, result);
+  };
+  for (const auto input : {"null", "{}", "[]"}) {
+    SCOPED_TRACE(input);
+    const auto document = json_utils::read_from_string(input);
+    check_invalid(size_t(1), document);
+    check_invalid(1, document);
+    check_invalid(int64_t(1), document);
+    check_invalid(std::string("unchanged"), document);
+    check_invalid(true, document);
+    check_invalid(kTEXT, document);
+    check_invalid(kENCODING_DICT, document);
+  }
+  check_invalid(size_t(1), json_utils::read_from_string("-1"));
+  check_invalid(1, json_utils::read_from_string("2147483648"));
+  check_invalid(int64_t(1), json_utils::read_from_string("18446744073709551615"));
+  check_invalid(1, json_utils::read_from_string("1.5"));
+  check_invalid(std::string("unchanged"), json_utils::read_from_string("1"));
+  check_invalid(true, json_utils::read_from_string("1"));
+}
+
+TEST(JsonUtils, MemberErrorsThrow) {
+  for (const auto input : {"null", "[]", "true", "42", "\"text\"", "{}"}) {
+    SCOPED_TRACE(input);
+    const auto document = json_utils::read_from_string(input);
+    int result = 7;
+    EXPECT_THROW(json_utils::get_member(document, "missing"),
+                 json_utils::json_schema_error);
+    EXPECT_THROW(json_utils::get_value_from_object(document, result, "missing"),
+                 json_utils::json_schema_error);
+    EXPECT_EQ(7, result);
+  }
+  const auto document = json_utils::read_from_string(R"({"id":42,"name":null})");
+  EXPECT_EQ(42, json_utils::get_int_member(document, "id"));
+  EXPECT_THROW(json_utils::get_int_member(document, "name"),
+               json_utils::json_schema_error);
+  try {
+    json_utils::get_member(document, "missing");
+    FAIL() << "Missing member was accepted";
+  } catch (const json_utils::json_schema_error& e) {
+    EXPECT_NE(std::string::npos, std::string(e.what()).find("missing"));
+  }
+}
+
+TEST(JsonUtils, ContainerRoundTrips) {
+  check_json_round_trip(std::vector<std::string>{"id", "parent_id"});
+  check_json_round_trip(std::list<std::string>{"id", "parent_id"});
+  check_json_round_trip(std::vector<std::pair<int, std::string>>{{1, "id"}, {2, "name"}});
+  check_json_round_trip(std::list<std::pair<int, std::string>>{{1, "id"}, {2, "name"}});
+  check_json_round_trip(std::map<int, std::string>{{1, "id"}, {2, "name"}});
+  check_json_round_trip(std::vector<std::string>{});
+  check_json_round_trip(std::list<std::string>{});
+  check_json_round_trip(std::vector<std::pair<int, std::string>>{});
+  check_json_round_trip(std::list<std::pair<int, std::string>>{});
+  check_json_round_trip(std::map<int, std::string>{});
+}
+
+TEST(JsonUtils, ContainerErrorsDoNotPublishPartialResults) {
+  const auto check_invalid = [](const auto& document, auto output) {
+    EXPECT_THROW(json_utils::get_value(document, output), json_utils::json_schema_error);
+    EXPECT_TRUE(output.empty());
+  };
+  for (const auto input : {"null", "{}", "true", "42", "\"id\""}) {
+    SCOPED_TRACE(input);
+    const auto document = json_utils::read_from_string(input);
+    check_invalid(document, std::vector<std::string>{});
+    check_invalid(document, std::list<std::string>{});
+    check_invalid(document, std::vector<std::pair<int, std::string>>{});
+    check_invalid(document, std::list<std::pair<int, std::string>>{});
+    check_invalid(document, std::map<int, std::string>{});
+  }
+  for (const auto input : {R"(["id",42])", R"(["id",null])"}) {
+    SCOPED_TRACE(input);
+    const auto document = json_utils::read_from_string(input);
+    check_invalid(document, std::vector<std::string>{});
+    check_invalid(document, std::list<std::string>{});
+  }
+  for (const auto input : {R"([{"key":1,"value":"id"},null])",
+                           R"([{"key":1,"value":"id"},{"value":"name"}])",
+                           R"([{"key":1,"value":"id"},{"key":2}])",
+                           R"([{"key":1,"value":"id"},{"key":"bad","value":"name"}])",
+                           R"([{"key":1,"value":"id"},{"key":2,"value":42}])"}) {
+    SCOPED_TRACE(input);
+    const auto document = json_utils::read_from_string(input);
+    check_invalid(document, std::vector<std::pair<int, std::string>>{});
+    check_invalid(document, std::list<std::pair<int, std::string>>{});
+    check_invalid(document, std::map<int, std::string>{});
+  }
+}
+
+TEST(JsonUtils, IntegerArrayUsesSharedValidation) {
+  const auto document = json_utils::read_from_string("[1,-2,3]");
+  EXPECT_EQ((std::vector<int32_t>{1, -2, 3}), json_utils::get_int_vector(document));
+  for (const auto input : {"null", "{}", "[1,null]", "[1,2147483648]"}) {
+    SCOPED_TRACE(input);
+    const auto document = json_utils::read_from_string(input);
+    EXPECT_THROW(json_utils::get_int_vector(document), json_utils::json_schema_error);
+  }
+}
+
+TEST(JsonUtils, MetadataRoundTrips) {
+  check_json_round_trip(shared::StringDictKey(1, 2));
+  check_json_round_trip(SQLTypeInfo(kINT, false));
+  check_json_round_trip(SQLTypeInfo(kDECIMAL, 12, 3, false));
+}
+
+TEST(JsonUtils, MetadataErrorsThrow) {
+  for (const auto input : {"null", "[]", "{}", R"({"type":"bad"})"}) {
+    SCOPED_TRACE(input);
+    const auto document = json_utils::read_from_string(input);
+    SQLTypeInfo type;
+    EXPECT_THROW(json_utils::get_value(document, type), json_utils::json_schema_error);
+  }
+  for (const auto input : {"null", "[]", "{}", R"({"db_id":1,"dict_id":null})"}) {
+    SCOPED_TRACE(input);
+    const auto document = json_utils::read_from_string(input);
+    shared::StringDictKey key;
+    EXPECT_THROW(json_utils::get_value(document, key), json_utils::json_schema_error);
+  }
+}
 
 // for (auto const interval : makeIntervals(0, M, n_workers)) {...}
 // iterates over interval={begin,end} pairs which satisfy:

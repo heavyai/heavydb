@@ -1,0 +1,465 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <gtest/gtest.h>
+#include <thrift/TApplicationException.h>
+#include <thrift/transport/TBufferTransports.h>
+#include <thrift/transport/TTransportException.h>
+
+#include <atomic>
+#include <chrono>
+#include <functional>
+#include <future>
+#include <new>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "Calcite/Calcite.h"
+#include "Tests/LogCaptureTestHelper.h"
+#include "ThriftHandler/QueryState.h"
+#include "gen-cpp/CalciteServer.h"
+
+namespace {
+
+using Table = std::pair<std::string, std::string>;
+using Tables = std::vector<Table>;
+using namespace std::chrono_literals;
+
+class MetadataCalcite : public Calcite {
+ public:
+  MetadataCalcite() : Calcite(0, 0, "", 0, 0, false) {}
+
+  std::function<void(const std::string&, const std::string&)> update;
+  std::vector<bool> statistics_scopes;
+  size_t connections_opened{0};
+  bool fail_to_connect{false};
+
+ private:
+  class Client : public CalciteServerNull {
+   public:
+    explicit Client(MetadataCalcite& owner) : owner_(owner) {}
+    void updateMetadata(const std::string& catalog,
+                        const std::string& table,
+                        const bool statistics_only) override {
+      owner_.statistics_scopes.push_back(statistics_only);
+      owner_.update(catalog, table);
+    }
+
+   private:
+    MetadataCalcite& owner_;
+  };
+
+  MetadataConnection openMetadataConnection() override {
+    ++connections_opened;
+    if (fail_to_connect) {
+      throw apache::thrift::transport::TTransportException("could not connect");
+    }
+    return {std::make_shared<Client>(*this),
+            std::make_shared<apache::thrift::transport::TMemoryBuffer>()};
+  }
+};
+
+class PausedUpdate {
+ public:
+  void pause() {
+    entered_.set_value();
+    released_.get_future().wait();
+  }
+
+  bool waitForEntry() {
+    return entered_.get_future().wait_for(5s) == std::future_status::ready;
+  }
+
+  void release() { released_.set_value(); }
+
+ private:
+  std::promise<void> entered_;
+  std::promise<void> released_;
+};
+
+}  // namespace
+
+class CalciteMetadataTest : public testing::Test {
+ protected:
+  void refresh() { calcite_.refreshTableStatistics(); }
+  void refreshCommitted() { calcite_.refreshCommittedMetadata(); }
+
+  MetadataCalcite calcite_;
+};
+
+TEST_F(CalciteMetadataTest, PlanningRequiresAcknowledgementOfCommittedSchema) {
+  Tables calls;
+  bool unavailable = true;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    calls.emplace_back(db, table);
+    if (unavailable) {
+      throw apache::thrift::TApplicationException("invalidation not acknowledged");
+    }
+  };
+  ASSERT_NO_THROW(calcite_.publishTableMetadata("db", "child", [] {}));
+  auto query = query_state::QueryState::create(nullptr, "SELECT 1");
+  for (const bool rewrites : {false, true}) {
+    TOptimizationOption options;
+    options.enable_experimental_query_rewrites = rewrites;
+    EXPECT_THROW(
+        calcite_.process(query->createQueryStateProxy(), "SELECT 1", {}, options),
+        apache::thrift::TApplicationException);
+  }
+  unavailable = false;
+  refreshCommitted();
+  refreshCommitted();
+  EXPECT_EQ(Tables(4, Table("db", "child")), calls);
+  EXPECT_EQ(std::vector<bool>(4, false), calcite_.statistics_scopes);
+}
+
+TEST_F(CalciteMetadataTest, RolledBackDdlPreservesOnlyEarlierCommittedChanges) {
+  Tables calls;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    calls.emplace_back(db, table);
+    throw apache::thrift::TApplicationException("no reply");
+  };
+  calcite_.publishTableMetadata("db", "first", [] {});
+  calcite_.publishTableMetadata("db", "second", [] {});
+  auto rollback = [] { throw std::runtime_error("catalog write failed"); };
+  EXPECT_THROW(calcite_.publishTableMetadata("db", "first", rollback),
+               std::runtime_error);
+  EXPECT_THROW(calcite_.publishTableMetadata("db", "third", rollback),
+               std::runtime_error);
+  calls.clear();
+  bool fail_second = true;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    calls.emplace_back(db, table);
+    if (table == "second" && fail_second) {
+      throw apache::thrift::TApplicationException("still no reply");
+    }
+  };
+  EXPECT_THROW(refreshCommitted(), apache::thrift::TApplicationException);
+  fail_second = false;
+  refreshCommitted();
+  refreshCommitted();
+  EXPECT_EQ((Tables{{"db", "first"}, {"db", "second"}, {"db", "second"}}), calls);
+}
+
+TEST_F(CalciteMetadataTest, CoalescesWritesAndLeavesCleanReadsAlone) {
+  Tables updates;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+  };
+  refresh();
+  EXPECT_TRUE(updates.empty());
+  calcite_.markTableStatisticsDirty("db", "a");
+  calcite_.markTableStatisticsDirty("db", "a");
+  calcite_.markTableStatisticsDirty("db", "b");
+  refresh();
+  refresh();
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}}), updates);
+}
+
+TEST_F(CalciteMetadataTest, DistinguishesStatisticsRefreshFromSchemaInvalidation) {
+  Tables updates;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+  };
+  calcite_.markTableStatisticsDirty("db", "a");
+  refresh();
+  calcite_.updateMetadata("db", "a");
+  calcite_.updateMetadata("db", "");
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "a"}, {"db", ""}}), updates);
+  EXPECT_EQ((std::vector<bool>{true, false, false}), calcite_.statistics_scopes);
+}
+
+TEST_F(CalciteMetadataTest, OpensOneConnectionPerDirtySnapshot) {
+  Tables updates;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+  };
+  refresh();
+  EXPECT_EQ(0u, calcite_.connections_opened);
+  const Tables dirty{{"db", "a"}, {"db", "b"}, {"other", "a"}};
+  for (const auto& [db, table] : dirty) {
+    calcite_.markTableStatisticsDirty(db, table);
+  }
+  calcite_.fail_to_connect = true;
+  EXPECT_NO_THROW(refresh());
+  EXPECT_TRUE(updates.empty());
+  EXPECT_EQ(1u, calcite_.connections_opened);
+  calcite_.fail_to_connect = false;
+  refresh();
+  refresh();
+  EXPECT_EQ(dirty, updates);
+  EXPECT_EQ(2u, calcite_.connections_opened);
+  calcite_.updateMetadata("db", "unrelated");
+  EXPECT_EQ(3u, calcite_.connections_opened);
+}
+
+TEST_F(CalciteMetadataTest, RefreshDoesNotBlockWritersOrOtherPlanners) {
+  PausedUpdate paused;
+  std::atomic<size_t> updates{0};
+  calcite_.update = [&](const auto&, const auto&) {
+    if (++updates == 1) {
+      paused.pause();
+    }
+  };
+  calcite_.markTableStatisticsDirty("db", "a");
+  auto owner = std::async(std::launch::async, [&] { refresh(); });
+  const bool entered = paused.waitForEntry();
+  auto writer = std::async(std::launch::async, [&] {
+    calcite_.markTableStatisticsDirty("db", "a");
+    calcite_.markTableStatisticsDirty("db", "b");
+  });
+  auto planner = std::async(std::launch::async, [&] { refresh(); });
+  const auto writer_status = writer.wait_for(5s);
+  const auto planner_status = planner.wait_for(5s);
+  // Release before asserting or joining so a regression cannot strand the workers.
+  paused.release();
+  owner.get();
+  writer.get();
+  planner.get();
+  EXPECT_TRUE(entered);
+  EXPECT_EQ(std::future_status::ready, writer_status);
+  EXPECT_EQ(std::future_status::ready, planner_status);
+  EXPECT_EQ(1u, updates.load());
+  refresh();
+  EXPECT_EQ(3u, updates.load());
+}
+
+TEST_F(CalciteMetadataTest, FailedRefreshRetainsOnlyUnfinishedTables) {
+  LogCapture log;
+  Tables updates;
+  bool fail = true;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+    if (table == "b" && fail) {
+      fail = false;
+      throw apache::thrift::TApplicationException("metadata update failed");
+    }
+  };
+  for (const auto* table : {"a", "b", "c"}) {
+    calcite_.markTableStatisticsDirty("db", table);
+  }
+  EXPECT_NO_THROW(refresh());
+  EXPECT_TRUE(log.contains("Statistics refresh failed for db.b: metadata update failed"));
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}}), updates);
+  EXPECT_EQ(1u, calcite_.connections_opened);
+  refresh();
+  refresh();
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}, {"db", "b"}, {"db", "c"}}), updates);
+  EXPECT_EQ(2u, calcite_.connections_opened);
+}
+
+TEST_F(CalciteMetadataTest, FailedRefreshMergesConcurrentWrites) {
+  PausedUpdate paused;
+  Tables updates;
+  bool fail = true;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+    if (table == "b" && fail) {
+      fail = false;
+      paused.pause();
+      throw apache::thrift::transport::TTransportException("metadata connection failed");
+    }
+  };
+  for (const auto* table : {"a", "b", "c"}) {
+    calcite_.markTableStatisticsDirty("db", table);
+  }
+  auto owner = std::async(std::launch::async, [&] { refresh(); });
+  const bool entered = paused.waitForEntry();
+  auto writer = std::async(std::launch::async, [&] {
+    for (const auto* table : {"a", "b", "d"}) {
+      calcite_.markTableStatisticsDirty("db", table);
+    }
+  });
+  const auto writer_status = writer.wait_for(5s);
+  paused.release();
+  EXPECT_NO_THROW(owner.get());
+  writer.get();
+  EXPECT_TRUE(entered);
+  EXPECT_EQ(std::future_status::ready, writer_status);
+  refresh();
+  refresh();
+  EXPECT_EQ(
+      (Tables{
+          {"db", "a"}, {"db", "b"}, {"db", "a"}, {"db", "b"}, {"db", "c"}, {"db", "d"}}),
+      updates);
+}
+
+TEST_F(CalciteMetadataTest, RepeatedRpcFailureStopsSnapshotAndRecovers) {
+  Tables updates;
+  bool fail = true;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+    if (table == "b" && fail) {
+      throw apache::thrift::TException("metadata connection failed");
+    }
+  };
+  for (const auto* table : {"a", "b", "c"}) {
+    calcite_.markTableStatisticsDirty("db", table);
+  }
+  calcite_.markTableStatisticsDirty("other", "d");
+  EXPECT_NO_THROW(refresh());
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}}), updates);
+  EXPECT_NO_THROW(refresh());
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}, {"db", "b"}}), updates);
+  fail = false;
+  EXPECT_NO_THROW(refresh());
+  refresh();
+  EXPECT_EQ((Tables{{"db", "a"},
+                    {"db", "b"},
+                    {"db", "b"},
+                    {"db", "b"},
+                    {"db", "c"},
+                    {"other", "d"}}),
+            updates);
+}
+
+TEST_F(CalciteMetadataTest, UnexpectedRefreshFailureStillPropagates) {
+  Tables updates;
+  bool fail = true;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+    if (table == "b" && fail) {
+      fail = false;
+      throw std::runtime_error("unexpected failure");
+    }
+  };
+  for (const auto* table : {"a", "b", "c"}) {
+    calcite_.markTableStatisticsDirty("db", table);
+  }
+  EXPECT_THROW(refresh(), std::runtime_error);
+  refresh();
+  refresh();
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}, {"db", "b"}, {"db", "c"}}), updates);
+}
+
+TEST_F(CalciteMetadataTest, AllocationFailureStillPropagates) {
+  calcite_.markTableStatisticsDirty("db", "a");
+  calcite_.update = [&](const auto&, const auto&) { throw std::bad_alloc(); };
+  EXPECT_THROW(refresh(), std::bad_alloc);
+  Tables updates;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+  };
+  refresh();
+  refresh();
+  EXPECT_EQ((Tables{{"db", "a"}}), updates);
+}
+
+TEST_F(CalciteMetadataTest, TableDdlClearsOnlyItsPendingRefresh) {
+  Tables updates;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+  };
+  calcite_.markTableStatisticsDirty("db", "a");
+  calcite_.markTableStatisticsDirty("db", "b");
+  calcite_.markTableStatisticsDirty("other", "a");
+  calcite_.updateMetadata("db", "a");
+  refresh();
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}, {"other", "a"}}), updates);
+}
+
+TEST_F(CalciteMetadataTest, DatabaseDdlClearsOnlyItsPendingRefreshes) {
+  Tables updates;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+  };
+  calcite_.markTableStatisticsDirty("db", "a");
+  calcite_.markTableStatisticsDirty("db", "b");
+  calcite_.markTableStatisticsDirty("other", "a");
+  calcite_.updateMetadata("db", "");
+  refresh();
+  EXPECT_EQ((Tables{{"db", ""}, {"other", "a"}}), updates);
+}
+
+TEST_F(CalciteMetadataTest, DdlDoesNotLoseConcurrentWritesOrBlockStatisticsReaders) {
+  PausedUpdate paused;
+  std::atomic<size_t> updates{0};
+  calcite_.update = [&](const auto&, const auto&) {
+    if (++updates == 1) {
+      paused.pause();
+    }
+  };
+  calcite_.markTableStatisticsDirty("db", "a");
+  auto ddl = std::async(std::launch::async, [&] { calcite_.updateMetadata("db", "a"); });
+  const bool entered = paused.waitForEntry();
+  auto writer = std::async(std::launch::async,
+                           [&] { calcite_.markTableStatisticsDirty("db", "a"); });
+  auto planner = std::async(std::launch::async, [&] { refresh(); });
+  const auto writer_status = writer.wait_for(5s);
+  const auto planner_status = planner.wait_for(5s);
+  paused.release();
+  ddl.get();
+  writer.get();
+  planner.get();
+  EXPECT_TRUE(entered);
+  EXPECT_EQ(std::future_status::ready, writer_status);
+  EXPECT_EQ(std::future_status::ready, planner_status);
+  EXPECT_EQ(1u, updates.load());
+  refresh();
+  EXPECT_EQ(2u, updates.load());
+}
+
+TEST_F(CalciteMetadataTest, DatabaseDdlRpcFailureStillPropagates) {
+  Tables updates;
+  calcite_.update = [&](const auto&, const auto&) {
+    throw apache::thrift::TApplicationException("metadata update failed");
+  };
+  calcite_.markTableStatisticsDirty("db", "a");
+  calcite_.markTableStatisticsDirty("db", "b");
+  calcite_.markTableStatisticsDirty("other", "a");
+  EXPECT_THROW(calcite_.updateMetadata("db", ""), apache::thrift::TApplicationException);
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+  };
+  refresh();
+  refresh();
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}, {"other", "a"}}), updates);
+}
+
+TEST_F(CalciteMetadataTest, TableDdlRpcFailureStillPropagates) {
+  calcite_.markTableStatisticsDirty("db", "a");
+  calcite_.markTableStatisticsDirty("db", "b");
+  calcite_.update = [&](const auto&, const auto&) {
+    throw apache::thrift::transport::TTransportException("metadata connection failed");
+  };
+  EXPECT_THROW(calcite_.updateMetadata("db", "a"),
+               apache::thrift::transport::TTransportException);
+  Tables updates;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+  };
+  refresh();
+  refresh();
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}}), updates);
+}
+
+TEST_F(CalciteMetadataTest, DdlStillWaitsForItsInvalidation) {
+  PausedUpdate paused;
+  std::atomic<size_t> updates{0};
+  calcite_.update = [&](const auto&, const auto&) {
+    if (++updates == 1) {
+      paused.pause();
+    }
+  };
+  calcite_.markTableStatisticsDirty("db", "a");
+  auto owner = std::async(std::launch::async, [&] { refresh(); });
+  const bool entered = paused.waitForEntry();
+  std::promise<void> ddl_started;
+  auto started = ddl_started.get_future();
+  auto ddl = std::async(std::launch::async, [&] {
+    ddl_started.set_value();
+    calcite_.updateMetadata("db", "a");
+  });
+  const auto started_status = started.wait_for(5s);
+  const auto ddl_status = ddl.wait_for(100ms);
+  paused.release();
+  owner.get();
+  ddl.get();
+  EXPECT_TRUE(entered);
+  EXPECT_EQ(std::future_status::ready, started_status);
+  EXPECT_EQ(std::future_status::timeout, ddl_status);
+  EXPECT_EQ(2u, updates.load());
+}

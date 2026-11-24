@@ -26,6 +26,7 @@ import org.apache.calcite.tools.ValidationException;
 import org.apache.calcite.util.Pair;
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.apache.commons.pool.impl.GenericObjectPool;
+import org.apache.thrift.TApplicationException;
 import org.apache.thrift.TException;
 import org.apache.thrift.server.TServer;
 import org.slf4j.Logger;
@@ -194,7 +195,9 @@ public class CalciteServerHandler implements CalciteServer.Iface {
               queryParsingOption.is_explain,
               queryParsingOption.is_explain_detail,
               optimizationOption.is_view_optimize,
-              optimizationOption.enable_watchdog);
+              optimizationOption.enable_watchdog,
+              optimizationOption.enable_experimental_query_rewrites,
+              optimizationOption.trust_unenforced_table_constraints);
 
       if (!buildRATreeFromRAString) {
         HeavyDBParser.ProcessResult res;
@@ -305,9 +308,9 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     server = s;
   }
 
-  // TODO: Add update type parameter to API.
   @Override
-  public void updateMetadata(String catalog, String table) throws TException {
+  public void updateMetadata(String catalog, String table, boolean statisticsOnly)
+          throws TException {
     HEAVYDBLOGGER.debug(
             "Received invalidation from server for " + catalog + " : " + table);
     long timer = System.currentTimeMillis();
@@ -318,11 +321,11 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     } catch (Exception ex) {
       String msg = "Could not get Parse Item from pool: " + ex.getMessage();
       HEAVYDBLOGGER.error(msg, ex);
-      return;
+      throw new TApplicationException(TApplicationException.INTERNAL_ERROR, msg);
     }
     CURRENT_PARSER.set(parser);
     try {
-      parser.updateMetaData(catalog, table);
+      parser.updateMetaData(catalog, table, statisticsOnly);
     } finally {
       CURRENT_PARSER.set(null);
       try {

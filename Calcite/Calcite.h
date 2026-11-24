@@ -14,8 +14,12 @@
 #include "gen-cpp/calciteserver_types.h"
 #include "gen-cpp/extension_functions_types.h"
 
+#include <atomic>
+#include <functional>
 #include <mutex>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace apache::thrift::transport;
@@ -26,6 +30,7 @@ constexpr char const* kCalciteUserPassword = "HyperInteractive";
 }  // namespace
 
 class CalciteServerClient;
+class CalciteServerIf;
 
 namespace Catalog_Namespace {
 class SessionInfo;
@@ -71,6 +76,10 @@ class Calcite {
   std::string getExtensionFunctionWhitelist();
   std::string getUserDefinedFunctionWhitelist();
   virtual void updateMetadata(std::string catalog, std::string table);
+  void publishTableMetadata(const std::string& catalog,
+                            const std::string& table,
+                            const std::function<void()>& publish);
+  void markTableStatisticsDirty(const std::string& catalog, const std::string& table);
   void close_calcite_server(bool log = true);
   virtual ~Calcite();
   std::string getRuntimeExtensionFunctionWhitelist();
@@ -87,9 +96,17 @@ class Calcite {
   TOptimizationOption getCalciteOptimizationOption(
       bool is_view_optimize,
       bool enable_watchdog,
-      const std::vector<TFilterPushDownInfo>& filter_push_down_info);
+      const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+      bool enable_experimental_query_rewrites,
+      bool trust_unenforced_table_constraints);
+
+ protected:
+  using MetadataConnection =
+      std::pair<std::shared_ptr<CalciteServerIf>, std::shared_ptr<TTransport>>;
 
  private:
+  friend class CalciteMetadataTest;
+
   void init(const int db_port,
             const int port,
             const std::string& data_dir,
@@ -107,6 +124,14 @@ class Calcite {
                           const std::string& calcite_session_id);
   std::vector<std::string> get_db_objects(const std::string ra);
   void inner_close_calcite_server(bool log);
+  virtual MetadataConnection openMetadataConnection();
+  void updateMetadataImpl(MetadataConnection& connection,
+                          const std::string& catalog,
+                          const std::string& table,
+                          bool statistics_only,
+                          bool last_update);
+  void refreshTableStatistics();
+  void refreshCommittedMetadata();
   std::pair<std::shared_ptr<CalciteServerClient>, std::shared_ptr<TTransport>> getClient(
       int port);
 
@@ -124,5 +149,13 @@ class Calcite {
   std::string ssl_keystore_password_;
   std::string ssl_ca_file_;
   std::string db_config_file_;
+  // A committed schema change must be acknowledged before planning, unlike statistics.
+  std::mutex committed_metadata_mutex_;
+  std::set<std::pair<std::string, std::string>> pending_committed_metadata_;
+  std::atomic<bool> has_pending_committed_metadata_{false};
+  // Acquire refresh before statistics; never hold statistics across an RPC.
+  std::mutex metadata_refresh_mutex_;
+  std::mutex statistics_mutex_;
+  std::set<std::pair<std::string, std::string>> dirty_statistics_;
   std::once_flag shutdown_once_flag_;
 };

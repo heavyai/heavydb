@@ -27,6 +27,8 @@
 #include <random>
 #include <regex>
 #include <sstream>
+#include <unordered_map>
+#include <unordered_set>
 
 #if BOOST_VERSION >= 106600
 #include <boost/uuid/detail/sha1.hpp>
@@ -164,7 +166,7 @@ Catalog::Catalog(const string& basePath,
                  std::shared_ptr<Calcite> calcite,
                  bool is_new_db,
                  const std::map<int32_t, std::string>& user_id_name_map,
-                 const UserMetadata& root_user)
+                 const UserMetadata* system_objects_owner)
     : basePath_(basePath)
     , sqliteConnector_(curDB.dbName, basePath + "/" + shared::kCatalogDirectoryName + "/")
     , currentDB_(curDB)
@@ -208,7 +210,9 @@ Catalog::Catalog(const string& basePath,
   if (g_serialize_temp_tables) {
     boost::filesystem::remove(table_json_filepath(basePath_, currentDB_.dbName));
   }
-  conditionallyInitializeSystemObjects(root_user);
+  if (system_objects_owner) {
+    conditionallyInitializeSystemObjects(*system_objects_owner);
+  }
   // once all initialized use real object
   initialized_ = true;
 }
@@ -1204,6 +1208,7 @@ void Catalog::reloadCatalogMetadataUnlocked(
 
   sqliteConnector_.reset(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
                          currentDB_.dbName);
+  initialize_constraint_storage(sqliteConnector_);
 
   // Notice when tables or columns have been created, dropped, or changed by other nodes.
   // Needed so that users will see reasonably-correct lists of what objects exist.
@@ -1248,6 +1253,13 @@ void Catalog::reloadCatalogMetadataUnlocked(
   // Reload tables.
   for (auto const& reload_table_id : reload_table_ids) {
     reloadTableMetadataUnlocked(reload_table_id);
+  }
+
+  // Reopening SQLite discards TEMP records. Rebuild only for surviving local tables.
+  for (const auto& [id, td] : tableDescriptorMapById_) {
+    if (table_is_temporary(td) && td->shard < 0) {
+      insertConstraintRecords(*td, split_key_metadata(td->keyMetainfo).constraints);
+    }
   }
 
   ////////// NON-TABLES //////////
@@ -1353,7 +1365,9 @@ std::unique_ptr<TableDescriptor> Catalog::getTableFromStorage(const int table_id
   std::string table_query(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
       "max_chunk_size, frag_page_size, "
-      "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid, "
+      "max_rows, partitions, shard_column_id, shard, num_shards, "
+      "(SELECT m.key_metainfo FROM mapd_table_key_metadata m WHERE "
+      "m.tableid=mapd_tables.tableid), userid, "
       "sort_column_id, storage_type, max_rollback_epochs, is_system_table, comment "
       "FROM mapd_tables WHERE tableid = ?");
 
@@ -1375,7 +1389,9 @@ void Catalog::buildTablesMapUnlocked() {
   std::string tableQuery(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
       "max_chunk_size, frag_page_size, "
-      "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid, "
+      "max_rows, partitions, shard_column_id, shard, num_shards, "
+      "(SELECT m.key_metainfo FROM mapd_table_key_metadata m WHERE "
+      "m.tableid=mapd_tables.tableid), userid, "
       "sort_column_id, storage_type, max_rollback_epochs, is_system_table, comment "
       "from mapd_tables");
   sqliteConnector_.query(tableQuery);
@@ -1597,6 +1613,7 @@ void Catalog::buildMaps(const std::map<int32_t, std::string>& user_name_by_user_
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
 
+  initialize_constraint_storage(sqliteConnector_);
   buildDictionaryMapUnlocked();
   buildTablesMapUnlocked();
 
@@ -2474,10 +2491,14 @@ void Catalog::delDictionaryNontransactional(const ColumnDescriptor& cd) {
     return;
   }
   const auto dictId = cd.columnType.get_comp_param();
-  CHECK_GT(dictId, 0);
-  // decrement and zero check dict ref count
   const auto td = getMetadataForTable(cd.tableId, false);
   CHECK(td);
+  // Physical shards can carry a dummy dictionary rather than an owned reference.
+  if (dictId == 0 && td->shard >= 0) {
+    return;
+  }
+  CHECK_GT(dictId, 0);
+  // decrement and zero check dict ref count
   sqliteConnector_.query_with_text_param(
       "UPDATE mapd_dictionaries SET refcount = refcount - 1 WHERE dictid = ?",
       std::to_string(dictId));
@@ -2772,8 +2793,17 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
   columnDescriptorsForRoll.emplace_back(nullptr, ncd);
 }
 
+namespace {
+void validate_table_constraint_dependencies_for_column_change(
+    const Catalog& catalog,
+    const TableDescriptor* td,
+    const ColumnDescriptor* cd,
+    const std::string& operation);
+}
+
 void Catalog::dropColumnTransactional(const TableDescriptor& td,
                                       const ColumnDescriptor& cd) {
+  validate_table_constraint_dependencies_for_column_change(*this, &td, &cd, "drop");
   {
     // In order to avoid a lock-order inversion, system catalog operations need
     // to occur outside catalog locks
@@ -2850,6 +2880,7 @@ void Catalog::dropColumnPolicies(const TableDescriptor& td, const ColumnDescript
 
 // NOTE: this function is deprecated
 void Catalog::dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd) {
+  validate_table_constraint_dependencies_for_column_change(*this, &td, &cd, "drop");
   SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
       DBObject(td.tableName, cd.columnName, ColumnDBObjectType), this);
   SysCatalog::instance().dropPoliciesForColumn(*this, td.tableName, cd.columnName);
@@ -3191,6 +3222,7 @@ void Catalog::createTable(
   }
 
   td.nColumns = columns.size();
+  const auto keys = split_key_metadata(td.keyMetainfo);
   // TODO(sy): don't take disk locks or touch sqlite connector for temporary tables
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
@@ -3216,7 +3248,7 @@ void Catalog::createTable(
                                    td.storageType,
                                    std::to_string(td.maxRollbackEpochs),
                                    std::to_string(td.is_system_table),
-                                   td.keyMetainfo});
+                                   keys.directives});
 
       // now get the auto generated tableid
       sqliteConnector_.query_with_text_param(
@@ -3355,6 +3387,9 @@ void Catalog::createTable(
     }
 
     addTableToMap(&td, cds, dds);
+    if (isLogicalTable) {
+      insertConstraintRecords(td, keys.constraints);
+    }
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
   } catch (std::exception& e) {
     end_transaction_or_abort(
@@ -4026,6 +4061,7 @@ void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) 
     // having to repopulate data on error
     removeChunks(table_id);
     dataMgr_->getGlobalFileMgr()->setFileMgrParams(db_id, table_id, file_mgr_params);
+    markTableStatisticsDirty(table_id);
   }
 }
 
@@ -4210,6 +4246,8 @@ void Catalog::setTableEpochs(const int32_t db_id,
     file_mgr_params.epoch = table_epoch_info.table_epoch;
     dataMgr_->getGlobalFileMgr()->setFileMgrParams(
         db_id, table_epoch_info.table_id, file_mgr_params);
+    // Keep successful shard resets dirty even if a later epoch is rejected.
+    markTableStatisticsDirty(table_epoch_info.table_id);
     LOG(INFO) << "Set table epoch for db id: " << db_id
               << ", table id: " << table_epoch_info.table_id
               << ", back to epoch: " << table_epoch_info.table_epoch;
@@ -4489,6 +4527,7 @@ void Catalog::truncateTable(const TableDescriptor* td) {
   const auto physical_tables = getPhysicalTablesDescriptors(td);
   for (const auto table : physical_tables) {
     doTruncateTable(table);
+    markTableStatisticsDirty(table->tableId);
   }
 }
 
@@ -4568,33 +4607,46 @@ void Catalog::refreshDictionaryCachesForTableUnlocked(const TableDescriptor& td)
 // NOTE(sy): Only used by --multi-instance clusters.
 void Catalog::invalidateCachesForTable(const int table_id) {
   // When called, exactly one thread has a LockMgr data or insert lock for the table.
-  cat_read_lock read_lock(this);
   ChunkKey const table_key{getDatabaseId(), table_id};
-  auto td = getMutableMetadataForTableUnlocked(table_id);
-  CHECK(td);
+  std::shared_ptr<std::mutex> fragmenter_mutex;
+  {
+    cat_read_lock read_lock(this);
+    auto td = getMutableMetadataForTableUnlocked(table_id);
+    CHECK(td);
+    fragmenter_mutex = td->mutex_;
+  }
+
+  // Keep metadata readers from repopulating the fragmenter from the old file manager.
+  // Storage calls back into the catalog, so do not hold the catalog lock across I/O.
+  std::unique_lock fragmenter_lock(*fragmenter_mutex);
+  bool is_foreign;
+  bool refresh_statistics;
+  {
+    cat_read_lock read_lock(this);
+    auto td = getMutableMetadataForTableUnlocked(table_id);
+    CHECK(td);
+    CHECK(td->mutex_ == fragmenter_mutex);
+    Executor::clearExternalCaches(false, td, getDatabaseId());
+    refreshDictionaryCachesForTableUnlocked(*td);
+    is_foreign = dynamic_cast<foreign_storage::ForeignTable*>(td) != nullptr;
+    refresh_statistics = !td->isView && !td->isForeignTable();
+    td->fragmenter.reset();
+  }
   getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
   getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
-  Executor::clearExternalCaches(false, td, getDatabaseId());
-
-  refreshDictionaryCachesForTableUnlocked(*td);
-
-  // TODO(sy): doTruncateTable() says "destroy fragmenter before deleteChunks is called"
-  // removeFragmenterForTable(table_key[CHUNK_KEY_TABLE_IDX]);
-  if (td->fragmenter != nullptr) {
-    auto tableDescIt = tableDescriptorMapById_.find(table_id);
-    CHECK(tableDescIt != tableDescriptorMapById_.end());
-    tableDescIt->second->fragmenter = nullptr;
-    CHECK(td->fragmenter == nullptr);
-  }
   getDataMgr().getGlobalFileMgr()->closeFileMgr(table_key[CHUNK_KEY_DB_IDX],
                                                 table_key[CHUNK_KEY_TABLE_IDX]);
-  if (dynamic_cast<foreign_storage::ForeignTable*>(td)) {
+  if (is_foreign) {
     dataMgr_->getPersistentStorageMgr()->getForeignStorageMgr()->refreshTable(table_key,
                                                                               true);
   } else {
     dataMgr_->removeMutableTableDiskCacheData(currentDB_.dbId, table_id);
   }
-  instantiateFragmenter(td);
+  fragmenter_lock.unlock();
+  CHECK(getMetadataForTable(table_id, true));
+  if (refresh_statistics) {
+    markTableStatisticsDirty(table_id);
+  }
 }
 
 void Catalog::removeFragmenterForTable(const int table_id) const {
@@ -4606,6 +4658,770 @@ void Catalog::removeFragmenterForTable(const int table_id) const {
     tableDescIt->second->fragmenter = nullptr;
     CHECK(td->fragmenter == nullptr);
   }
+}
+
+namespace {
+
+std::string constraint_column_list_to_string(const std::vector<std::string>& columns) {
+  return boost::algorithm::join(columns, ", ");
+}
+
+void validate_constraint_column(const std::string& table_name,
+                                const ColumnDescriptor& cd) {
+  if (cd.isSystemCol || cd.isVirtualCol) {
+    throw std::runtime_error("Column " + cd.columnName +
+                             " cannot be used in a table constraint.");
+  }
+  if (cd.columnType.is_array() || cd.columnType.is_geometry()) {
+    throw std::runtime_error("Column " + table_name + "." + cd.columnName + " has type " +
+                             cd.columnType.toString() +
+                             ", which is not supported in a table constraint.");
+  }
+}
+
+std::vector<std::string> normalize_constraint_columns(
+    const Catalog& catalog,
+    const TableDescriptor* td,
+    const std::vector<std::string>& column_names) {
+  if (column_names.empty()) {
+    throw std::runtime_error("Table constraint must reference at least one column.");
+  }
+
+  std::unordered_set<std::string> normalized_column_names;
+  std::vector<std::string> result;
+  result.reserve(column_names.size());
+  for (const auto& column_name : column_names) {
+    const auto cd = catalog.getMetadataForColumn(td->tableId, column_name);
+    if (!cd) {
+      throw std::runtime_error("Column " + column_name + " does not exist for table " +
+                               td->tableName + ".");
+    }
+    validate_constraint_column(td->tableName, *cd);
+    const auto normalized_name = boost::to_upper_copy<std::string>(cd->columnName);
+    if (!normalized_column_names.insert(normalized_name).second) {
+      throw std::runtime_error("Column " + cd->columnName +
+                               " appears more than once in a table constraint.");
+    }
+    result.emplace_back(cd->columnName);
+  }
+  return result;
+}
+
+std::vector<std::string> normalize_constraint_columns(
+    const std::string& table_name,
+    const std::list<ColumnDescriptor>& columns,
+    const std::vector<std::string>& column_names) {
+  if (column_names.empty()) {
+    throw std::runtime_error("Table constraint must reference at least one column.");
+  }
+
+  std::unordered_set<std::string> normalized_column_names;
+  std::vector<std::string> result;
+  result.reserve(column_names.size());
+  for (const auto& column_name : column_names) {
+    const auto column_it =
+        std::find_if(columns.begin(), columns.end(), [&column_name](const auto& cd) {
+          return boost::iequals(cd.columnName, column_name);
+        });
+    if (column_it == columns.end()) {
+      throw std::runtime_error("Column " + column_name + " does not exist for table " +
+                               table_name + ".");
+    }
+    validate_constraint_column(table_name, *column_it);
+    const auto normalized_name = boost::to_upper_copy<std::string>(column_it->columnName);
+    if (!normalized_column_names.insert(normalized_name).second) {
+      throw std::runtime_error("Column " + column_it->columnName +
+                               " appears more than once in a table constraint.");
+    }
+    result.emplace_back(column_it->columnName);
+  }
+  return result;
+}
+
+std::optional<std::vector<int32_t>> get_column_ordinals_for_table(
+    const Catalog& catalog,
+    const TableDescriptor* td,
+    const std::vector<std::string>& column_names) {
+  std::unordered_map<std::string, int32_t> column_ordinals;
+  const auto deleted_cd = catalog.getDeletedColumn(td);
+  int32_t ordinal = 0;
+  for (const auto cd :
+       catalog.getAllColumnMetadataForTable(td->tableId, true, true, false)) {
+    if (cd == deleted_cd) {
+      continue;
+    }
+    column_ordinals.emplace(boost::to_upper_copy<std::string>(cd->columnName), ordinal++);
+  }
+
+  std::vector<int32_t> ordinals;
+  ordinals.reserve(column_names.size());
+  for (const auto& column_name : column_names) {
+    const auto it = column_ordinals.find(boost::to_upper_copy<std::string>(column_name));
+    if (it == column_ordinals.end()) {
+      return std::nullopt;
+    }
+    ordinals.emplace_back(it->second);
+  }
+  return ordinals;
+}
+
+std::vector<SQLTypeInfo> get_column_types_for_table(
+    const Catalog& catalog,
+    const TableDescriptor* td,
+    const std::vector<std::string>& column_names) {
+  std::vector<SQLTypeInfo> types;
+  types.reserve(column_names.size());
+  for (const auto& column_name : column_names) {
+    const auto cd = catalog.getMetadataForColumn(td->tableId, column_name);
+    if (!cd) {
+      throw std::runtime_error("Column " + column_name + " does not exist for table " +
+                               td->tableName + ".");
+    }
+    types.emplace_back(cd->columnType);
+  }
+  return types;
+}
+
+std::vector<SQLTypeInfo> get_column_types_for_columns(
+    const std::string& table_name,
+    const std::list<ColumnDescriptor>& columns,
+    const std::vector<std::string>& column_names) {
+  std::vector<SQLTypeInfo> types;
+  types.reserve(column_names.size());
+  for (const auto& column_name : column_names) {
+    const auto column_it =
+        std::find_if(columns.begin(), columns.end(), [&column_name](const auto& cd) {
+          return boost::iequals(cd.columnName, column_name);
+        });
+    if (column_it == columns.end()) {
+      throw std::runtime_error("Column " + column_name + " does not exist for table " +
+                               table_name + ".");
+    }
+    types.emplace_back(column_it->columnType);
+  }
+  return types;
+}
+
+bool foreign_key_column_types_match(const SQLTypeInfo& source,
+                                    const SQLTypeInfo& referenced) {
+  // Physical encodings and nullability do not change the referential value domain.
+  // Precision, scale, and collection element type do.
+  return source.get_type() == referenced.get_type() &&
+         source.get_subtype() == referenced.get_subtype() &&
+         source.get_dimension() == referenced.get_dimension() &&
+         source.get_scale() == referenced.get_scale();
+}
+
+void validate_foreign_key_column_types(
+    const std::string& source_table_name,
+    const std::vector<std::string>& source_column_names,
+    const std::vector<SQLTypeInfo>& source_types,
+    const std::string& referenced_table_name,
+    const std::vector<std::string>& referenced_column_names,
+    const std::vector<SQLTypeInfo>& referenced_types) {
+  CHECK_EQ(source_column_names.size(), source_types.size());
+  CHECK_EQ(referenced_column_names.size(), referenced_types.size());
+  CHECK_EQ(source_types.size(), referenced_types.size());
+  for (size_t i = 0; i < source_types.size(); ++i) {
+    if (!foreign_key_column_types_match(source_types[i], referenced_types[i])) {
+      throw std::runtime_error("Foreign key column " + source_table_name + "." +
+                               source_column_names[i] + " has type " +
+                               source_types[i].toString() + ", but referenced column " +
+                               referenced_table_name + "." + referenced_column_names[i] +
+                               " has type " + referenced_types[i].toString() + ".");
+    }
+  }
+}
+
+bool column_lists_match(const std::vector<std::string>& lhs,
+                        const std::vector<std::string>& rhs) {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < lhs.size(); ++i) {
+    if (!boost::iequals(lhs[i], rhs[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool column_sets_match(const std::vector<std::string>& lhs,
+                       const std::vector<std::string>& rhs) {
+  return std::is_permutation(
+      lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), [](const auto& l, const auto& r) {
+        return boost::iequals(l, r);
+      });
+}
+
+bool is_unique_constraint(const TableConstraint& constraint) {
+  return constraint.type == TableConstraintType::PrimaryKey ||
+         constraint.type == TableConstraintType::Unique;
+}
+
+bool constraint_names_match(const TableConstraint& lhs, const TableConstraint& rhs) {
+  return lhs.name && rhs.name && boost::iequals(*lhs.name, *rhs.name);
+}
+
+std::vector<std::string> get_constraint_names(
+    const std::vector<TableConstraint>& constraints) {
+  std::vector<std::string> names;
+  names.reserve(constraints.size());
+  for (const auto& constraint : constraints) {
+    if (constraint.name && !constraint.name->empty()) {
+      names.emplace_back(*constraint.name);
+    }
+  }
+  return names;
+}
+
+std::string generated_constraint_name(const std::string& table_name,
+                                      const TableConstraint& constraint,
+                                      const std::vector<std::string>& reserved_names) {
+  const auto suffix = [&] {
+    switch (constraint.type) {
+      case TableConstraintType::PrimaryKey:
+        return std::string{"pkey"};
+      case TableConstraintType::Unique:
+        return std::string{"key"};
+      case TableConstraintType::ForeignKey:
+        return std::string{"fkey"};
+    }
+    throw std::runtime_error("Unknown table constraint type.");
+  }();
+  const auto base_name = table_name + "_" +
+                         boost::algorithm::join(constraint.column_names, "_") + "_" +
+                         suffix;
+  auto candidate = base_name;
+  size_t suffix_number = 2;
+  const auto name_exists = [&](const std::string& name) {
+    return std::any_of(
+        reserved_names.begin(), reserved_names.end(), [&](const auto& reserved_name) {
+          return boost::iequals(reserved_name, name);
+        });
+  };
+  while (name_exists(candidate)) {
+    candidate = base_name + "_" + std::to_string(suffix_number++);
+  }
+  return candidate;
+}
+
+void validate_new_constraint_against_existing(
+    const std::string& table_name,
+    const std::vector<TableConstraint>& existing_constraints,
+    const TableConstraint& normalized_constraint) {
+  for (const auto& existing_constraint : existing_constraints) {
+    if (constraint_names_match(existing_constraint, normalized_constraint)) {
+      throw std::runtime_error("Constraint " + *normalized_constraint.name +
+                               " already exists on table " + table_name + ".");
+    }
+    if (normalized_constraint.type == TableConstraintType::PrimaryKey &&
+        existing_constraint.type == TableConstraintType::PrimaryKey) {
+      throw std::runtime_error("Table " + table_name + " already has a primary key.");
+    }
+    if (existing_constraint.type != normalized_constraint.type) {
+      continue;
+    }
+    // Unique keys are column sets; foreign keys retain their source-to-target order.
+    const bool same_columns =
+        is_unique_constraint(normalized_constraint)
+            ? column_sets_match(existing_constraint.column_names,
+                                normalized_constraint.column_names)
+            : column_lists_match(existing_constraint.column_names,
+                                 normalized_constraint.column_names);
+    if (same_columns) {
+      if (normalized_constraint.type == TableConstraintType::ForeignKey) {
+        const auto& existing_reference = existing_constraint.foreign_key_reference;
+        const auto& new_reference = normalized_constraint.foreign_key_reference;
+        if (!existing_reference || !new_reference ||
+            !boost::iequals(existing_reference->table_name, new_reference->table_name) ||
+            !column_lists_match(existing_reference->column_names,
+                                new_reference->column_names)) {
+          continue;
+        }
+      }
+      throw std::runtime_error(
+          "Equivalent " + table_constraint_type_to_string(normalized_constraint.type) +
+          " constraint already exists on table " + table_name + ".");
+    }
+  }
+}
+
+bool references_unique_constraint(
+    const std::vector<TableConstraint>& referenced_constraints,
+    const std::vector<std::string>& reference_column_names) {
+  for (const auto& referenced_constraint : referenced_constraints) {
+    if (is_unique_constraint(referenced_constraint) &&
+        column_sets_match(referenced_constraint.column_names, reference_column_names)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void validate_foreign_key_lifetime(const TableDescriptor* child,
+                                   const TableDescriptor* parent) {
+  if (table_is_temporary(parent) && !table_is_temporary(child)) {
+    throw std::runtime_error("Persistent tables cannot reference temporary table " +
+                             parent->tableName + ".");
+  }
+  if (g_multi_instance && table_is_temporary(child) && !table_is_temporary(parent)) {
+    throw std::runtime_error(
+        "Temporary tables cannot reference shared persistent table " + parent->tableName +
+        " in multi-instance mode.");
+  }
+}
+
+bool constraint_uses_source_column(const TableConstraint& constraint,
+                                   const std::string& column_name) {
+  return std::any_of(constraint.column_names.begin(),
+                     constraint.column_names.end(),
+                     [&column_name](const auto& constrained_column) {
+                       return boost::iequals(constrained_column, column_name);
+                     });
+}
+
+bool foreign_key_references_table(const TableConstraint& constraint,
+                                  const std::string& table_name) {
+  return constraint.type == TableConstraintType::ForeignKey &&
+         constraint.foreign_key_reference &&
+         boost::iequals(constraint.foreign_key_reference->table_name, table_name);
+}
+
+bool foreign_key_references_column(const TableConstraint& constraint,
+                                   const std::string& column_name) {
+  return std::any_of(constraint.foreign_key_reference->column_names.begin(),
+                     constraint.foreign_key_reference->column_names.end(),
+                     [&column_name](const auto& referenced_column) {
+                       return boost::iequals(referenced_column, column_name);
+                     });
+}
+
+void validate_table_constraint_dependencies_for_drop(const Catalog& catalog,
+                                                     const TableDescriptor* td) {
+  CHECK(td);
+  for (const auto& [source, constraint] :
+       catalog.getReferencingConstraints(td->tableId)) {
+    if (source == td->tableName) {
+      continue;
+    }
+    throw std::runtime_error("Cannot drop table " + td->tableName +
+                             " because foreign key " +
+                             constraint.name.value_or("<unnamed>") + " on table " +
+                             source + " references it.");
+  }
+}
+
+void validate_table_constraint_dependencies_for_rename(const Catalog& catalog,
+                                                       const TableDescriptor* td) {
+  CHECK(td);
+  for (const auto& [source, constraint] :
+       catalog.getReferencingConstraints(td->tableId)) {
+    if (source == td->tableName) {
+      throw std::runtime_error(
+          "Renaming table " + td->tableName + " with self-referencing foreign key " +
+          constraint.name.value_or("<unnamed>") +
+          " is not supported. Drop the constraint before renaming and recreate it "
+          "afterward.");
+    }
+    throw std::runtime_error("Cannot rename table " + td->tableName +
+                             " because foreign key " +
+                             constraint.name.value_or("<unnamed>") + " on table " +
+                             source + " references it.");
+  }
+}
+
+void validate_table_constraint_dependencies_for_column_change(
+    const Catalog& catalog,
+    const TableDescriptor* td,
+    const ColumnDescriptor* cd,
+    const std::string& operation) {
+  CHECK(td);
+  CHECK(cd);
+  const auto reject = [&](const std::string& source, const TableConstraint& constraint) {
+    throw std::runtime_error("Cannot " + operation + " column " + td->tableName + "." +
+                             cd->columnName + " because constraint " +
+                             constraint.name.value_or("<unnamed>") + " on table " +
+                             source + " depends on it.");
+  };
+  for (const auto& constraint : catalog.getTableConstraints(td)) {
+    if (constraint_uses_source_column(constraint, cd->columnName)) {
+      reject(td->tableName, constraint);
+    }
+  }
+  for (const auto& [source, constraint] :
+       catalog.getReferencingConstraints(td->tableId)) {
+    if (foreign_key_references_column(constraint, cd->columnName)) {
+      reject(source, constraint);
+    }
+  }
+}
+
+void validate_table_constraint_dependencies_for_constraint_drop(
+    const Catalog& catalog,
+    const TableDescriptor* td,
+    const TableConstraint& dropped_constraint) {
+  if (!is_unique_constraint(dropped_constraint)) {
+    return;
+  }
+  const auto existing_constraints = catalog.getTableConstraints(td);
+  if (std::any_of(existing_constraints.begin(),
+                  existing_constraints.end(),
+                  [&](const auto& constraint) {
+                    return is_unique_constraint(constraint) &&
+                           !constraint_names_match(constraint, dropped_constraint) &&
+                           column_sets_match(constraint.column_names,
+                                             dropped_constraint.column_names);
+                  })) {
+    return;
+  }
+  for (const auto& [source, constraint] :
+       catalog.getReferencingConstraints(td->tableId)) {
+    if (column_sets_match(constraint.foreign_key_reference->column_names,
+                          dropped_constraint.column_names)) {
+      throw std::runtime_error("Cannot drop constraint " +
+                               dropped_constraint.name.value_or("<unnamed>") +
+                               " on table " + td->tableName + " because foreign key " +
+                               constraint.name.value_or("<unnamed>") + " on table " +
+                               source + " depends on it.");
+    }
+  }
+}
+
+}  // namespace
+
+void Catalog::insertConstraintRecords(const TableDescriptor& td,
+                                      const std::vector<StoredConstraint>& constraints) {
+  insert_constraint_records(
+      sqliteConnector_,
+      td.tableId,
+      table_is_temporary(&td),
+      constraints,
+      [&](const std::string& name) {
+        const auto parent = getMutableMetadataForTableUnlocked(name);
+        if (!parent || parent->shard >= 0 ||
+            (table_is_temporary(parent) && !table_is_temporary(&td))) {
+          throw std::runtime_error("Invalid referenced table " + name + " for " +
+                                   td.tableName + ".");
+        }
+        return parent->tableId;
+      });
+}
+
+std::vector<std::pair<std::string, TableConstraint>> Catalog::getReferencingConstraints(
+    int parent_id) const {
+  cat_sqlite_lock lock(this);
+  sqliteConnector_.query_with_text_param(
+      "SELECT owner,definition FROM mapd_constraints WHERE parent=?1 UNION ALL "
+      "SELECT owner,definition FROM mapd_temp_constraints WHERE parent=?1 "
+      "ORDER BY owner",
+      std::to_string(parent_id));
+  std::vector<std::pair<std::string, TableConstraint>> result;
+  for (size_t i = 0; i < sqliteConnector_.getNumRows(); ++i) {
+    const auto source = tableDescriptorMapById_.at(sqliteConnector_.getData<int>(i, 0));
+    auto keys = parse_table_constraints_from_key_metainfo(
+        "[" + sqliteConnector_.getData<std::string>(i, 1) + "]");
+    if (keys.size() != 1 || !keys.front().foreign_key_reference) {
+      throw std::runtime_error("Invalid indexed foreign key on table " +
+                               source->tableName + ".");
+    }
+    result.emplace_back(source->tableName, std::move(keys.front()));
+  }
+  return result;
+}
+
+std::vector<TableConstraint> Catalog::getTableConstraints(
+    const TableDescriptor* td) const {
+  CHECK(td);
+  cat_read_lock read_lock(this);
+  try {
+    return parse_table_constraints_from_key_metainfo(td->keyMetainfo);
+  } catch (const std::runtime_error& e) {
+    throw std::runtime_error("Invalid constraint metadata for table " + td->tableName +
+                             ": " + e.what());
+  }
+}
+
+std::map<std::string, std::vector<int32_t>> Catalog::getForeignKeyColumnOrdinals(
+    const TableDescriptor* td) const {
+  cat_read_lock read_lock(this);
+  std::map<std::string, std::vector<int32_t>> ordinals;
+  for (const auto& constraint : getTableConstraints(td)) {
+    if (!constraint.foreign_key_reference || !constraint.name) {
+      continue;
+    }
+    const auto& reference = *constraint.foreign_key_reference;
+    const auto foreign_td = getMetadataForTable(reference.table_name, false);
+    auto columns = foreign_td ? get_column_ordinals_for_table(
+                                    *this, foreign_td, reference.column_names)
+                              : std::nullopt;
+    if (!columns) {
+      LOG(WARNING) << "Skipping foreign key " << *constraint.name << " on table "
+                   << td->tableName << " in planner statistics: "
+                   << (foreign_td ? "missing referenced column in "
+                                  : "missing referenced table ")
+                   << reference.table_name << "("
+                   << constraint_column_list_to_string(reference.column_names) << ").";
+      continue;
+    }
+    ordinals.emplace(*constraint.name, std::move(*columns));
+  }
+  return ordinals;
+}
+
+void Catalog::validateColumnConstraintDependencies(const TableDescriptor* td,
+                                                   const ColumnDescriptor* cd,
+                                                   const std::string& operation) const {
+  validate_table_constraint_dependencies_for_column_change(*this, td, cd, operation);
+}
+
+TableConstraint Catalog::normalizeTableConstraint(
+    const TableDescriptor* td,
+    const TableConstraint& constraint) const {
+  CHECK(td);
+  if (td->isView) {
+    throw std::runtime_error("Table constraints cannot be added to views.");
+  }
+
+  TableConstraint normalized_constraint = constraint;
+  normalized_constraint.enforced = false;
+  normalized_constraint.column_names =
+      normalize_constraint_columns(*this, td, constraint.column_names);
+  if (normalized_constraint.type == TableConstraintType::PrimaryKey) {
+    for (const auto& column : normalized_constraint.column_names) {
+      if (!getMetadataForColumn(td->tableId, column)->columnType.get_notnull()) {
+        throw std::runtime_error("Primary key column " + td->tableName + "." + column +
+                                 " must be NOT NULL before adding a primary key.");
+      }
+    }
+  }
+
+  const auto existing_constraints = getTableConstraints(td);
+  if (!normalized_constraint.name || normalized_constraint.name->empty()) {
+    normalized_constraint.name = generated_constraint_name(
+        td->tableName, normalized_constraint, get_constraint_names(existing_constraints));
+  }
+  validate_new_constraint_against_existing(
+      td->tableName, existing_constraints, normalized_constraint);
+
+  if (normalized_constraint.type != TableConstraintType::ForeignKey) {
+    normalized_constraint.foreign_key_reference = {};
+    return normalized_constraint;
+  }
+
+  if (!constraint.foreign_key_reference) {
+    throw std::runtime_error("Foreign key constraint is missing a referenced table.");
+  }
+  auto reference = *constraint.foreign_key_reference;
+  const auto foreign_td = getMetadataForTable(reference.table_name, false);
+  if (!foreign_td) {
+    throw std::runtime_error("Referenced table " + reference.table_name +
+                             " does not exist.");
+  }
+  reference.table_name = foreign_td->tableName;
+  validate_foreign_key_lifetime(td, foreign_td);
+  reference.column_names =
+      normalize_constraint_columns(*this, foreign_td, reference.column_names);
+  if (reference.column_names.size() != normalized_constraint.column_names.size()) {
+    throw std::runtime_error(
+        "Foreign key column count does not match referenced key "
+        "column count.");
+  }
+  validate_foreign_key_column_types(
+      td->tableName,
+      normalized_constraint.column_names,
+      get_column_types_for_table(*this, td, normalized_constraint.column_names),
+      foreign_td->tableName,
+      reference.column_names,
+      get_column_types_for_table(*this, foreign_td, reference.column_names));
+
+  const auto referenced_constraints = getTableConstraints(foreign_td);
+  if (!references_unique_constraint(referenced_constraints, reference.column_names)) {
+    throw std::runtime_error("Foreign key on table " + td->tableName +
+                             " references non-unique columns " +
+                             constraint_column_list_to_string(reference.column_names) +
+                             " on table " + foreign_td->tableName + ".");
+  }
+
+  normalized_constraint.foreign_key_reference = reference;
+  return normalized_constraint;
+}
+
+std::vector<TableConstraint> Catalog::normalizeTableConstraintsForCreate(
+    const TableDescriptor* td,
+    std::list<ColumnDescriptor>& columns,
+    const std::vector<TableConstraint>& constraints) const {
+  CHECK(td);
+  if (td->isView) {
+    throw std::runtime_error("Table constraints cannot be added to views.");
+  }
+
+  std::vector<TableConstraint> normalized_constraints;
+  normalized_constraints.reserve(constraints.size());
+  // Explicit names take priority even when their declarations appear later.
+  auto reserved_names = get_constraint_names(constraints);
+
+  for (const auto& constraint : constraints) {
+    TableConstraint normalized_constraint = constraint;
+    normalized_constraint.enforced = false;
+    normalized_constraint.column_names =
+        normalize_constraint_columns(td->tableName, columns, constraint.column_names);
+    if (!normalized_constraint.name || normalized_constraint.name->empty()) {
+      normalized_constraint.name =
+          generated_constraint_name(td->tableName, normalized_constraint, reserved_names);
+      reserved_names.emplace_back(*normalized_constraint.name);
+    }
+    validate_new_constraint_against_existing(
+        td->tableName, normalized_constraints, normalized_constraint);
+    if (normalized_constraint.type != TableConstraintType::ForeignKey) {
+      normalized_constraint.foreign_key_reference = {};
+    }
+    normalized_constraints.emplace_back(std::move(normalized_constraint));
+  }
+
+  for (const auto& constraint : normalized_constraints) {
+    if (constraint.type == TableConstraintType::PrimaryKey) {
+      for (auto& cd : columns) {
+        if (constraint_uses_source_column(constraint, cd.columnName)) {
+          cd.columnType.set_notnull(true);
+        }
+      }
+    }
+  }
+
+  for (auto& normalized_constraint : normalized_constraints) {
+    if (normalized_constraint.type != TableConstraintType::ForeignKey) {
+      continue;
+    }
+    if (!normalized_constraint.foreign_key_reference) {
+      throw std::runtime_error("Foreign key constraint is missing a referenced table.");
+    }
+
+    auto reference = *normalized_constraint.foreign_key_reference;
+    const auto self_reference = boost::iequals(reference.table_name, td->tableName);
+    const TableDescriptor* foreign_td = nullptr;
+    if (!self_reference) {
+      foreign_td = getMetadataForTable(reference.table_name, false);
+      if (!foreign_td) {
+        throw std::runtime_error("Referenced table " + reference.table_name +
+                                 " does not exist.");
+      }
+    }
+
+    reference.table_name = self_reference ? td->tableName : foreign_td->tableName;
+    if (!self_reference) {
+      validate_foreign_key_lifetime(td, foreign_td);
+    }
+    reference.column_names =
+        self_reference
+            ? normalize_constraint_columns(td->tableName, columns, reference.column_names)
+            : normalize_constraint_columns(*this, foreign_td, reference.column_names);
+
+    if (reference.column_names.size() != normalized_constraint.column_names.size()) {
+      throw std::runtime_error(
+          "Foreign key column count does not match referenced key "
+          "column count.");
+    }
+    validate_foreign_key_column_types(
+        td->tableName,
+        normalized_constraint.column_names,
+        get_column_types_for_columns(
+            td->tableName, columns, normalized_constraint.column_names),
+        reference.table_name,
+        reference.column_names,
+        self_reference
+            ? get_column_types_for_columns(td->tableName, columns, reference.column_names)
+            : get_column_types_for_table(*this, foreign_td, reference.column_names));
+
+    const auto referenced_constraints =
+        self_reference ? normalized_constraints : getTableConstraints(foreign_td);
+    if (!references_unique_constraint(referenced_constraints, reference.column_names)) {
+      const auto foreign_table_name =
+          self_reference ? td->tableName : foreign_td->tableName;
+      throw std::runtime_error("Foreign key on table " + td->tableName +
+                               " references non-unique columns " +
+                               constraint_column_list_to_string(reference.column_names) +
+                               " on table " + foreign_table_name + ".");
+    }
+
+    normalized_constraint.foreign_key_reference = reference;
+  }
+
+  return normalized_constraints;
+}
+
+void Catalog::addTableConstraint(const TableDescriptor* td,
+                                 const TableConstraint& constraint) {
+  CHECK(td);
+  const auto normalized_constraint = normalizeTableConstraint(td, constraint);
+  updateTableConstraintMetadata(
+      td,
+      [&](const auto& metadata) {
+        return append_table_constraint_to_key_metainfo(metadata, normalized_constraint);
+      },
+      "ADD CONSTRAINT");
+}
+
+void Catalog::dropTableConstraint(const TableDescriptor* td,
+                                  const std::string& constraint_name) {
+  if (!td) {
+    throw std::invalid_argument("Cannot drop a constraint from a null table.");
+  }
+  if (constraint_name.empty()) {
+    throw std::invalid_argument("Table constraint name cannot be empty.");
+  }
+
+  const auto constraints = getTableConstraints(td);
+  const auto constraint_it =
+      std::find_if(constraints.begin(), constraints.end(), [&](const auto& constraint) {
+        return constraint.name && boost::iequals(*constraint.name, constraint_name);
+      });
+  if (constraint_it == constraints.end()) {
+    throw std::runtime_error("Constraint " + constraint_name +
+                             " does not exist on table " + td->tableName + ".");
+  }
+  validate_table_constraint_dependencies_for_constraint_drop(*this, td, *constraint_it);
+  updateTableConstraintMetadata(
+      td,
+      [&](const auto& metadata) {
+        return remove_table_constraint_from_key_metainfo(metadata, constraint_name);
+      },
+      "DROP CONSTRAINT");
+}
+
+void Catalog::updateTableConstraintMetadata(
+    const TableDescriptor* td,
+    const std::function<std::string(const std::string&)>& update,
+    const std::string& operation) {
+  if (td->shard >= 0) {
+    throw std::runtime_error("Cannot alter constraints on physical shard " +
+                             td->tableName + ". Alter the logical table instead.");
+  }
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  std::map<int, std::string> updated_metadata;
+  updated_metadata.emplace(td->tableId, update(td->keyMetainfo));
+  for (const auto shard : getPhysicalTablesDescriptors(td, false)) {
+    if (shard->tableId != td->tableId) {
+      updated_metadata.emplace(shard->tableId, update(shard->keyMetainfo));
+    }
+  }
+  const auto context = "ALTER TABLE " + td->tableName + " " + operation;
+  calciteMgr_->publishTableMetadata(currentDB_.dbName, td->tableName, [&] {
+    sqliteConnector_.query("BEGIN TRANSACTION");
+    try {
+      delete_constraint_records(sqliteConnector_, td->tableId, table_is_temporary(td));
+      insertConstraintRecords(
+          *td, split_key_metadata(updated_metadata.at(td->tableId)).constraints);
+    } catch (const std::exception&) {
+      end_transaction_or_abort(sqliteConnector_, "ROLLBACK TRANSACTION", context);
+      throw;
+    }
+    end_transaction_or_abort(sqliteConnector_, "END TRANSACTION", context);
+    for (auto& [table_id, metadata] : updated_metadata) {
+      tableDescriptorMapById_.at(table_id)->keyMetainfo.swap(metadata);
+    }
+  });
 }
 
 // used by rollback_table_epoch to clean up in memory artifacts after a rollback
@@ -4620,6 +5436,7 @@ void Catalog::removeChunks(const int table_id) const {
 }
 
 void Catalog::dropTable(const TableDescriptor* td) {
+  validate_table_constraint_dependencies_for_drop(*this, td);
   SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
       DBObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType), this);
   SysCatalog::instance().dropPoliciesForTable(*this, td->tableName);
@@ -4684,6 +5501,7 @@ void Catalog::eraseTableMetadata(const TableDescriptor* td) {
 
 void Catalog::executeDropTableSqliteQueries(const TableDescriptor* td) {
   const int tableId = td->tableId;
+  delete_constraint_records(sqliteConnector_, tableId, table_is_temporary(td));
   sqliteConnector_.query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?",
                                          std::to_string(tableId));
   sqliteConnector_.query_with_text_params(
@@ -4769,6 +5587,7 @@ void rename_column(const std::string& renamed_table,
 }  // namespace
 
 void Catalog::renameTable(const TableDescriptor* td, const string& newTableName) {
+  validate_table_constraint_dependencies_for_rename(*this, td);
   {
     cat_write_lock write_lock(this);
     cat_sqlite_lock sqlite_lock(this);
@@ -4779,7 +5598,8 @@ void Catalog::renameTable(const TableDescriptor* td, const string& newTableName)
       CHECK(!physicalTables.empty());
       for (size_t i = 0; i < physicalTables.size(); i++) {
         int32_t physical_tb_id = physicalTables[i];
-        const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+        const TableDescriptor* phys_td =
+            getMutableMetadataForTableUnlocked(physical_tb_id);
         CHECK(phys_td);
         std::string newPhysTableName =
             generatePhysicalTableName(newTableName, static_cast<int32_t>(i + 1));
@@ -4908,6 +5728,7 @@ void Catalog::renameTables(
     //    or will exist when executed in 'name' order
     auto td = getCachedTableDescriptor(cachedTableMap, curTableName);
     CHECK(td);
+    validate_table_constraint_dependencies_for_rename(*this, td);
 
     tableIds.push_back(td->tableId);
     if (uniqueOrderedTableIds.find(td->tableId) == uniqueOrderedTableIds.end()) {
@@ -4958,7 +5779,8 @@ void Catalog::renameTables(
         CHECK(!physicalTables.empty());
         for (size_t k = 0; k < physicalTables.size(); k++) {
           int32_t physical_tb_id = physicalTables[k];
-          const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+          const TableDescriptor* phys_td =
+              getMutableMetadataForTableUnlocked(physical_tb_id);
           CHECK(phys_td);
           std::string newPhysTableName = generatePhysicalTableName(newTableName, (k + 1));
           allNames.emplace_back(phys_td->tableName, newPhysTableName);
@@ -5023,6 +5845,7 @@ void Catalog::renameTables(
 void Catalog::renameColumn(const TableDescriptor* td,
                            const ColumnDescriptor* cd,
                            const string& newColumnName) {
+  validate_table_constraint_dependencies_for_column_change(*this, td, cd, "rename");
   {
     cat_write_lock write_lock(this);
     cat_sqlite_lock sqlite_lock(this);
@@ -5426,6 +6249,14 @@ int Catalog::getLogicalTableId(const int physicalTableId) const {
   return physicalTableId;
 }
 
+void Catalog::markTableStatisticsDirty(int table_id) const {
+  cat_read_lock read_lock(this);
+  const auto td = getMetadataForTable(getLogicalTableId(table_id), false);
+  if (td) {
+    calciteMgr_->markTableStatisticsDirty(currentDB_.dbName, td->tableName);
+  }
+}
+
 void Catalog::checkpoint(const int logicalTableId) const {
   const auto td = getMetadataForTable(logicalTableId);
   const auto shards = getPhysicalTablesDescriptors(td);
@@ -5669,7 +6500,9 @@ TableDescriptor* Catalog::createTableFromDiskUnlocked(int32_t table_id) {
   std::string query(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
       "max_chunk_size, frag_page_size, max_rows, partitions, shard_column_id, shard, "
-      "num_shards, key_metainfo, userid, sort_column_id, storage_type, "
+      "num_shards, "
+      "(SELECT m.key_metainfo FROM mapd_table_key_metadata m WHERE "
+      "m.tableid=mapd_tables.tableid), userid, sort_column_id, storage_type, "
       "max_rollback_epochs, is_system_table from mapd_tables WHERE tableid = " +
       std::to_string(table_id));
   sqliteConnector_.query(query);
@@ -5921,6 +6754,11 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
   // gather SHARED DICTIONARYs
   if (shared_dicts.size()) {
     os << ", " << boost::algorithm::join(shared_dicts, ", ");
+  }
+  std::vector<std::string> constraint_definitions;
+  gatherTableConstraintInfo(constraint_definitions, td, true);
+  for (const auto& definition : constraint_definitions) {
+    os << ", " << definition;
   }
   // gather WITH options ...
   std::vector<std::string> with_options;
@@ -6375,6 +7213,49 @@ void Catalog::gatherAdditionalInfo(std::vector<std::string>& additional_info,
         }
       }
     }
+  }
+  gatherTableConstraintInfo(additional_info, td, false);
+}
+
+void Catalog::gatherTableConstraintInfo(std::vector<std::string>& additional_info,
+                                        const TableDescriptor* td,
+                                        bool for_archive) const {
+  for (const auto& constraint : getTableConstraints(td)) {
+    // A single-table archive must not depend on tables it does not contain.
+    if (for_archive && constraint.type == TableConstraintType::ForeignKey &&
+        !foreign_key_references_table(constraint, td->tableName)) {
+      continue;
+    }
+    std::vector<std::string> quoted_columns;
+    quoted_columns.reserve(constraint.column_names.size());
+    for (const auto& column_name : constraint.column_names) {
+      quoted_columns.emplace_back(quoteIfRequired(column_name));
+    }
+
+    std::string constraint_sql;
+    if (constraint.name && !constraint.name->empty()) {
+      constraint_sql += "CONSTRAINT " + quoteIfRequired(*constraint.name) + " ";
+    }
+    constraint_sql += table_constraint_type_to_string(constraint.type) + " (" +
+                      boost::algorithm::join(quoted_columns, ", ") + ")";
+
+    if (constraint.type == TableConstraintType::ForeignKey &&
+        constraint.foreign_key_reference) {
+      std::vector<std::string> quoted_reference_columns;
+      quoted_reference_columns.reserve(
+          constraint.foreign_key_reference->column_names.size());
+      for (const auto& column_name : constraint.foreign_key_reference->column_names) {
+        quoted_reference_columns.emplace_back(quoteIfRequired(column_name));
+      }
+      const auto& referenced_table = constraint.foreign_key_reference->table_name;
+      const auto reference_name =
+          for_archive && boost::iequals(referenced_table, td->tableName)
+              ? std::string{"@T"}
+              : quoteIfRequired(referenced_table);
+      constraint_sql += " REFERENCES " + reference_name + " (" +
+                        boost::algorithm::join(quoted_reference_columns, ", ") + ")";
+    }
+    additional_info.emplace_back(constraint_sql);
   }
 }
 

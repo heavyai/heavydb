@@ -1339,7 +1339,7 @@ TEST_F(ViewObject, CalciteViewResolution) {
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, false);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(false, false, {});
+      g_calcite->getCalciteOptimizationOption(false, false, {}, false, false);
 
   auto query_state1 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_table");
@@ -4739,8 +4739,8 @@ class ColumnCapturerPermissionTest : public DBHandlerTestFixture {
 
     const auto calciteQueryParsingOption =
         calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-    const auto calciteOptimizationOption =
-        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+    const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+        false, g_enable_watchdog, {}, false, false);
     auto result =
         query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
                                                            query_state_proxy,

@@ -20,6 +20,7 @@
 #include <atomic>
 #include <cstdint>
 #include <ctime>
+#include <functional>
 #include <limits>
 #include <list>
 #include <map>
@@ -38,6 +39,7 @@
 #include "Catalog/LinkDescriptor.h"
 #include "Catalog/SessionInfo.h"
 #include "Catalog/SysCatalog.h"
+#include "Catalog/TableConstraints.h"
 #include "Catalog/TableDescriptor.h"
 #include "Catalog/TableMetadata.h"
 #include "Catalog/Types.h"
@@ -137,7 +139,7 @@ class Catalog final {
           std::shared_ptr<Calcite> calcite,
           bool is_new_db,
           const std::map<int32_t, std::string>& user_id_name_map,
-          const UserMetadata& root_user);
+          const UserMetadata* system_objects_owner);
 
   /**
    * @brief Destructor - deletes all
@@ -176,7 +178,24 @@ class Catalog final {
   void dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd);
   void dropColumnPolicies(const TableDescriptor& td, const ColumnDescriptor& cd);
   void invalidateCachesForTable(const int table_id);
+  void markTableStatisticsDirty(int table_id) const;
   void removeFragmenterForTable(const int table_id) const;
+  std::vector<TableConstraint> getTableConstraints(const TableDescriptor* td) const;
+  std::vector<std::pair<std::string, TableConstraint>> getReferencingConstraints(
+      int parent_id) const;
+  std::map<std::string, std::vector<int32_t>> getForeignKeyColumnOrdinals(
+      const TableDescriptor* td) const;
+  void validateColumnConstraintDependencies(const TableDescriptor* td,
+                                            const ColumnDescriptor* cd,
+                                            const std::string& operation) const;
+  TableConstraint normalizeTableConstraint(const TableDescriptor* td,
+                                           const TableConstraint& constraint) const;
+  std::vector<TableConstraint> normalizeTableConstraintsForCreate(
+      const TableDescriptor* td,
+      std::list<ColumnDescriptor>& columns,
+      const std::vector<TableConstraint>& constraints) const;
+  void addTableConstraint(const TableDescriptor* td, const TableConstraint& constraint);
+  void dropTableConstraint(const TableDescriptor* td, const std::string& constraint_name);
 
   const std::map<int, const ColumnDescriptor*> getDictionaryToColumnMapping();
 
@@ -698,6 +717,7 @@ class Catalog final {
                       const std::string& new_owner);
 
   bool isInfoSchemaDb() const;
+  void conditionallyInitializeSystemObjects(const UserMetadata& root_user);
 
   void checkDateInDaysColumnMigration();
   bool checkDropRenderGroupColumnsMigration();
@@ -812,7 +832,7 @@ class Catalog final {
   CustomExpressionMapById custom_expr_map_by_id_;
   TableDictColumnsMap dict_columns_by_table_id_;
 
-  SqliteConnector sqliteConnector_;
+  mutable SqliteConnector sqliteConnector_;
   const DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
 
@@ -869,6 +889,15 @@ class Catalog final {
                             std::set<std::string>& shared_dict_column_names,
                             const TableDescriptor* td) const;
   std::string quoteIfRequired(const std::string& column_name) const;
+  void gatherTableConstraintInfo(std::vector<std::string>& definitions,
+                                 const TableDescriptor* td,
+                                 bool for_archive) const;
+  void insertConstraintRecords(const TableDescriptor& td,
+                               const std::vector<StoredConstraint>& constraints);
+  void updateTableConstraintMetadata(
+      const TableDescriptor* td,
+      const std::function<std::string(const std::string&)>& update,
+      const std::string& operation);
   DeletedColumnPerTableMap deletedColumnPerTable_;
   void adjustAlteredTableFiles(
       const std::string& temp_data_dir,
@@ -927,7 +956,6 @@ class Catalog final {
       const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
       int32_t new_owner_id);
 
-  void conditionallyInitializeSystemObjects(const UserMetadata& root_user);
   void initializeSystemServers();
   void initializeSystemTables();
   void initializeUsersSystemTable();

@@ -416,6 +416,48 @@ void HeavyDBSharedDictOpt(List<SqlNode> list) :
     }
 }
 
+void TableConstraint(List<SqlNode> list) :
+{
+    final Span s;
+    SqlIdentifier constraintName = null;
+    SqlNodeList columnList;
+    SqlIdentifier referencesTable;
+    SqlNodeList referencesColumnList;
+}
+{
+    { s = span(); }
+    [ <CONSTRAINT> constraintName = SimpleIdentifier() ]
+    (
+        <PRIMARY> <KEY>
+        columnList = ParenthesizedSimpleIdentifierList()
+        {
+            list.add(SqlDdlNodes.primary(s.end(this), constraintName, columnList));
+        }
+    |
+        <UNIQUE>
+        columnList = ParenthesizedSimpleIdentifierList()
+        {
+            list.add(SqlDdlNodes.unique(s.end(this), constraintName, columnList));
+        }
+    |
+        <FOREIGN> <KEY>
+        columnList = ParenthesizedSimpleIdentifierList()
+        <REFERENCES>
+        referencesTable = CompoundIdentifier()
+        {
+            if (!referencesTable.isSimple()) {
+                throw new ParseException(
+                    "REFERENCES requires an unqualified table name in the current database.");
+            }
+        }
+        referencesColumnList = ParenthesizedSimpleIdentifierList()
+        {
+            list.add(SqlDdlNodes.foreign(
+                s.end(this), constraintName, columnList, referencesTable, referencesColumnList));
+        }
+    )
+}
+
 void TableElement(List<SqlNode> list) :
 {
     final SqlIdentifier id;
@@ -434,6 +476,9 @@ void TableElement(List<SqlNode> list) :
         HeavyDBShardKeyOpt(list)
     |
         HeavyDBSharedDictOpt(list)
+    |
+        LOOKAHEAD(2)
+        TableConstraint(list)
     |
         (
             id = SimpleIdentifier()
@@ -724,10 +769,12 @@ SqlDdl SqlAlterTable(Span s) :
     SqlIdentifier newTableName;
     SqlIdentifier columnName;
     SqlIdentifier newColumnName;
+    SqlIdentifier constraintName;
     SqlIdentifier columnType;
     SqlIdentifier encodingSpec;
     boolean notNull = false;
     SqlNodeList columnList = null;
+    final List<SqlNode> constraintList = new ArrayList<SqlNode>();
 }
 {
     <ALTER>
@@ -755,21 +802,38 @@ SqlDdl SqlAlterTable(Span s) :
         )
     |
         <DROP>
-        columnList = DropColumnNodeList()
-        {
-            sqlAlterTableBuilder.dropColumn(columnList);
-        }
+        (
+            <CONSTRAINT>
+            constraintName = SimpleIdentifier()
+            {
+                sqlAlterTableBuilder.dropConstraint(constraintName.toString());
+            }
+        |
+            columnList = DropColumnNodeList()
+            {
+                sqlAlterTableBuilder.dropColumn(columnList);
+            }
+        )
     |
         <ADD>
-        [<COLUMN>]
         (
-            columnList = TableElementList()
+            LOOKAHEAD(2)
+            TableConstraint(constraintList)
+            {
+                sqlAlterTableBuilder.addConstraint(
+                    new SqlNodeList(constraintList, s.end(this)));
+            }
             |
-            columnList = NoParenTableElementList()
+            [<COLUMN>]
+            (
+                columnList = TableElementList()
+                |
+                columnList = NoParenTableElementList()
+            )
+            {
+                sqlAlterTableBuilder.addColumnList(columnList);
+            }
         )
-        {
-            sqlAlterTableBuilder.addColumnList(columnList);
-        }
     |
         columnList = RepeatedAlterColumnList()
         {
