@@ -20,6 +20,7 @@
  */
 
 #include "Catalog/TableConstraints.h"
+#include "Logger/Logger.h"
 #include "Shared/JsonUtils.h"
 #include "SqliteConnector/SqliteConnector.h"
 
@@ -318,8 +319,10 @@ void initialize_constraint_storage(SqliteConnector& db) {
           tables.emplace(id, OldTable{id, name, physical, std::move(keys)});
         }
       } catch (const std::runtime_error& e) {
-        throw std::runtime_error("Cannot migrate constraint metadata for table " + name +
-                                 ": " + e.what());
+        const auto message =
+            "Cannot migrate constraint metadata for table " + name + ": " + e.what();
+        LOG(ERROR) << message;
+        throw std::runtime_error(message);
       }
     }
     // Only discard a physical copy when it agrees with the logical declaration.

@@ -10,6 +10,7 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/TableConstraints.h"
 #include "CudaMgr/CudaMgr.h"
+#include "LogCaptureTestHelper.h"
 #include "Parser/ParserNode.h"
 #include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
@@ -325,8 +326,14 @@ TEST_F(TableConstraintTransactionTest, MigratesLegacyReferencesAtomically) {
     db.query_with_text_param(
         "INSERT INTO mapd_tables VALUES (2,'c',-1,?1),(3,'c_shard',0,?1)", metadata);
     db.query("INSERT INTO mapd_logical_to_physical VALUES (3,2)");
-    EXPECT_THROW(Catalog_Namespace::initialize_constraint_storage(db),
-                 std::runtime_error);
+    {
+      LogCapture logs;
+      EXPECT_THROW(Catalog_Namespace::initialize_constraint_storage(db),
+                   std::runtime_error);
+      EXPECT_TRUE(
+          logs.contains("Cannot migrate constraint metadata for table broken: Malformed "
+                        "table key metadata."));
+    }
     db.query("SELECT name FROM sqlite_master WHERE name='mapd_constraints'");
     EXPECT_EQ(0u, db.getNumRows());
     db.query("SELECT key_metainfo FROM mapd_tables WHERE tableid=2");
