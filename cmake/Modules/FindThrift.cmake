@@ -89,10 +89,11 @@ if(Thrift_USE_STATIC_LIBS)
 endif()
 
 # Set standard CMake FindPackage variables if found.
-set(Thrift_LIBRARIES ${Thrift_LIBRARY})
-if(Thrift_USE_STATIC_LIBS)
-  set(Thrift_LIBRARIES ${Thrift_LIBRARIES} ${OPENSSL_LIBRARIES})
-endif()
+#
+# Thrift's SSL transport leaves OpenSSL symbols unresolved in the shared library
+# in some dependency builds.  Keep OpenSSL on the consumer link line after
+# libthrift so static OpenSSL archives satisfy those references.
+set(Thrift_LIBRARIES ${Thrift_LIBRARY} ${OPENSSL_LIBRARIES})
 
 set(Thrift_LIBRARY_DIRS ${Thrift_LIBRARY_DIR})
 set(Thrift_INCLUDE_DIRS ${Thrift_LIBRARY_DIR}/../include)
