@@ -7,6 +7,8 @@
 #define QUERYENGINE_RELALGEXECUTOR_H
 
 #include "QueryEngine/AggregatedResult.h"
+#include "QueryEngine/CardinalityEstimator.h"
+#include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
@@ -14,6 +16,7 @@
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/QueryRewrite.h"
 #include "QueryEngine/RelAlgDag.h"
+#include "QueryEngine/ResultSetEntryFilter.h"
 #include "QueryEngine/SpeculativeTopN.h"
 #include "QueryEngine/StreamingTopN.h"
 #include "Shared/scope.h"
@@ -31,6 +34,33 @@ class GfxContext;
 extern bool g_skip_intermediate_count;
 
 enum class MergeType { Union, Reduce };
+
+bool should_prefer_kernel_per_fragment_groupby_for_test(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos,
+    const size_t max_groups_buffer_entry_guess,
+    const Executor* executor);
+
+std::optional<size_t> non_amplifying_join_groupby_initial_guess_for_test(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos);
+
+std::optional<size_t> unique_temp_join_group_cardinality_upper_bound_for_test(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos);
+
+std::optional<size_t> slab_limited_speculative_groupby_entry_guess_for_test(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const Executor* executor,
+    const size_t proven_upper_bound);
+
+std::optional<size_t> projection_batched_fragment_output_upper_bound_for_test(
+    const std::vector<InputTableInfo>& table_infos,
+    const size_t max_rows_per_batch);
+
+std::optional<size_t> exact_per_device_projection_output_bound_for_test(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos);
 
 struct QueryStepExecutionResult {
   ExecutionResult result;
@@ -121,7 +151,8 @@ class RelAlgExecutor : private StorageIOFacility {
                                       const ExecutionOptions& eo,
                                       const bool skip_device_id_selection,
                                       RenderInfo* render_info,
-                                      const int64_t queue_time_ms);
+                                      const int64_t queue_time_ms,
+                                      const SortInfo& root_sort_info = SortInfo());
 
   QueryStepExecutionResult executeRelAlgQuerySingleStep(const RaExecutionSequence& seq,
                                                         const size_t step_idx,
@@ -223,7 +254,8 @@ class RelAlgExecutor : private StorageIOFacility {
                          const ExecutionOptions&,
                          bool skip_device_id_selection,
                          RenderInfo*,
-                         const int64_t queue_time_ms);
+                         const int64_t queue_time_ms,
+                         const SortInfo& root_sort_info);
 
   void executeUpdate(const RelAlgNode* node,
                      const CompilationOptions& co,
@@ -235,24 +267,36 @@ class RelAlgExecutor : private StorageIOFacility {
                      const ExecutionOptions& eo_in,
                      const int64_t queue_time_ms);
 
-  ExecutionResult executeCompound(const RelCompound*,
-                                  const CompilationOptions&,
-                                  const ExecutionOptions&,
-                                  RenderInfo*,
-                                  const int64_t queue_time_ms);
+  ExecutionResult executeCompound(
+      const RelCompound*,
+      const CompilationOptions&,
+      const ExecutionOptions&,
+      RenderInfo*,
+      const int64_t queue_time_ms,
+      const ResultSetEntryFilter* deferred_sparse_baseline_filter = nullptr,
+      bool defer_gpu_baseline_hash_host_storage_before_copy = false,
+      const std::vector<size_t>& device_resident_output_column_indices = {},
+      const SortInfo& root_sort_info = SortInfo());
 
-  ExecutionResult executeAggregate(const RelAggregate* aggregate,
-                                   const CompilationOptions& co,
-                                   const ExecutionOptions& eo,
-                                   RenderInfo* render_info,
-                                   const int64_t queue_time_ms);
+  ExecutionResult executeAggregate(
+      const RelAggregate* aggregate,
+      const CompilationOptions& co,
+      const ExecutionOptions& eo,
+      RenderInfo* render_info,
+      const int64_t queue_time_ms,
+      const ResultSetEntryFilter* deferred_sparse_baseline_filter = nullptr,
+      bool defer_gpu_baseline_hash_host_storage_before_copy = false,
+      const std::vector<size_t>& device_resident_output_column_indices = {},
+      const SortInfo& root_sort_info = SortInfo());
 
-  ExecutionResult executeProject(const RelProject*,
-                                 const CompilationOptions&,
-                                 const ExecutionOptions&,
-                                 RenderInfo*,
-                                 const int64_t queue_time_ms,
-                                 const std::optional<size_t> previous_count);
+  ExecutionResult executeProject(
+      const RelProject*,
+      const CompilationOptions&,
+      const ExecutionOptions&,
+      RenderInfo*,
+      const int64_t queue_time_ms,
+      const std::optional<size_t> previous_count,
+      const std::vector<size_t>& device_resident_output_column_indices = {});
 
   ExecutionResult executeTableFunction(const RelTableFunction*,
                                        const CompilationOptions&,
@@ -402,20 +446,13 @@ class RelAlgExecutor : private StorageIOFacility {
                                                     const bool just_explain,
                                                     const bool is_gpu);
 
-  void addTemporaryTable(const int node_id, const ResultSetPtr& result) {
-    CHECK_LT(size_t(0), result->colCount());
-    CHECK_LT(node_id, 0);
-    auto it_ok = temporary_tables_.emplace(node_id, result);
-    CHECK(it_ok.second) << "Failed to add temporary table (node_id: " << node_id << ")";
-    VLOG(1) << "Add temporary table (node_id: " << node_id << ")";
-  }
+  void addTemporaryTable(const int node_id,
+                         const ResultSetPtr& result,
+                         const RelAlgNode* source_node = nullptr);
 
-  void eraseFromTemporaryTables(const int node_id) {
-    if (temporary_tables_.find(node_id) != temporary_tables_.end()) {
-      temporary_tables_.erase(node_id);
-      VLOG(1) << "Erase temporary table (node_id: " << node_id << ")";
-    }
-  }
+  void eraseFromTemporaryTables(const int node_id);
+
+  void addTemporaryTableSourceNodes(TableIdToNodeMap& table_id_to_node_map) const;
 
   void handleNop(RaExecutionDesc& ed);
 
@@ -449,9 +486,32 @@ class RelAlgExecutor : private StorageIOFacility {
   std::unique_ptr<RelAlgDag> query_dag_;
   std::shared_ptr<const query_state::QueryState> query_state_;
   TemporaryTables temporary_tables_;
+  std::unordered_map<int, std::shared_ptr<const RelAlgNode>>
+      temporary_table_source_nodes_;
+  TemporaryTableSourceInfoMap temporary_table_source_info_;
   time_t now_;
   std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_join_info_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
+  std::unordered_map<QueryPlanHash, ExecutionResult> intra_query_result_cache_;
+  struct ProjectionResultCacheEntry {
+    std::vector<QueryPlanHash> target_expr_hashes;
+    std::vector<TargetMetaInfo> targets_meta;
+    ExecutionResult result;
+  };
+  std::unordered_map<QueryPlanHash, std::vector<ProjectionResultCacheEntry>>
+      projection_result_cache_;
+  std::unordered_map<QueryPlanHash, std::vector<ProjectionResultCacheEntry>>
+      compound_projection_result_cache_;
+  struct AggregatePrefixResultCacheEntry {
+    std::vector<QueryPlanHash> target_expr_hashes;
+    std::vector<TargetMetaInfo> targets_meta;
+    ExecutionResult result;
+  };
+  std::unordered_map<QueryPlanHash, std::vector<AggregatePrefixResultCacheEntry>>
+      aggregate_prefix_result_cache_;
+  std::unordered_map<int, ExecutionResult> prefiltered_filter_result_cache_;
+  ColumnCacheMap column_cache_;
+  ResultSetColumnCache result_set_column_cache_;
   int64_t queue_time_ms_;
   bool has_step_for_union_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;

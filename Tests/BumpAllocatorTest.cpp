@@ -27,6 +27,7 @@ namespace {
 
 size_t g_num_gpus{0};
 bool g_keep_data{false};
+constexpr size_t row_count_per_gpu = 64;
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
@@ -44,6 +45,15 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const ExecutorDeviceType device_type) {
   return QR::get()->runSQL(query_str, device_type, true, true);
+}
+
+size_t test_row_count() {
+  return row_count_per_gpu * g_num_gpus;
+}
+
+std::string select_test_rows_query() {
+  return "SELECT t1.x + 0 FROM test t1 JOIN test t2 ON t1.x = t2.x WHERE t1.x < " +
+         std::to_string(test_row_count()) + ";";
 }
 
 // Note: This assumes a homogenous GPU setup
@@ -91,7 +101,7 @@ class LowGpuBufferMemory : public ::testing::Test {
     QR::get()->runDDLStatement(create_table_stmt);
 
     // Insert enough data to just barely overflow
-    for (size_t i = 0; i < 64 * g_num_gpus; i++) {
+    for (size_t i = 0; i < test_row_count(); i++) {
       const std::string insert_stmt{"INSERT INTO test VALUES (" + std::to_string(i) +
                                     ", " + std::to_string(i) + ");"};
       run_multiple_agg(insert_stmt, ExecutorDeviceType::CPU);
@@ -123,25 +133,26 @@ class LowGpuBufferMemory : public ::testing::Test {
 
 TEST_F(LowGpuBufferMemory, CPUMode) {
   // Baseline correctness
-  auto result_rows =
-      run_multiple_agg("SELECT x FROM test WHERE x < 500;", ExecutorDeviceType::CPU);
-  ASSERT_EQ(result_rows->rowCount(), size_t(64 * g_num_gpus));
+  auto result_rows = run_multiple_agg(select_test_rows_query(), ExecutorDeviceType::CPU);
+  ASSERT_EQ(result_rows->getDeviceType(), ExecutorDeviceType::CPU);
+  ASSERT_EQ(result_rows->rowCount(), test_row_count());
 }
 
-TEST_F(LowGpuBufferMemory, OutOfMemory) {
+TEST_F(LowGpuBufferMemory, OOMRetryOnGpuKernelPerFragment) {
   SKIP_NO_GPU();
 
+  // CPU retry is disabled in this fixture. The GPU path should recover by
+  // shrinking execution to kernel-per-fragment instead of punting to CPU.
   try {
-    run_multiple_agg("SELECT x FROM test WHERE x < 500;", ExecutorDeviceType::GPU);
-    ASSERT_TRUE(false) << "Expected query to throw exception";
+    auto result_rows =
+        run_multiple_agg(select_test_rows_query(), ExecutorDeviceType::GPU);
+    ASSERT_EQ(result_rows->getDeviceType(), ExecutorDeviceType::GPU);
+    ASSERT_EQ(result_rows->rowCount(), test_row_count());
   } catch (const std::exception& e) {
-    ASSERT_EQ(
-        std::string{"Query ran out of GPU memory, unable to automatically retry on CPU"},
-        std::string(e.what()));
+    ASSERT_TRUE(false) << "Expected GPU kernel-per-fragment retry to recover. "
+                       << "Query threw: " << e.what();
   }
 }
-
-constexpr size_t row_count_per_gpu = 64;
 
 class LowGpuBufferMemoryCpuRetry : public ::testing::Test {
  public:
@@ -154,7 +165,7 @@ class LowGpuBufferMemoryCpuRetry : public ::testing::Test {
 
     // Insert enough data to exceed the max buffer entry guess and force a pre-flight CPU
     // count
-    for (size_t i = 0; i < row_count_per_gpu * g_num_gpus; i++) {
+    for (size_t i = 0; i < test_row_count(); i++) {
       const std::string insert_stmt{"INSERT INTO test VALUES (" + std::to_string(i) +
                                     ", " + std::to_string(i) + ");"};
       run_multiple_agg(insert_stmt, ExecutorDeviceType::CPU);
@@ -184,13 +195,16 @@ class LowGpuBufferMemoryCpuRetry : public ::testing::Test {
   bool allow_cpu_retry_state_;
 };
 
-TEST_F(LowGpuBufferMemoryCpuRetry, OOMRetryOnCPU) {
+TEST_F(LowGpuBufferMemoryCpuRetry, OOMRecoveryPrefersGpuBeforeCpuFallback) {
   SKIP_NO_GPU();
 
   try {
     auto result_rows =
-        run_multiple_agg("SELECT x FROM test WHERE x < 500;", ExecutorDeviceType::GPU);
-    ASSERT_EQ(result_rows->rowCount(), size_t(row_count_per_gpu * g_num_gpus));
+        run_multiple_agg(select_test_rows_query(), ExecutorDeviceType::GPU);
+    // CPU fallback is available, but the lower-cost kernel-per-fragment GPU retry
+    // should recover first.
+    ASSERT_EQ(result_rows->getDeviceType(), ExecutorDeviceType::GPU);
+    ASSERT_EQ(result_rows->rowCount(), test_row_count());
   } catch (const std::exception& e) {
     ASSERT_TRUE(false) << "Expected query to not throw exception. Query threw: "
                        << e.what();
@@ -207,7 +221,7 @@ class MediumGpuBufferMemory : public ::testing::Test {
     QR::get()->runDDLStatement(create_table_stmt);
 
     // Insert enough data to just barely overflow
-    for (size_t i = 0; i < 64 * g_num_gpus; i++) {
+    for (size_t i = 0; i < test_row_count(); i++) {
       const std::string insert_stmt{"INSERT INTO test VALUES (" + std::to_string(i) +
                                     ", " + std::to_string(i) + ");"};
       run_multiple_agg(insert_stmt, ExecutorDeviceType::CPU);

@@ -85,6 +85,46 @@ baseline_hash_join_idx_64(const int8_t* hash_buff,
   return baseline_hash_join_idx_impl<int64_t>(hash_buff, key, key_bytes, entry_count);
 }
 
+FORCE_INLINE DEVICE uint32_t ranked_bitmap_popcount32_impl(uint32_t val) {
+  val = val - ((val >> 1) & 0x55555555u);
+  val = (val & 0x33333333u) + ((val >> 2) & 0x33333333u);
+  return (((val + (val >> 4)) & 0x0f0f0f0fu) * 0x01010101u) >> 24;
+}
+
+extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t
+ranked_bitmap_hash_join_idx(const int8_t* hash_buff,
+                            const int64_t val,
+                            const int64_t min_val,
+                            const int64_t max_val,
+                            const int64_t null_val,
+                            const int64_t bitmap_word_count,
+                            const int64_t rank_block_count,
+                            const int64_t rank_block_word_count) {
+  if (!hash_buff || val == null_val || val < min_val || val > max_val) {
+    return kNoMatch;
+  }
+  const auto bitmap = reinterpret_cast<const uint32_t*>(hash_buff);
+  const auto rank_blocks = bitmap + bitmap_word_count;
+  const auto payload = reinterpret_cast<const uint32_t*>(rank_blocks + rank_block_count);
+  const uint64_t bitmap_idx = static_cast<uint64_t>(val - min_val);
+  const uint64_t word_idx = bitmap_idx >> 5;
+  const uint32_t word = bitmap[word_idx];
+  const uint32_t bit_idx = bitmap_idx & 31;
+  const uint32_t bit_mask = uint32_t(1) << bit_idx;
+  if (!(word & bit_mask)) {
+    return kNoMatch;
+  }
+  const uint64_t block_idx = word_idx / rank_block_word_count;
+  const uint64_t block_start_word = block_idx * rank_block_word_count;
+  uint32_t rank = rank_blocks[block_idx];
+  for (uint64_t idx = block_start_word; idx < word_idx; ++idx) {
+    rank += ranked_bitmap_popcount32_impl(bitmap[idx]);
+  }
+  const uint32_t lower_bits_mask = bit_idx ? ((uint32_t(1) << bit_idx) - 1) : 0;
+  rank += ranked_bitmap_popcount32_impl(word & lower_bits_mask);
+  return static_cast<int64_t>(payload[rank]);
+}
+
 template <typename T>
 FORCE_INLINE DEVICE int64_t get_bucket_key_for_value_impl(const T value,
                                                           const double bucket_size) {

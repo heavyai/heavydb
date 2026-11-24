@@ -233,6 +233,8 @@ struct TableFunctionManager {
         ExecutorDeviceType::CPU,
         (output_num_rows_ == 0 ? 1 : output_num_rows_),
         std::vector<std::vector<const int8_t*>>{col_buf_ptrs_},
+        ColumnBufferLayouts{std::vector<ColumnBufferLayout>(
+            col_buf_ptrs_.size(), ColumnBufferLayout::Fragment)},
         std::vector<std::vector<uint64_t>>{{0}},  // frag offsets
         row_set_mem_owner_,
         nullptr,

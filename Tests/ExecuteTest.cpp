@@ -13,8 +13,11 @@
 #include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/ExpressionRange.h"
+#include "../QueryEngine/JoinHashTable/BitmapJoinHashTable.h"
+#include "../QueryEngine/JoinHashTable/RankedBitmapJoinHashTable.h"
 #include "../QueryEngine/QueryEngine.h"
 #include "../QueryEngine/RelAlgDag.h"  // RelAlgDagBuilder::buildDag
+#include "../QueryEngine/RelAlgOptimizer.h"
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/Compressor.h"
@@ -49,6 +52,7 @@ extern bool g_enable_smem_group_by;
 extern size_t g_compression_limit_bytes;
 extern bool g_allow_cpu_retry;
 extern bool g_allow_query_step_cpu_retry;
+extern bool g_enable_result_reduction_pipeline;
 extern bool g_enable_watchdog;
 extern bool g_skip_intermediate_count;
 extern bool g_enable_left_join_filter_hoisting;
@@ -57,6 +61,8 @@ extern size_t g_baseline_groupby_threshold;
 
 extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_bbox_intersect_hashjoin;
+extern bool g_enable_bitmap_hashjoin;
+extern bool g_enable_ranked_bitmap_hashjoin;
 extern double g_gpu_mem_limit_percent;
 extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
@@ -11336,6 +11342,62 @@ TEST_F(Select, SparseAggregateSortMaterialization) {
   }
 }
 
+TEST_F(Select, GroupedTopNWithProjectedKey) {
+  const std::string table = "grouped_top_n_projected_key";
+  const auto drop = "DROP TABLE IF EXISTS " + table + ";";
+  run_ddl_statement(drop);
+  g_sqlite_comparator.query(drop);
+  ScopeGuard cleanup = [&] {
+    run_ddl_statement(drop);
+    g_sqlite_comparator.query(drop);
+  };
+  const auto create = "CREATE TABLE " + table + " (k INT, v DOUBLE)";
+  run_ddl_statement(create + " WITH (FRAGMENT_SIZE=2);");
+  g_sqlite_comparator.query(create + ";");
+  const auto insert = "INSERT INTO " + table +
+                      " VALUES (0, 1), (0, 2), (31, 10), (31, 20), "
+                      "(127, -5), (127, -6), (255, NULL);";
+  run_multiple_agg(insert, ExecutorDeviceType::CPU);
+  g_sqlite_comparator.query(insert);
+  ScopeGuard restore = [pipeline = g_enable_result_reduction_pipeline,
+                        columnar = g_enable_columnar_output,
+                        top_min = g_parallel_top_min,
+                        retry = g_allow_cpu_retry,
+                        step_retry = g_allow_query_step_cpu_retry] {
+    g_enable_result_reduction_pipeline = pipeline;
+    g_enable_columnar_output = columnar;
+    g_parallel_top_min = top_min;
+    g_allow_cpu_retry = retry;
+    g_allow_query_step_cpu_retry = step_retry;
+  };
+  g_enable_columnar_output = false;
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+  // INT keys beside DOUBLE aggregates exercise the pipeline's projected-key layout.
+  for (const bool pipeline : {false, true}) {
+    g_enable_result_reduction_pipeline = pipeline;
+    for (const size_t top_min : {0, 100000}) {
+      g_parallel_top_min = top_min;
+      for (const auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        for (const std::string order : {"ASC NULLS FIRST",
+                                        "ASC NULLS LAST",
+                                        "DESC NULLS FIRST",
+                                        "DESC NULLS LAST"}) {
+          for (const int limit : {2, 10}) {
+            SCOPED_TRACE(::testing::Message()
+                         << "pipeline=" << pipeline << " top_min=" << top_min
+                         << " device=" << dt << " order=" << order << " limit=" << limit);
+            c("SELECT k, SUM(v) AS total FROM " + table + " GROUP BY k ORDER BY total " +
+                  order + " LIMIT " + std::to_string(limit) + ";",
+              dt);
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_F(Select, TopNSortWithWatchdogOn) {
   ScopeGuard reset = [top_min = g_parallel_top_min,
                       top_max = g_parallel_top_max,
@@ -12169,6 +12231,837 @@ TEST_F(Select, Subqueries) {
   }
 }
 
+namespace {
+
+class ResultReductionPipelineTestMode {
+ public:
+  ResultReductionPipelineTestMode()
+      : orig_result_reduction_pipeline_(g_enable_result_reduction_pipeline)
+      , orig_cpu_retry_(g_allow_cpu_retry)
+      , orig_step_cpu_retry_(g_allow_query_step_cpu_retry) {
+    g_enable_result_reduction_pipeline = true;
+    g_allow_cpu_retry = false;
+    g_allow_query_step_cpu_retry = false;
+  }
+
+  ~ResultReductionPipelineTestMode() {
+    g_enable_result_reduction_pipeline = orig_result_reduction_pipeline_;
+    g_allow_cpu_retry = orig_cpu_retry_;
+    g_allow_query_step_cpu_retry = orig_step_cpu_retry_;
+  }
+
+ private:
+  const bool orig_result_reduction_pipeline_;
+  const bool orig_cpu_retry_;
+  const bool orig_step_cpu_retry_;
+};
+
+class BitmapHashJoinTestMode {
+ public:
+  BitmapHashJoinTestMode() : original_(g_enable_bitmap_hashjoin) {
+    BitmapJoinHashTable::invalidateCache();
+    g_enable_bitmap_hashjoin = true;
+  }
+
+  ~BitmapHashJoinTestMode() {
+    BitmapJoinHashTable::invalidateCache();
+    g_enable_bitmap_hashjoin = original_;
+  }
+
+ private:
+  const bool original_;
+};
+
+class RankedBitmapHashJoinTestMode {
+ public:
+  RankedBitmapHashJoinTestMode() : original_(g_enable_ranked_bitmap_hashjoin) {
+    RankedBitmapJoinHashTable::invalidateCache();
+    g_enable_ranked_bitmap_hashjoin = true;
+  }
+
+  ~RankedBitmapHashJoinTestMode() {
+    RankedBitmapJoinHashTable::invalidateCache();
+    g_enable_ranked_bitmap_hashjoin = original_;
+  }
+
+ private:
+  const bool original_;
+};
+
+class ExperimentalConstraintTrustTestMode {
+ public:
+  ExperimentalConstraintTrustTestMode(const bool enable_rewrites,
+                                      const bool trust_unenforced_constraints)
+      : original_enable_rewrites_(g_enable_experimental_query_rewrites)
+      , original_trust_unenforced_constraints_(g_trust_unenforced_table_constraints) {
+    g_enable_experimental_query_rewrites = enable_rewrites;
+    g_trust_unenforced_table_constraints = trust_unenforced_constraints;
+  }
+
+  ~ExperimentalConstraintTrustTestMode() {
+    g_enable_experimental_query_rewrites = original_enable_rewrites_;
+    g_trust_unenforced_table_constraints = original_trust_unenforced_constraints_;
+  }
+
+ private:
+  const bool original_enable_rewrites_;
+  const bool original_trust_unenforced_constraints_;
+};
+
+void assertInt64RowsEqual(const std::shared_ptr<ResultSet>& rows,
+                          const std::vector<std::vector<int64_t>>& expected);
+void assertInt64RowSetEqual(const std::shared_ptr<ResultSet>& rows,
+                            std::vector<std::vector<int64_t>> expected);
+
+TEST_F(Select, SegmentedTemporaryColumnsRespectFetchPlan) {
+  SKIP_WITH_TEMP_TABLES();
+  const std::string table_name{"segmented_column_fetch_plan_test"};
+  ResultReductionPipelineTestMode pipeline_mode;
+  ExperimentalConstraintTrustTestMode rewrite_mode(false, false);
+  ScopeGuard restore_output = [columnar = g_enable_columnar_output] {
+    g_enable_columnar_output = columnar;
+  };
+  for (const int fragment_size : {2, 1024}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    run_ddl_statement("CREATE TABLE " + table_name +
+                      " (id BIGINT NOT NULL) WITH (FRAGMENT_SIZE=" +
+                      std::to_string(fragment_size) + ");");
+    ScopeGuard drop_table = [&] {
+      if (!g_keep_test_data) {
+        run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+      }
+    };
+    run_multiple_agg("INSERT INTO " + table_name +
+                         " VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9);",
+                     ExecutorDeviceType::CPU);
+    const auto scalar_input = [&](const std::string& aggregate,
+                                  const std::string& filter = "id > 2") {
+      return "SELECT " + aggregate + " AS val FROM " + table_name + " WHERE " + filter;
+    };
+    const std::vector<std::pair<std::string, std::vector<int64_t>>> inputs{
+        {scalar_input("COUNT(*)"), {7}},
+        {scalar_input("SUM(id)"), {42}},
+        {scalar_input("MIN(id)"), {3}},
+        {scalar_input("MAX(id)"), {9}},
+        {scalar_input("COUNT(*)", "id < 0"), {0}},
+        {scalar_input("MIN(id)", "id < 0"), {inline_int_null_value<int64_t>()}},
+        {"SELECT SUM(id) AS val FROM " + table_name + " GROUP BY MOD(id, 3)",
+         {12, 15, 18}},
+        {"SELECT id AS val FROM " + table_name + " ORDER BY id LIMIT 4", {1, 2, 3, 4}}};
+    for (const bool pipeline : {false, true}) {
+      g_enable_result_reduction_pipeline = pipeline;
+      for (const bool columnar : {false, true}) {
+        g_enable_columnar_output = columnar;
+        for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+          SKIP_NO_GPU();
+          for (const auto& [input, values] : inputs) {
+            for (const bool column_first : {false, true}) {
+              SCOPED_TRACE(::testing::Message()
+                           << "fragment_size=" << fragment_size << " pipeline="
+                           << pipeline << " columnar=" << columnar << " device=" << dt
+                           << " input=" << input << " column_first=" << column_first);
+              const std::string expression{"CASE WHEN n.val > 5 THEN 20 ELSE 50 END"};
+              const auto targets =
+                  column_first ? "n.val, " + expression : expression + ", n.val";
+              // CASE scopes its decoded-value cache. Both projection orders must
+              // honor the input layout even when a column is already marked fetched.
+              const auto query = "WITH n AS (" + input + ") SELECT a.id, " + targets +
+                                 " FROM " + table_name + " a, n WHERE a.id > 2;";
+              std::vector<std::vector<int64_t>> expected;
+              for (int64_t id = 3; id <= 9; ++id) {
+                for (const auto value : values) {
+                  const int64_t branch_value = value > 5 ? 20 : 50;
+                  expected.push_back(column_first
+                                         ? std::vector<int64_t>{id, value, branch_value}
+                                         : std::vector<int64_t>{id, branch_value, value});
+                }
+              }
+              ASSERT_NO_FATAL_FAILURE(
+                  assertInt64RowSetEqual(run_multiple_agg(query, dt), expected));
+            }
+          }
+        }
+      }
+    }
+  }
+}
+TEST_F(Select, ScalarCountDistinctRewritePreservesNullAndEmptyInputs) {
+  const std::string table_name{"scalar_count_distinct_rewrite_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k INT NOT NULL, v INT, f DOUBLE, nn INT NOT NULL) "
+                    "WITH (FRAGMENT_SIZE=2);");
+  ScopeGuard drop_table = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  // GPU assertions must exercise the requested plan, not a CPU retry.
+  ResultReductionPipelineTestMode pipeline_mode;
+  for (const bool populated : {false, true}) {
+    if (populated) {
+      run_multiple_agg("INSERT INTO " + table_name +
+                           " VALUES (1, 10, 1.25, 10), (1, 10, 1.25, 10), "
+                           "(1, NULL, NULL, 10), (2, NULL, NULL, 20), "
+                           "(2, NULL, NULL, 20), (3, 20, 2.5, 30), "
+                           "(3, 30, 2.5, 30), (3, NULL, NULL, 30);",
+                       ExecutorDeviceType::CPU);
+    }
+    for (const bool rewrites : {false, true}) {
+      ExperimentalConstraintTrustTestMode rewrite_mode(rewrites, false);
+      for (const bool pipeline : {false, true}) {
+        g_enable_result_reduction_pipeline = pipeline;
+        for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+          SKIP_NO_GPU();
+          SCOPED_TRACE(::testing::Message()
+                       << "populated=" << populated << " rewrites=" << rewrites
+                       << " pipeline=" << pipeline << " device=" << dt);
+          for (const std::string column :
+               {"v", "nn", "CAST(v AS BIGINT)", "CAST(v AS DECIMAL(10, 2))"}) {
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg(
+                    "SELECT COUNT(DISTINCT " + column + ") FROM " + table_name + ";", dt),
+                {{populated ? 3 : 0}}));
+          }
+          ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+              run_multiple_agg(
+                  "SELECT COUNT(DISTINCT v) FROM " + table_name + " WHERE k = 2;", dt),
+              {{0}}));
+          ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+              run_multiple_agg(
+                  "SELECT COUNT(DISTINCT v) FROM " + table_name + " WHERE k = 99;", dt),
+              {{0}}));
+          if (rewrites || dt == ExecutorDeviceType::CPU) {
+            for (const std::string filter : {"", " WHERE k = 2", " WHERE k = 99"}) {
+              ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                  run_multiple_agg(
+                      "SELECT COUNT(DISTINCT f) FROM " + table_name + filter + ";", dt),
+                  {{populated && filter.empty() ? 2 : 0}}));
+            }
+          }
+          if (populated) {
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT k, COUNT(DISTINCT v) FROM " + table_name +
+                                     " GROUP BY k ORDER BY k;",
+                                 dt),
+                {{1, 1}, {2, 0}, {3, 2}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT k, COUNT(DISTINCT nn) FROM " + table_name +
+                                     " GROUP BY k ORDER BY k;",
+                                 dt),
+                {{1, 1}, {2, 1}, {3, 1}}));
+          }
+        }
+      }
+    }
+  }
+}
+
+void assertInt64RowsEqual(const ResultSet& rows,
+                          const std::vector<std::vector<int64_t>>& expected) {
+  ASSERT_EQ(rows.rowCount(), expected.size());
+  rows.moveToBegin();
+  for (size_t row_idx = 0; row_idx < expected.size(); ++row_idx) {
+    const auto row = rows.getNextRow(true, true);
+    ASSERT_EQ(row.size(), expected[row_idx].size());
+    for (size_t col_idx = 0; col_idx < expected[row_idx].size(); ++col_idx) {
+      EXPECT_EQ(v<int64_t>(row[col_idx]), expected[row_idx][col_idx])
+          << "row_idx=" << row_idx << " col_idx=" << col_idx;
+    }
+  }
+}
+
+void assertInt64RowsEqual(const std::shared_ptr<ResultSet>& rows,
+                          const std::vector<std::vector<int64_t>>& expected) {
+  ASSERT_TRUE(rows);
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(*rows, expected));
+}
+
+void assertInt64RowSetEqual(const std::shared_ptr<ResultSet>& rows,
+                            std::vector<std::vector<int64_t>> expected) {
+  ASSERT_TRUE(rows);
+  ASSERT_EQ(rows->rowCount(), expected.size());
+  std::vector<std::vector<int64_t>> actual;
+  rows->moveToBegin();
+  for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+    const auto row = rows->getNextRow(true, true);
+    std::vector<int64_t> actual_row;
+    actual_row.reserve(row.size());
+    for (const auto& datum : row) {
+      actual_row.push_back(v<int64_t>(datum));
+    }
+    actual.emplace_back(std::move(actual_row));
+  }
+  std::sort(actual.begin(), actual.end());
+  std::sort(expected.begin(), expected.end());
+  EXPECT_EQ(actual, expected);
+}
+
+}  // namespace
+TEST_F(Select, ExistenceCountPreservesDuplicatesNullsAndEmptyInputs) {
+  SKIP_WITH_TEMP_TABLES();
+
+  const std::string probe_table{"existence_count_probe"};
+  const std::string build_table{"existence_count_build"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+  ScopeGuard drop_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    }
+  };
+  run_ddl_statement("CREATE TABLE " + probe_table +
+                    " (k INT, bucket INT NOT NULL) WITH (FRAGMENT_SIZE=2);");
+  run_ddl_statement("CREATE TABLE " + build_table +
+                    " (k INT, allowed INT NOT NULL) WITH (FRAGMENT_SIZE=2);");
+
+  // Disable CPU retry so GPU assertions cannot silently exercise another path.
+  ResultReductionPipelineTestMode pipeline_mode;
+  BitmapHashJoinTestMode bitmap_mode;
+  for (int state = 0; state < 4; ++state) {
+    if (state == 1) {
+      run_multiple_agg("INSERT INTO " + probe_table +
+                           " VALUES (1, 0), (1, 0), (2, 0), (3, 1), "
+                           "(3, 1), (NULL, 1), (4, 1), (5, 2);",
+                       ExecutorDeviceType::CPU);
+    } else if (state == 2) {
+      run_multiple_agg("INSERT INTO " + build_table + " VALUES (NULL, 1), (NULL, 1);",
+                       ExecutorDeviceType::CPU);
+    } else if (state == 3) {
+      run_multiple_agg("INSERT INTO " + build_table +
+                           " VALUES (1, 1), (1, 1), (2, 0), (3, 1), (3, 1), (9, 1);",
+                       ExecutorDeviceType::CPU);
+    }
+    for (const bool rewrites : {false, true}) {
+      ExperimentalConstraintTrustTestMode rewrite_mode(rewrites, false);
+      for (const bool bitmap : {false, true}) {
+        g_enable_bitmap_hashjoin = bitmap;
+        for (const bool pipeline : {false, true}) {
+          g_enable_result_reduction_pipeline = pipeline;
+          for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+            SKIP_NO_GPU();
+            SCOPED_TRACE(::testing::Message()
+                         << "state=" << state << " rewrites=" << rewrites << " bitmap="
+                         << bitmap << " pipeline=" << pipeline << " device=" << dt);
+            const bool matches = state == 3;
+            const auto membership = " FROM " + probe_table +
+                                    " p WHERE p.k IN "
+                                    "(SELECT k FROM " +
+                                    build_table + " WHERE allowed = 1)";
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT COUNT(*)" + membership + ";", dt),
+                {{matches ? 4 : 0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT COUNT(*)" + membership + " AND p.bucket = 1;",
+                                 dt),
+                {{matches ? 2 : 0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT COUNT(*)" + membership + " AND p.bucket = 99;",
+                                 dt),
+                {{0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT bucket, COUNT(*)" + membership +
+                                     " GROUP BY bucket ORDER BY bucket;",
+                                 dt),
+                matches ? std::vector<std::vector<int64_t>>{{0, 2}, {1, 2}}
+                        : std::vector<std::vector<int64_t>>{}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT COUNT(*) FROM " + probe_table +
+                                     " p JOIN (SELECT k, MIN(TRUE) AS marker FROM " +
+                                     build_table +
+                                     " WHERE allowed = 1 GROUP BY k) b "
+                                     "ON p.k = b.k;",
+                                 dt),
+                {{matches ? 4 : 0}}));
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_F(Select, CorrelatedExistsPreservesEmptyInputs) {
+  SKIP_WITH_TEMP_TABLES();
+
+  const std::string probe_table{"empty_exists_probe"};
+  const std::string build_table{"empty_exists_build"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+  ScopeGuard drop_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    }
+  };
+  run_ddl_statement("CREATE TABLE " + probe_table +
+                    " (k INT, bucket INT NOT NULL) WITH (FRAGMENT_SIZE=2);");
+  run_ddl_statement("CREATE TABLE " + build_table +
+                    " (k INT, allowed INT NOT NULL) WITH (FRAGMENT_SIZE=2);");
+
+  ResultReductionPipelineTestMode pipeline_mode;
+  BitmapHashJoinTestMode bitmap_mode;
+  // Cover both empty, empty build, populated inputs, then empty probe only.
+  for (int state = 0; state < 4; ++state) {
+    if (state == 1) {
+      run_multiple_agg("INSERT INTO " + probe_table +
+                           " VALUES (1, 0), (1, 0), (2, 0), (3, 1), "
+                           "(3, 1), (NULL, 1), (4, 1), (5, 2);",
+                       ExecutorDeviceType::CPU);
+    } else if (state == 2) {
+      run_multiple_agg("INSERT INTO " + build_table +
+                           " VALUES (NULL, 1), (1, 1), (1, 1), (2, 0), "
+                           "(3, 1), (3, 1), (9, 1);",
+                       ExecutorDeviceType::CPU);
+    } else if (state == 3) {
+      run_ddl_statement("TRUNCATE TABLE " + probe_table + ";");
+    }
+    for (const bool rewrites : {false, true}) {
+      ExperimentalConstraintTrustTestMode rewrite_mode(rewrites, false);
+      for (const bool bitmap : {false, true}) {
+        g_enable_bitmap_hashjoin = bitmap;
+        for (const bool pipeline : {false, true}) {
+          g_enable_result_reduction_pipeline = pipeline;
+          for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+            SKIP_NO_GPU();
+            SCOPED_TRACE(::testing::Message()
+                         << "state=" << state << " rewrites=" << rewrites << " bitmap="
+                         << bitmap << " pipeline=" << pipeline << " device=" << dt);
+            const bool matches = state == 2;
+            const auto subquery = "EXISTS (SELECT 1 FROM " + build_table +
+                                  " b WHERE b.k = p.k AND b.allowed = 1)";
+            const auto from = " FROM " + probe_table + " p WHERE ";
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT COUNT(*)" + from + subquery + ";", dt),
+                {{matches ? 4 : 0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT COUNT(*)" + from + "NOT " + subquery + ";", dt),
+                {{state == 1 ? 8
+                  : matches  ? 4
+                             : 0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg(
+                    "SELECT COUNT(*)" + from + subquery + " AND p.bucket = 1;", dt),
+                {{matches ? 2 : 0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg(
+                    "SELECT COUNT(*)" + from + subquery + " AND p.bucket = 99;", dt),
+                {{0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT bucket, COUNT(*)" + from + subquery +
+                                     " GROUP BY bucket ORDER BY bucket;",
+                                 dt),
+                matches ? std::vector<std::vector<int64_t>>{{0, 2}, {1, 2}}
+                        : std::vector<std::vector<int64_t>>{}));
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_F(Select, NullSafePerfectJoinPreservesNullOnlyKeys) {
+  SKIP_WITH_TEMP_TABLES();
+  BitmapHashJoinTestMode bitmap_mode;
+  RankedBitmapHashJoinTestMode ranked_bitmap_mode;
+  g_enable_bitmap_hashjoin = false;
+  g_enable_ranked_bitmap_hashjoin = false;
+  ExperimentalConstraintTrustTestMode rewrite_mode(false, false);
+  ResultReductionPipelineTestMode pipeline_mode;
+
+  const std::string probe{"null_safe_probe"};
+  const std::string build{"null_safe_build"};
+  for (const auto& table : {probe, build}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+    run_ddl_statement("CREATE TABLE " + table +
+                      " (id INT NOT NULL, k INT) WITH (FRAGMENT_SIZE=2);");
+  }
+  ScopeGuard drop_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build + ";");
+    }
+  };
+  run_multiple_agg("INSERT INTO " + probe + " VALUES (1,NULL),(2,NULL),(3,5),(4,6);",
+                   ExecutorDeviceType::CPU);
+  const auto query = "SELECT p.id, b.id FROM " + probe + " p JOIN " + build +
+                     " b ON p.k IS NOT DISTINCT FROM b.k ORDER BY p.id, b.id;";
+  for (const bool null_only : {false, true}) {
+    for (const bool duplicate : {false, true}) {
+      run_ddl_statement("TRUNCATE TABLE " + build + ";");
+      run_multiple_agg("INSERT INTO " + build + " VALUES " +
+                           (null_only ? "(10,NULL);" : "(10,NULL),(11,5),(12,6);"),
+                       ExecutorDeviceType::CPU);
+      if (duplicate) {
+        run_multiple_agg("INSERT INTO " + build + " VALUES (13,NULL);",
+                         ExecutorDeviceType::CPU);
+      }
+      std::vector<std::vector<int64_t>> expected =
+          duplicate
+              ? std::vector<std::vector<int64_t>>{{1, 10}, {1, 13}, {2, 10}, {2, 13}}
+              : std::vector<std::vector<int64_t>>{{1, 10}, {2, 10}};
+      if (!null_only) {
+        expected.push_back({3, 11});
+        expected.push_back({4, 12});
+      }
+      for (const bool pipeline : {false, true}) {
+        g_enable_result_reduction_pipeline = pipeline;
+        for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+          SKIP_NO_GPU();
+          SCOPED_TRACE(::testing::Message()
+                       << "null_only=" << null_only << " duplicate=" << duplicate
+                       << " pipeline=" << pipeline << " device=" << dt);
+          ASSERT_NO_FATAL_FAILURE(
+              assertInt64RowsEqual(run_multiple_agg(query, dt), expected));
+        }
+      }
+    }
+  }
+}
+
+TEST_F(Select, PipelinedGroupedExtremaPreserveNullableValues) {
+  SKIP_WITH_TEMP_TABLES();
+  ResultReductionPipelineTestMode pipeline_mode;
+  ExperimentalConstraintTrustTestMode rewrite_mode(false, false);
+  ScopeGuard restore_columnar = [columnar = g_enable_columnar_output] {
+    g_enable_columnar_output = columnar;
+  };
+  const std::string table{"grouped_extrema_nulls"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+  ScopeGuard drop_table = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+    }
+  };
+  for (const auto fragment_size : {2, 100}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+    run_ddl_statement("CREATE TABLE " + table +
+                      " (id INT NOT NULL, k INT, v INT) WITH (FRAGMENT_SIZE=" +
+                      std::to_string(fragment_size) + ");");
+    // The nullable key range ends at 7, so 8 is the translated NULL key, but it
+    // remains a valid aggregate value for k = 3.
+    run_multiple_agg("INSERT INTO " + table +
+                         " VALUES (1,1,1),(2,1,2),(3,2,NULL),(4,NULL,7),"
+                         "(5,3,8),(6,3,8),(7,4,NULL),(8,4,NULL),(9,7,-3);",
+                     ExecutorDeviceType::CPU);
+    for (const bool pipeline : {false, true}) {
+      g_enable_result_reduction_pipeline = pipeline;
+      for (const bool columnar : {false, true}) {
+        g_enable_columnar_output = columnar;
+        for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+          SKIP_NO_GPU();
+          for (const std::string aggregate : {"MIN", "MAX"}) {
+            SCOPED_TRACE(::testing::Message()
+                         << "fragment_size=" << fragment_size << " pipeline=" << pipeline
+                         << " columnar=" << columnar << " device=" << dt
+                         << " aggregate=" << aggregate);
+            const auto rows = run_multiple_agg(
+                "SELECT " + aggregate + "(v) FROM " + table + " GROUP BY k;", dt);
+            ASSERT_TRUE(rows);
+            EXPECT_EQ(rows->rowCount(), size_t(6));
+            std::vector<int64_t> actual;
+            rows->moveToBegin();
+            for (auto row = rows->getNextRow(true, true); !row.empty();
+                 row = rows->getNextRow(true, true)) {
+              ASSERT_EQ(row.size(), size_t(1));
+              actual.push_back(v<int64_t>(row[0]));
+            }
+            std::sort(actual.begin(), actual.end());
+            const std::vector<int64_t> expected{inline_int_null_value<int32_t>(),
+                                                inline_int_null_value<int32_t>(),
+                                                -3,
+                                                aggregate == "MIN" ? 1 : 2,
+                                                7,
+                                                8};
+            EXPECT_EQ(actual, expected);
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT p.id FROM " + table + " p JOIN (SELECT " +
+                                     aggregate + "(v) AS val FROM " + table +
+                                     " GROUP BY k) n ON p.v = n.val ORDER BY p.id;",
+                                 dt),
+                {{aggregate == "MIN" ? 1 : 2}, {4}, {5}, {6}, {9}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT k, " + aggregate + "(v) FROM " + table +
+                                     " GROUP BY k ORDER BY k NULLS FIRST;",
+                                 dt),
+                {{inline_int_null_value<int32_t>(), 7},
+                 {1, aggregate == "MIN" ? 1 : 2},
+                 {2, inline_int_null_value<int32_t>()},
+                 {3, 8},
+                 {4, inline_int_null_value<int32_t>()},
+                 {7, -3}}));
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_F(Select, PipelinedSampleStringsPreserveDictionaryIds) {
+  SKIP_WITH_TEMP_TABLES();
+  ResultReductionPipelineTestMode pipeline_mode;
+  ExperimentalConstraintTrustTestMode rewrite_mode(false, false);
+  ScopeGuard restore_columnar = [columnar = g_enable_columnar_output] {
+    g_enable_columnar_output = columnar;
+  };
+  const std::string table{"sample_string_nulls"};
+  ScopeGuard drop_table = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+    }
+  };
+  using Strings = std::vector<std::optional<std::string>>;
+  for (const bool notnull : {false, true}) {
+    for (const auto fragment_size : {2, 64}) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+      run_ddl_statement(
+          "CREATE TABLE " + table + " (k INT, s TEXT " + (notnull ? "NOT NULL " : "") +
+          "ENCODING DICT(32)) WITH (FRAGMENT_SIZE=" + std::to_string(fragment_size) +
+          ");");
+      // The NULL key is represented by 2, which is also the valid ID of mango.
+      run_multiple_agg("INSERT INTO " + table +
+                           " VALUES (0,'alpha'),(1,'zulu'),(NULL,'mango'),"
+                           "(0,'alpha'),(1,'zulu'),(NULL,'mango');",
+                       ExecutorDeviceType::CPU);
+      ASSERT_EQ(int64_t(2),
+                v<int64_t>(run_simple_agg("SELECT KEY_FOR_STRING(s) FROM " + table +
+                                              " WHERE k IS NULL LIMIT 1;",
+                                          ExecutorDeviceType::CPU)));
+      run_multiple_agg(
+          "INSERT INTO " + table + " VALUES (-1," + (notnull ? "''" : "NULL") + ");",
+          ExecutorDeviceType::CPU);
+      const std::optional<std::string> empty_value =
+          notnull ? std::make_optional(std::string{}) : std::nullopt;
+      for (const bool pipeline : {false, true}) {
+        g_enable_result_reduction_pipeline = pipeline;
+        for (const bool columnar : {false, true}) {
+          g_enable_columnar_output = columnar;
+          for (const auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+            SKIP_NO_GPU();
+            SCOPED_TRACE(::testing::Message()
+                         << "notnull=" << notnull << " fragment_size=" << fragment_size
+                         << " pipeline=" << pipeline << " columnar=" << columnar
+                         << " device=" << dt);
+            const auto assert_strings =
+                [&](const std::string& query, Strings expected, const bool ordered) {
+                  SCOPED_TRACE(query);
+                  const auto rows = run_multiple_agg(query, dt);
+                  ASSERT_TRUE(rows);
+                  Strings actual;
+                  rows->moveToBegin();
+                  for (auto row = rows->getNextRow(true, true); !row.empty();
+                       row = rows->getNextRow(true, true)) {
+                    const auto value = v<NullableString>(row.back());
+                    const auto* text = boost::get<std::string>(&value);
+                    actual.push_back(text ? std::make_optional(*text) : std::nullopt);
+                  }
+                  if (!ordered) {
+                    std::sort(actual.begin(), actual.end());
+                    std::sort(expected.begin(), expected.end());
+                  }
+                  EXPECT_EQ(actual, expected);
+                };
+            for (const bool project_key : {false, true}) {
+              const auto grouped = std::string("SELECT ") + (project_key ? "k," : "") +
+                                   "SAMPLE(s) AS label FROM " + table + " GROUP BY k";
+              assert_strings(
+                  grouped + ";", {empty_value, "alpha", "mango", "zulu"}, false);
+              assert_strings(grouped + " ORDER BY label NULLS FIRST;",
+                             {empty_value, "alpha", "mango", "zulu"},
+                             true);
+              assert_strings(grouped + " ORDER BY label DESC NULLS LAST LIMIT 2;",
+                             {"zulu", "mango"},
+                             true);
+            }
+            assert_strings("SELECT SAMPLE(s) AS label FROM " + table +
+                               " WHERE k IS NULL OR k>=0 GROUP BY k "
+                               "ORDER BY label LIMIT 1;",
+                           {"alpha"},
+                           true);
+            assert_strings(
+                "SELECT s FROM " + table + " GROUP BY s ORDER BY s NULLS FIRST;",
+                {empty_value, "alpha", "mango", "zulu"},
+                true);
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_F(Select, CorrelatedHavingPreservesNullKeys) {
+  SKIP_WITH_TEMP_TABLES();
+
+  ResultReductionPipelineTestMode pipeline_mode;
+  BitmapHashJoinTestMode bitmap_mode;
+  RankedBitmapHashJoinTestMode ranked_bitmap_mode;
+  g_enable_bitmap_hashjoin = false;
+  g_enable_ranked_bitmap_hashjoin = false;
+  ScopeGuard restore_columnar = [columnar = g_enable_columnar_output] {
+    g_enable_columnar_output = columnar;
+  };
+  const std::string probe{"having_null_probe"};
+  const std::string build{"having_null_build"};
+  for (const auto& table : {probe, build}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+    run_ddl_statement("CREATE TABLE " + table +
+                      " (id INT NOT NULL, k INT, v INT) WITH (FRAGMENT_SIZE=2);");
+  }
+  ScopeGuard drop_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build + ";");
+    }
+  };
+  run_multiple_agg("INSERT INTO " + probe +
+                       " VALUES (1,1,3),(2,1,4),(3,2,5),(4,NULL,8),(5,3,NULL),"
+                       "(6,3,2),(7,4,4),(8,4,4),(9,5,-1),(10,NULL,NULL),(11,6,8);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO " + build +
+                       " VALUES (1,1,1),(2,1,2),(3,2,NULL),(4,NULL,7),"
+                       "(5,3,8),(6,3,8),(7,4,NULL),(8,4,NULL),(9,7,-3);",
+                   ExecutorDeviceType::CPU);
+  const auto from = " FROM " + probe + " p WHERE ";
+  const auto empty_group =
+      "EXISTS (SELECT COUNT(*) FROM " + build + " b WHERE b.k = p.k HAVING COUNT(*) = 0)";
+  for (const bool rewrites : {false, true}) {
+    ExperimentalConstraintTrustTestMode rewrite_mode(rewrites, false);
+    for (const bool pipeline : {false, true}) {
+      g_enable_result_reduction_pipeline = pipeline;
+      for (const bool columnar : {false, true}) {
+        g_enable_columnar_output = columnar;
+        for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+          SKIP_NO_GPU();
+          SCOPED_TRACE(::testing::Message()
+                       << "rewrites=" << rewrites << " pipeline=" << pipeline
+                       << " columnar=" << columnar << " device=" << dt);
+          ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+              run_multiple_agg("SELECT id" + from + "EXISTS (SELECT SUM(v) FROM " +
+                                   build +
+                                   " b WHERE b.k = p.k HAVING SUM(v) > 2) ORDER BY id;",
+                               dt),
+              {{1}, {2}, {5}, {6}}));
+          ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+              run_multiple_agg("SELECT id" + from + empty_group + " ORDER BY id;", dt),
+              {{4}, {9}, {10}, {11}}));
+          ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+              run_multiple_agg(
+                  "SELECT id" + from + "NOT " + empty_group + " ORDER BY id;", dt),
+              {{1}, {2}, {3}, {5}, {6}, {7}, {8}}));
+        }
+      }
+    }
+  }
+}
+
+TEST_F(Select, InSubqueryPreservesEmptySetNullSemantics) {
+  SKIP_WITH_TEMP_TABLES();
+
+  ResultReductionPipelineTestMode pipeline_mode;
+  BitmapHashJoinTestMode bitmap_mode;
+  ScopeGuard restore_modes = [columnar = g_enable_columnar_output,
+                              hoist = g_hoist_literals] {
+    g_enable_columnar_output = columnar;
+    g_hoist_literals = hoist;
+  };
+  g_enable_bitmap_hashjoin = false;
+  g_enable_ranked_bitmap_hashjoin = false;
+
+  const std::string probe_table{"empty_in_probe"};
+  const std::string build_table{"empty_in_build"};
+  for (const bool dictionary : {false, true}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+    run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    ScopeGuard drop_tables = [&] {
+      if (!g_keep_test_data) {
+        run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+        run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+      }
+    };
+    const std::string key_type = dictionary ? "TEXT ENCODING DICT(32)" : "INT";
+    for (const auto& table : {probe_table, build_table}) {
+      run_ddl_statement("CREATE TABLE " + table + " (id INT NOT NULL, k " + key_type +
+                        ") WITH (FRAGMENT_SIZE=2);");
+    }
+    const auto key = [dictionary](const int value) {
+      return dictionary ? "'" + std::to_string(value) + "'" : std::to_string(value);
+    };
+    run_multiple_agg("INSERT INTO " + probe_table + " VALUES (0, NULL), (1, " + key(1) +
+                         "), (2, " + key(2) + "), (3, NULL), (4, " + key(3) + ");",
+                     ExecutorDeviceType::CPU);
+
+    // Empty table, disjoint keys, NULL-only, mixed, non-NULL, and filtered-empty RHS.
+    for (int state = 0; state < 6; ++state) {
+      if (state > 0 && state < 5) {
+        run_ddl_statement("TRUNCATE TABLE " + build_table + ";");
+        const auto values =
+            state == 1 ? "(1, " + key(9) + "), (2, " + key(10) + "), (3, " + key(11) +
+                             "), (4, " + key(12) + ")"
+            : state == 2 ? std::string{"(1, NULL), (2, NULL)"}
+            : state == 3
+                ? "(1, " + key(2) + "), (2, " + key(2) + "), (3, NULL), (4, " + key(9) +
+                      ")"
+                : "(1, " + key(2) + "), (2, " + key(2) + "), (3, " + key(9) + ")";
+        run_multiple_agg("INSERT INTO " + build_table + " VALUES " + values + ";",
+                         ExecutorDeviceType::CPU);
+      }
+      const auto rhs =
+          "(SELECT k FROM " + build_table + (state == 5 ? " WHERE id < 0)" : ")");
+      const bool empty_rhs = state == 0 || state == 5;
+      const bool matches = state == 3 || state == 4;
+      const bool rhs_has_null = state == 2 || state == 3;
+      for (const bool rewrites : {false, true}) {
+        ExperimentalConstraintTrustTestMode rewrite_mode(rewrites, false);
+        for (const bool pipeline : {false, true}) {
+          g_enable_result_reduction_pipeline = pipeline;
+          for (const bool columnar : {false, true}) {
+            g_enable_columnar_output = columnar;
+            for (const bool hoist : {true, false}) {
+              g_hoist_literals = hoist;
+              for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+                SKIP_NO_GPU();
+                SCOPED_TRACE(::testing::Message()
+                             << "dictionary=" << dictionary << " state=" << state
+                             << " rewrites=" << rewrites << " pipeline=" << pipeline
+                             << " columnar=" << columnar << " hoist=" << hoist
+                             << " device=" << dt);
+                ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                    run_multiple_agg("SELECT COUNT(*) FROM " + probe_table +
+                                         " WHERE k IN " + rhs + ";",
+                                     dt),
+                    {{matches ? 1 : 0}}));
+                ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                    run_multiple_agg("SELECT COUNT(*) FROM " + probe_table +
+                                         " WHERE k NOT IN " + rhs + ";",
+                                     dt),
+                    {{empty_rhs      ? 5
+                      : rhs_has_null ? 0
+                      : matches      ? 2
+                                     : 3}}));
+                std::vector<std::vector<int64_t>> expected;
+                for (int id = 0; id < 5; ++id) {
+                  const auto value = empty_rhs                            ? 0
+                                     : matches && id == 2                 ? 1
+                                     : rhs_has_null || id == 0 || id == 3 ? -1
+                                                                          : 0;
+                  expected.push_back({id, value});
+                }
+                ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                    run_multiple_agg("SELECT id, CASE WHEN k IN " + rhs +
+                                         " THEN 1 WHEN k NOT IN " + rhs +
+                                         " THEN 0 ELSE -1 END FROM " + probe_table +
+                                         " ORDER BY id;",
+                                     dt),
+                    expected));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_F(Select, Export_Via_Query_Having_Scalar_Subquery) {
   // EXPORT stmt needs "validation_query" to gather some info from the query
   // before doing the actual data export
@@ -12553,11 +13446,9 @@ TEST_F(Select, Joins_Fragmented_SelfJoin_And_LoopJoin) {
     (c("SELECT COUNT(*) FROM test a, test b WHERE b.x = b.x;", dt));
     (c("SELECT COUNT(*) FROM test a, test b, test c WHERE b.x = b.x;", dt));
     (c("SELECT COUNT(*) FROM test a, test b, test c WHERE c.x = c.x;", dt));
-    // We can't fold b.y = b.y b/c y is nullable
-    EXPECT_THROW(
-        run_multiple_agg(
-            "SELECT COUNT(*) FROM test a, test b WHERE b.x = b.x AND b.y = b.y;", dt),
-        std::runtime_error);
+    // We cannot fold b.y = b.y because y is nullable, but the remaining loop
+    // join shape is now executable and should return the reference result.
+    c("SELECT COUNT(*) FROM test a, test b WHERE b.x = b.x AND b.y = b.y;", dt);
     ASSERT_EQ(
         int64_t(-95),
         v<int64_t>(run_simple_agg(
@@ -23735,6 +24626,94 @@ TEST_F(Select, WindowFunctionAggregateNoOrder) {
       std::string query = "SELECT y, COUNT(d) OVER (PARTITION BY y) m FROM " +
                           table_name + " ORDER BY y ASC";
       c(query + " NULLS FIRST, m ASC NULLS FIRST;", query + ", m ASC;", dt);
+    }
+  }
+}
+
+TEST_F(Select, WindowFunctionPartitionExtremaGpuEligibility) {
+  const auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table{"window_extrema_eligibility"};
+  const auto drop = "DROP TABLE IF EXISTS " + table + ";";
+  run_ddl_statement(drop);
+  g_sqlite_comparator.query(drop);
+  ScopeGuard cleanup = [&] {
+    run_ddl_statement(drop);
+    g_sqlite_comparator.query(drop);
+  };
+  const auto columns =
+      " (id INT, p INT, k BIGINT, i INT, s SMALLINT, t TINYINT, f FLOAT, d DOUBLE, c ";
+  run_ddl_statement("CREATE TABLE " + table + columns +
+                    "BIGINT ENCODING FIXED(32)) WITH (FRAGMENT_SIZE=2);");
+  g_sqlite_comparator.query("CREATE TABLE " + table + columns + "BIGINT);");
+  for (const auto& row : {"(0,0,5,5,5,5,2.5,2.5,5)",
+                          "(1,0,3,3,3,3,0.5,0.5,3)",
+                          "(2,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL)",
+                          "(3,1,-2,-2,-2,-2,-1.25,-1.25,-2)",
+                          "(4,1,-5,-5,-5,-5,-3.5,-3.5,-5)",
+                          "(5,2,NULL,NULL,NULL,NULL,NULL,NULL,NULL)",
+                          "(6,NULL,7,7,7,7,8.0,8.0,7)",
+                          "(7,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)"}) {
+    const auto insert = "INSERT INTO " + table + " VALUES " + row + ";";
+    run_multiple_agg(insert, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert);
+  }
+  ScopeGuard restore_flags = [retry = g_allow_cpu_retry,
+                              step_retry = g_allow_query_step_cpu_retry,
+                              pipeline = g_enable_result_reduction_pipeline,
+                              columnar = g_enable_columnar_output] {
+    g_allow_cpu_retry = retry;
+    g_allow_query_step_cpu_retry = step_retry;
+    g_enable_result_reduction_pipeline = pipeline;
+    g_enable_columnar_output = columnar;
+  };
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+  g_enable_result_reduction_pipeline = true;
+
+  for (const bool columnar : {false, true}) {
+    g_enable_columnar_output = columnar;
+    for (const auto& arg : {"i", "s", "t", "f", "c", "k + 1"}) {
+      for (const auto& window : {"PARTITION BY p", ""}) {
+        SCOPED_TRACE(::testing::Message()
+                     << "columnar=" << columnar << " arg=" << arg << " over=" << window);
+        const auto extrema = std::string{"MIN("} + arg + ") OVER (" + window + "), MAX(" +
+                             arg + ") OVER (" + window + ")";
+        const auto query = "SELECT id, " + extrema + " FROM " + table + " ORDER BY id;";
+        c(query, query, ExecutorDeviceType::CPU);
+        c(query, query, dt);
+      }
+    }
+
+    // Unsupported types must select CPU before codegen, without needing a retry.
+    const auto cpu_selected =
+        run_multiple_agg("SELECT MIN(i) OVER (PARTITION BY p) FROM " + table + ";", dt);
+    ASSERT_EQ(ExecutorDeviceType::CPU, cpu_selected->getDeviceType());
+
+    // Keep supported 64-bit whole-partition extrema on GPU, including explicit frames.
+    for (const auto& arg : {"k", "d"}) {
+      for (const auto& window :
+           {"PARTITION BY p",
+            "PARTITION BY p ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING"}) {
+        SCOPED_TRACE(::testing::Message()
+                     << "columnar=" << columnar << " arg=" << arg << " over=" << window);
+        const auto extrema = std::string{"MIN("} + arg + ") OVER (" + window + "), MAX(" +
+                             arg + ") OVER (" + window + ")";
+        const auto query = "SELECT id, " + extrema + " FROM " + table + " ORDER BY id;";
+        c(query, query, dt);
+        const auto gpu_selected =
+            run_multiple_agg("SELECT " + extrema + " FROM " + table + ";", dt);
+        ASSERT_EQ(ExecutorDeviceType::GPU, gpu_selected->getDeviceType());
+      }
+    }
+    for (const auto& window :
+         {"PARTITION BY p ORDER BY id",
+          "PARTITION BY p ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW"}) {
+      const auto query = "SELECT id, MIN(k) OVER (" + std::string{window} +
+                         "), MAX(k) OVER (" + window + ") FROM " + table +
+                         " ORDER BY id;";
+      c(query, query, dt);
     }
   }
 }

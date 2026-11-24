@@ -43,9 +43,7 @@ class TableFunctionCompilationContext {
   void generateGpuKernel();
   bool passColumnsByValue(const TableFunctionExecutionUnit& exe_unit);
 
-  std::shared_ptr<CompilationContext> finalize(
-      bool emit_only_preflight_fn,
-      std::chrono::steady_clock::time_point& compile_start_timer);
+  std::shared_ptr<CompilationContext> finalize(bool emit_only_preflight_fn);
 
   llvm::Function* entry_point_func_;
   llvm::Function* kernel_func_;

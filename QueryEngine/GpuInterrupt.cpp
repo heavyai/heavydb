@@ -10,9 +10,12 @@ void Executor::unregisterActiveModule(int device_id) const {
 #ifdef HAVE_CUDA
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
   auto it = gpu_active_kernel_module_.find(device_id);
-  CHECK(it != gpu_active_kernel_module_.end())
-      << "Executor-" << executor_id_ << ": Cannot find a gpu kernel module on device-"
-      << device_id;
+  if (it == gpu_active_kernel_module_.end()) {
+    LOG(WARNING) << "Executor-" << executor_id_
+                 << ": Cannot find a gpu kernel module on device-" << device_id
+                 << " during unregister.";
+    return;
+  }
   gpu_active_kernel_module_.erase(it);
   VLOG(1) << "Executor-" << executor_id_
           << ": Unregistered a gpu kernel module on device-" << device_id;
@@ -87,13 +90,7 @@ void Executor::interrupt(const std::string& query_session,
     auto const& per_device_active_kernel_module =
         target_executor->getActiveKernelModule();
     if (!per_device_active_kernel_module.empty()) {
-      for (auto device_id : target_executor->getAvailableDevicesToProcessQuery()) {
-        auto it = per_device_active_kernel_module.find(device_id);
-        CHECK(it != per_device_active_kernel_module.end())
-            << "Executor-" << executor_id_
-            << ": Cannot find an active kernel module registered for device-"
-            << device_id;
-        void* llvm_module = it->second;
+      for (const auto& [device_id, llvm_module] : per_device_active_kernel_module) {
         auto cu_module = static_cast<CUmodule>(llvm_module);
         if (!cu_module) {
           continue;
@@ -185,9 +182,11 @@ void Executor::interrupt(const std::string& query_session,
     dynamic_watchdog_init(static_cast<unsigned>(DW_ABORT));
   }
 
-  if (allow_interrupt && CPU_execution_mode) {
-    // turn interrupt flag on for CPU mode
-    VLOG(1) << "Try to interrupt the running query on CPU from Executor " << executor_id_;
+  if (allow_interrupt &&
+      (CPU_execution_mode || g_enable_non_kernel_time_query_interrupt)) {
+    // Turn on the host-side interrupt flag for CPU execution and for non-kernel
+    // phases of GPU queries, such as result-set reduction and serialization.
+    VLOG(1) << "Try to interrupt host-side query work from Executor " << executor_id_;
     check_interrupt_init(static_cast<unsigned>(INT_ABORT));
   }
 }
@@ -246,8 +245,9 @@ void Executor::initializeDynamicWatchdog(CUmodule module_ptr,
   size_t dw_sm_cycle_start_size;
   checkCudaErrors(cuModuleGetGlobal(
       &dw_sm_cycle_start, &dw_sm_cycle_start_size, module_ptr, "dw_sm_cycle_start"));
-  CHECK_EQ(dw_sm_cycle_start_size, 128 * sizeof(uint64_t));
-  checkCudaErrors(cuMemsetD32Async(dw_sm_cycle_start, 0, 128 * 2, cuda_stream));
+  CHECK_EQ(dw_sm_cycle_start_size % sizeof(uint32_t), size_t(0));
+  checkCudaErrors(cuMemsetD32Async(
+      dw_sm_cycle_start, 0, dw_sm_cycle_start_size / sizeof(uint32_t), cuda_stream));
   checkCudaErrors(cuStreamSynchronize(cuda_stream));
 
   if (!could_interrupt) {

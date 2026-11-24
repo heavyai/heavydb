@@ -74,6 +74,8 @@ set(query_engine_source_files
   InValuesBitmap.cpp
   InputMetadata.cpp
   JoinFilterPushDown.cpp
+  JoinHashTable/BitmapJoinHashTable.cpp
+  JoinHashTable/RankedBitmapJoinHashTable.cpp
   JoinHashTable/BaselineJoinHashTable.cpp
   JoinHashTable/HashJoin.cpp
   JoinHashTable/HashTable.cpp
@@ -189,6 +191,7 @@ set(query_engine_cuda_source_files
   InPlaceSortImpl.cu
   ResultSetSortImpl.cu
   GpuInitGroups.cu
+  WindowGpu.cu
   JoinHashTable/Runtime/HashJoinRuntimeGpu.cu)
 
 list(APPEND query_engine_source_files

@@ -33,7 +33,8 @@ struct GenericKeyHandler {
 #ifndef __CUDACC__
                     ,
                     const int32_t* const* sd_inner_to_outer_translation_maps,
-                    const int32_t* sd_min_inner_elems
+                    const int32_t* sd_min_inner_elems,
+                    const int32_t* sd_max_inner_elems
 #endif
                     )
       : key_component_count_(key_component_count)
@@ -43,13 +44,16 @@ struct GenericKeyHandler {
 #ifndef __CUDACC__
     if (sd_inner_to_outer_translation_maps) {
       CHECK(sd_min_inner_elems);
+      CHECK(sd_max_inner_elems);
       sd_inner_to_outer_translation_maps_ = sd_inner_to_outer_translation_maps;
       sd_min_inner_elems_ = sd_min_inner_elems;
+      sd_max_inner_elems_ = sd_max_inner_elems;
     } else
 #endif
     {
       sd_inner_to_outer_translation_maps_ = nullptr;
       sd_min_inner_elems_ = nullptr;
+      sd_max_inner_elems_ = nullptr;
     }
   }
 
@@ -73,8 +77,13 @@ struct GenericKeyHandler {
         const auto sd_inner_to_outer_translation_map =
             sd_inner_to_outer_translation_maps_[key_component_index];
         const auto sd_min_inner_elem = sd_min_inner_elems_[key_component_index];
+        const auto sd_max_inner_elem = sd_max_inner_elems_[key_component_index];
         if (sd_inner_to_outer_translation_map &&
             elem != join_column_iterator.type_info->null_val) {
+          if (elem < sd_min_inner_elem || elem >= sd_max_inner_elem) {
+            skip_entry = true;
+            break;
+          }
           const auto outer_id =
               sd_inner_to_outer_translation_map[elem - sd_min_inner_elem];
           if (outer_id == StringDictionary::INVALID_STR_ID) {
@@ -89,7 +98,7 @@ struct GenericKeyHandler {
     }
 
     if (!skip_entry) {
-      return f(join_column_iterators[0].index, key_scratch_buff, key_component_count_);
+      return f((*join_column_iterators).index, key_scratch_buff, key_component_count_);
     }
 
     return 0;
@@ -117,6 +126,7 @@ struct GenericKeyHandler {
   const JoinColumnTypeInfo* type_info_per_key_;
   const int32_t* const* sd_inner_to_outer_translation_maps_;
   const int32_t* sd_min_inner_elems_;
+  const int32_t* sd_max_inner_elems_;
 };
 
 struct BoundingBoxIntersectKeyHandler {
@@ -151,7 +161,7 @@ struct BoundingBoxIntersectKeyHandler {
         key_scratch_buff[1] = y;
 
         const auto err =
-            f(join_column_iterators[0].index, key_scratch_buff, key_dims_count_);
+            f((*join_column_iterators).index, key_scratch_buff, key_dims_count_);
         if (err) {
           return err;
         }
@@ -208,7 +218,7 @@ struct RangeKeyHandler {
 
     key_scratch_buff[0] = floor(coords[0] * x_bucket_sz);
     key_scratch_buff[1] = floor(coords[1] * y_bucket_sz);
-    const auto err = f(join_column_iterators[0].index, key_scratch_buff, key_dims_count_);
+    const auto err = f((*join_column_iterators).index, key_scratch_buff, key_dims_count_);
     if (err) {
       return err;
     }
