@@ -9,12 +9,13 @@
 #include "RelAlgDag.h"
 
 #include <memory>
+#include <typeinfo>
 
 template <class T>
 class RexVisitorBase {
  public:
   virtual T visit(const RexScalar* rex_scalar) const {
-    CHECK(rex_scalar);
+    CHECK(rex_scalar) << "Null RexScalar passed to visitor " << typeid(*this).name();
     const auto rex_input = dynamic_cast<const RexInput*>(rex_scalar);
     if (rex_input) {
       return visitInput(rex_input);
@@ -76,6 +77,9 @@ class RexVisitor : public RexVisitorBase<T> {
     T result = defaultResult();
     for (size_t i = 0; i < operand_count; ++i) {
       const auto operand = rex_operator->getOperand(i);
+      CHECK(operand) << "Null RexOperator operand " << i << " of " << operand_count
+                     << " in "
+                     << rex_operator->toString(RelRexToStringConfig{true, true});
       T operandResult = RexVisitorBase<T>::visit(operand);
       result = aggregateResult(result, operandResult);
     }
@@ -150,7 +154,11 @@ class RexDeepCopyVisitor : public RexVisitorBase<std::unique_ptr<const RexScalar
     const size_t operand_count = rex_operator->size();
     std::vector<RetType> new_opnds;
     for (size_t i = 0; i < operand_count; ++i) {
-      new_opnds.push_back(visit(rex_operator->getOperand(i)));
+      const auto operand = rex_operator->getOperand(i);
+      CHECK(operand) << "Null RexOperator operand " << i << " of " << operand_count
+                     << " in "
+                     << rex_operator->toString(RelRexToStringConfig{true, true});
+      new_opnds.push_back(visit(operand));
     }
     return rex_operator->getDisambiguated(new_opnds);
   }
