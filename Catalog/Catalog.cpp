@@ -4607,34 +4607,44 @@ void Catalog::refreshDictionaryCachesForTableUnlocked(const TableDescriptor& td)
 // NOTE(sy): Only used by --multi-instance clusters.
 void Catalog::invalidateCachesForTable(const int table_id) {
   // When called, exactly one thread has a LockMgr data or insert lock for the table.
-  cat_read_lock read_lock(this);
   ChunkKey const table_key{getDatabaseId(), table_id};
-  auto td = getMutableMetadataForTableUnlocked(table_id);
-  CHECK(td);
+  std::shared_ptr<std::mutex> fragmenter_mutex;
+  {
+    cat_read_lock read_lock(this);
+    auto td = getMutableMetadataForTableUnlocked(table_id);
+    CHECK(td);
+    fragmenter_mutex = td->mutex_;
+  }
+
+  // Keep metadata readers from repopulating the fragmenter from the old file manager.
+  // Storage calls back into the catalog, so do not hold the catalog lock across I/O.
+  std::unique_lock fragmenter_lock(*fragmenter_mutex);
+  bool is_foreign;
+  bool refresh_statistics;
+  {
+    cat_read_lock read_lock(this);
+    auto td = getMutableMetadataForTableUnlocked(table_id);
+    CHECK(td);
+    CHECK(td->mutex_ == fragmenter_mutex);
+    Executor::clearExternalCaches(false, td, getDatabaseId());
+    refreshDictionaryCachesForTableUnlocked(*td);
+    is_foreign = dynamic_cast<foreign_storage::ForeignTable*>(td) != nullptr;
+    refresh_statistics = !td->isView && !td->isForeignTable();
+    td->fragmenter.reset();
+  }
   getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::GPU_LEVEL);
   getDataMgr().deleteChunksWithPrefix(table_key, MemoryLevel::CPU_LEVEL);
-  Executor::clearExternalCaches(false, td, getDatabaseId());
-
-  refreshDictionaryCachesForTableUnlocked(*td);
-
-  // TODO(sy): doTruncateTable() says "destroy fragmenter before deleteChunks is called"
-  // removeFragmenterForTable(table_key[CHUNK_KEY_TABLE_IDX]);
-  if (td->fragmenter != nullptr) {
-    auto tableDescIt = tableDescriptorMapById_.find(table_id);
-    CHECK(tableDescIt != tableDescriptorMapById_.end());
-    tableDescIt->second->fragmenter = nullptr;
-    CHECK(td->fragmenter == nullptr);
-  }
   getDataMgr().getGlobalFileMgr()->closeFileMgr(table_key[CHUNK_KEY_DB_IDX],
                                                 table_key[CHUNK_KEY_TABLE_IDX]);
-  if (dynamic_cast<foreign_storage::ForeignTable*>(td)) {
+  if (is_foreign) {
     dataMgr_->getPersistentStorageMgr()->getForeignStorageMgr()->refreshTable(table_key,
                                                                               true);
   } else {
     dataMgr_->removeMutableTableDiskCacheData(currentDB_.dbId, table_id);
   }
-  instantiateFragmenter(td);
-  if (!td->isView && !td->isForeignTable()) {
+  fragmenter_lock.unlock();
+  CHECK(getMetadataForTable(table_id, true));
+  if (refresh_statistics) {
     markTableStatisticsDirty(table_id);
   }
 }

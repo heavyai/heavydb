@@ -237,9 +237,12 @@ TEST_P(TableStatisticsTest, PeerDataReloadDefersRowCountRefresh) {
   {
     auto lock = lockmgr::TableDataLockMgr::getWriteLockForTable(key);
     // Model a reader whose fragmenter predates the rows already on disk.
-    ASSERT_GT(physical->fragmenter->getNumRows(), 0u);
+    const auto persisted_rows = physical->fragmenter->getNumRows();
+    ASSERT_GT(persisted_rows, 0u);
     physical->fragmenter->setNumRows(0);
     catalog.invalidateCachesForTable(physical->tableId);
+    ASSERT_TRUE(physical->fragmenter);
+    EXPECT_EQ(persisted_rows, physical->fragmenter->getNumRows());
   }
   expectDeferredRefresh(log, 6);
 }
