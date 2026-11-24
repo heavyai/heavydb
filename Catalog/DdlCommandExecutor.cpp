@@ -3353,11 +3353,7 @@ ExecutionResult AlterTableCommand::execute(bool read_only_mode) {
     if (!td) {
       throw std::runtime_error("Table " + tableName + " does not exist.");
     }
-    if (!session_ptr_->checkDBAccessPrivileges(
-            DBObjectType::TableDBObjectType, AccessPrivileges::ALTER_TABLE, tableName)) {
-      throw std::runtime_error(
-          "Current user does not have the privilege to alter table: " + tableName);
-    }
+    Parser::check_alter_table_privilege(*session_ptr_, td);
     validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
     const auto constraint =
         Parser::table_constraint_from_json(*ddl_payload["constraintData"].Begin());
@@ -3380,11 +3376,7 @@ ExecutionResult AlterTableCommand::execute(bool read_only_mode) {
     if (!td) {
       throw std::runtime_error("Table " + tableName + " does not exist.");
     }
-    if (!session_ptr_->checkDBAccessPrivileges(
-            DBObjectType::TableDBObjectType, AccessPrivileges::ALTER_TABLE, tableName)) {
-      throw std::runtime_error(
-          "Current user does not have the privilege to alter table: " + tableName);
-    }
+    Parser::check_alter_table_privilege(*session_ptr_, td);
     validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
     catalog.dropTableConstraint(td, json_str(ddl_payload["constraintName"]));
     return {};

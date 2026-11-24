@@ -2308,6 +2308,10 @@ TEST_F(TableConstraintTest, AlterConstraintsRequireAlterPrivilege) {
   queryAndAssertException(
       "ALTER TABLE constraint_review_parent DROP CONSTRAINT parent_pk;", privilege_error);
   sql("CREATE TABLE constraint_review_child (id INT NOT NULL);");
+  loginAdmin();
+  sql("REVOKE ALTER ON TABLE constraint_review_child FROM test_user;");
+  login("test_user", "test_pass");
+  sql("ALTER TABLE constraint_review_child ADD COLUMN spare INT;");
   EXPECT_NO_THROW(sql(
       "ALTER TABLE constraint_review_child ADD CONSTRAINT child_pk PRIMARY KEY(id);"));
   EXPECT_NO_THROW(sql("ALTER TABLE constraint_review_child DROP CONSTRAINT child_pk;"));
