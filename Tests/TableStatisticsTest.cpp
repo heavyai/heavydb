@@ -15,6 +15,7 @@
 #include <thrift/transport/TServerSocket.h>
 
 #include "DBHandlerTestHelpers.h"
+#include "Fragmenter/AbstractFragmenter.h"
 #include "LockMgr/LockMgr.h"
 #include "LogCaptureTestHelper.h"
 #include "Shared/heavyai_path.h"
@@ -221,6 +222,26 @@ TEST_P(TableStatisticsTest, InsertSelectInvalidatesDestinationBeforeNextRewrite)
   sqlAndCompareResult("SELECT id FROM statistics_source ORDER BY id;",
                       {{i(7)}, {i(8)}, {i(9)}, {i(10)}});
   EXPECT_FALSE(log.contains(kMetadataRefresh));
+}
+
+TEST_P(TableStatisticsTest, PeerDataReloadDefersRowCountRefresh) {
+  auto& catalog = getCatalog();
+  const auto* table = catalog.getMetadataForTable("statistics_maintenance", false);
+  const auto physical_tables = catalog.getPhysicalTablesDescriptors(table);
+  ASSERT_FALSE(physical_tables.empty());
+  const auto* physical = physical_tables.front();
+  const ChunkKey key{catalog.getDatabaseId(), physical->tableId};
+
+  system_parameters_.enable_experimental_query_rewrites = std::get<1>(GetParam());
+  LogCapture log;
+  {
+    auto lock = lockmgr::TableDataLockMgr::getWriteLockForTable(key);
+    // Model a reader whose fragmenter predates the rows already on disk.
+    ASSERT_GT(physical->fragmenter->getNumRows(), 0u);
+    physical->fragmenter->setNumRows(0);
+    catalog.invalidateCachesForTable(physical->tableId);
+  }
+  expectDeferredRefresh(log, 6);
 }
 
 TEST_P(TableStatisticsTest, PlannerDefersRowCountWhileWriterOwnsTable) {

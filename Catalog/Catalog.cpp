@@ -4632,6 +4632,9 @@ void Catalog::invalidateCachesForTable(const int table_id) {
     dataMgr_->removeMutableTableDiskCacheData(currentDB_.dbId, table_id);
   }
   instantiateFragmenter(td);
+  if (!td->isView && !td->isForeignTable()) {
+    markTableStatisticsDirty(table_id);
+  }
 }
 
 void Catalog::removeFragmenterForTable(const int table_id) const {
