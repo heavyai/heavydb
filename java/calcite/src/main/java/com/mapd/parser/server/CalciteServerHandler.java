@@ -26,6 +26,7 @@ import org.apache.calcite.tools.ValidationException;
 import org.apache.calcite.util.Pair;
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.apache.commons.pool.impl.GenericObjectPool;
+import org.apache.thrift.TApplicationException;
 import org.apache.thrift.TException;
 import org.apache.thrift.server.TServer;
 import org.slf4j.Logger;
@@ -320,7 +321,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     } catch (Exception ex) {
       String msg = "Could not get Parse Item from pool: " + ex.getMessage();
       HEAVYDBLOGGER.error(msg, ex);
-      return;
+      throw new TApplicationException(TApplicationException.INTERNAL_ERROR, msg);
     }
     CURRENT_PARSER.set(parser);
     try {

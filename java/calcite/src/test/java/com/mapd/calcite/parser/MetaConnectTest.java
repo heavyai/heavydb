@@ -17,6 +17,8 @@ import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.util.mapping.IntPair;
+import org.apache.commons.pool.impl.GenericObjectPool;
+import org.apache.thrift.TApplicationException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TField;
 import org.apache.thrift.protocol.TMessage;
@@ -31,6 +33,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -87,12 +90,22 @@ public class MetaConnectTest {
             .updateMetaData(database, table, true);
   }
 
-  private void invalidateOverThrift(String table, Boolean statisticsOnly) throws Exception {
-    CalciteServerHandler handler = new CalciteServerHandler(-1,
+  private CalciteServerHandler newHandler() throws Exception {
+    return new CalciteServerHandler(-1,
             temporary.getRoot().getPath(),
             "src/test/resources/ast/test_extension_functions.ast",
             SockTransportProperties.getUnencryptedClient(),
             "");
+  }
+
+  private void invalidateOverThrift(String table, Boolean statisticsOnly)
+          throws Exception {
+    invalidateOverThrift(newHandler(), table, statisticsOnly);
+  }
+
+  private static void invalidateOverThrift(
+          CalciteServerHandler handler, String table, Boolean statisticsOnly)
+          throws Exception {
     TMemoryBuffer request = new TMemoryBuffer(256);
     TMemoryBuffer response = new TMemoryBuffer(256);
     CalciteServer.Client client = new CalciteServer.Client(
@@ -244,6 +257,37 @@ public class MetaConnectTest {
   @Test
   public void thriftRoutesStatisticsAndSchemaInvalidation() throws Exception {
     checkMetadataScopes(true, false);
+  }
+
+  @Test
+  public void invalidationReportsParserBorrowFailureAndCanBeRetried() throws Exception {
+    AtomicInteger rows = new AtomicInteger(5);
+    MetaConnect connection = connection(name -> details(rows.get()));
+    Table cached = connection.getTable("child");
+    rows.set(8);
+
+    CalciteServerHandler handler = newHandler();
+    Field field = CalciteServerHandler.class.getDeclaredField("parserPool");
+    field.setAccessible(true);
+    GenericObjectPool pool = (GenericObjectPool) field.get(handler);
+    pool.setMaxActive(1);
+    pool.setWhenExhaustedAction(GenericObjectPool.WHEN_EXHAUSTED_FAIL);
+    Object parser = pool.borrowObject();
+    try {
+      for (boolean statisticsOnly : new boolean[] {true, false}) {
+        TApplicationException failure = assertThrows(TApplicationException.class,
+                () -> invalidateOverThrift(handler, "child", statisticsOnly));
+        assertEquals(TApplicationException.INTERNAL_ERROR, failure.getType());
+        assertCachedRows(connection, cached, 5);
+      }
+    } finally {
+      pool.returnObject(parser);
+    }
+
+    invalidateOverThrift(handler, "child", true);
+    Table refreshed = connection.getTable("child");
+    assertNotSame(cached, refreshed);
+    assertCachedRows(connection, refreshed, 8);
   }
 
   @Test
