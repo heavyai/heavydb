@@ -5121,15 +5121,23 @@ void check_foreign_key_privilege(const Catalog_Namespace::SessionInfo& session,
     return;
   }
   const auto& referenced_table = constraint.foreign_key_reference->table_name;
-  if (!session.getCatalog().getMetadataForTable(referenced_table, false)) {
+  const auto parent = session.getCatalog().getMetadataForTable(referenced_table, false);
+  if (!parent && session.get_currentUser().isSuper) {
     throw std::runtime_error("Referenced table " + referenced_table + " does not exist.");
   }
-  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
-                                       AccessPrivileges::SELECT_FROM_TABLE,
-                                       referenced_table)) {
-    throw std::runtime_error(
-        "Current user does not have SELECT privileges on referenced table: " +
-        referenced_table);
+  if (!parent || !session.checkDBAccessPrivileges(
+                     parent->isView ? DBObjectType::ViewDBObjectType
+                                    : DBObjectType::TableDBObjectType,
+                     parent->isView ? AccessPrivileges::SELECT_FROM_VIEW
+                                    : AccessPrivileges::SELECT_FROM_TABLE,
+                     referenced_table)) {
+    throw std::runtime_error("Referenced table " + referenced_table +
+                             " does not exist or is not readable with SELECT.");
+  }
+  if (parent->isView || parent->isForeignTable()) {
+    throw std::runtime_error("A foreign key cannot reference " +
+                             std::string(parent->isView ? "view " : "foreign table ") +
+                             referenced_table + ".");
   }
   // A foreign key restricts future DDL on its parent, not just access to metadata.
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,

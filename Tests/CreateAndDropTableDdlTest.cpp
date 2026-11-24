@@ -1819,8 +1819,8 @@ TEST_F(TableConstraintTest, ForeignKeyRequiresReferencedTablePrivileges) {
   sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   const std::string privilege_error =
-      "Current user does not have SELECT privileges on referenced table: "
-      "constraint_review_parent";
+      "Referenced table constraint_review_parent does not exist or is not readable with "
+      "SELECT.";
   queryAndAssertException(
       "CREATE TABLE constraint_review_child (id INT, FOREIGN KEY(id) "
       "REFERENCES constraint_review_parent(id));",
@@ -1875,10 +1875,10 @@ class ForeignKeyParentPrivilegeTest : public TableConstraintTest,
     }
   }
 
-  std::string addForeignKey() const {
+  std::string addForeignKey(const std::string& parent = "parent_privilege") const {
     return std::string(GetParam() ? "ALTER TABLE child_privilege ADD "
                                   : "CREATE TABLE child_privilege (id INT, ") +
-           "CONSTRAINT child_fk FOREIGN KEY(id) REFERENCES parent_privilege(id)" +
+           "CONSTRAINT child_fk FOREIGN KEY(id) REFERENCES " + parent + "(id)" +
            (GetParam() ? ";" : ");");
   }
 
@@ -1886,8 +1886,11 @@ class ForeignKeyParentPrivilegeTest : public TableConstraintTest,
     const auto before = getCatalog().getMetadataForTable("child_privilege", false);
     const auto original_metadata = before ? before->keyMetainfo : std::string{};
     queryAndAssertException(addForeignKey(),
-                            "Current user does not have " + privilege +
-                                " privileges on referenced table: parent_privilege");
+                            privilege == "SELECT"
+                                ? "Referenced table parent_privilege does not exist or "
+                                  "is not readable with SELECT."
+                                : "Current user does not have ALTER privileges on "
+                                  "referenced table: parent_privilege");
     const auto after = getCatalog().getMetadataForTable("child_privilege", false);
     if (GetParam()) {
       ASSERT_NE(nullptr, after);
@@ -1911,6 +1914,28 @@ class ForeignKeyParentPrivilegeTest : public TableConstraintTest,
               constraints[0].foreign_key_reference->column_names);
   }
 };
+
+TEST_P(ForeignKeyParentPrivilegeTest, ReportsUnsupportedParentsOnlyWhenReadable) {
+  loginAdmin();
+  sql("CREATE VIEW parent_view AS SELECT id FROM parent_privilege;");
+  sql(getCreateTableQuery(
+      ddl_utils::TableType::FOREIGN_TABLE, "parent_foreign", "(id INT)"));
+  login("test_user", "test_pass");
+  prepareChild();
+  for (const std::string parent : {"parent_absent", "parent_view", "parent_foreign"}) {
+    queryAndAssertException(
+        addForeignKey(parent),
+        "Referenced table " + parent + " does not exist or is not readable with SELECT.");
+  }
+  loginAdmin();
+  sql("GRANT SELECT ON VIEW parent_view TO test_user;");
+  sql("GRANT SELECT ON TABLE parent_foreign TO test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(addForeignKey("parent_view"),
+                          "A foreign key cannot reference view parent_view.");
+  queryAndAssertException(addForeignKey("parent_foreign"),
+                          "A foreign key cannot reference foreign table parent_foreign.");
+}
 
 TEST_P(ForeignKeyParentPrivilegeTest, ReaderCannotBlockOwnerDdl) {
   grantOnParent("SELECT");
@@ -2099,10 +2124,9 @@ class ForeignKeyColumnPrivilegeTest : public TableConstraintTest,
   }
 
   void expectDenied() {
-    queryAndAssertException(
-        addForeignKey(),
-        "Current user does not have SELECT privileges on referenced table: "
-        "fk_privilege_parent");
+    queryAndAssertException(addForeignKey(),
+                            "Referenced table fk_privilege_parent does not exist or is "
+                            "not readable with SELECT.");
     loginAdmin();
     const auto td = getCatalog().getMetadataForTable("fk_privilege_child", false);
     if (GetParam()) {
