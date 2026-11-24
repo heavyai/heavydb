@@ -222,6 +222,7 @@ class NoneEncoder : public Encoder {
       const bool replicating,
       const int64_t offset,
       const bool is_validated_data) {
+    MetadataRollbackGuard metadata_rollback(*this);
     if (offset == 0 && num_elems_to_append >= num_elems_) {
       resetChunkStats();
     }
@@ -253,6 +254,7 @@ class NoneEncoder : public Encoder {
       buffer_->write(
           src_data, num_elems_to_append * sizeof(T), static_cast<size_t>(offset));
     }
+    metadata_rollback.commit();
     return std::make_shared<ChunkMetadata>(getMetadata());
   }
 

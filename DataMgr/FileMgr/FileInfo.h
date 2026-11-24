@@ -5,10 +5,12 @@
 
 #pragma once
 
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
 #include <set>
+#include <shared_mutex>
 #include <vector>
 
 #include "../../Shared/types.h"
@@ -47,7 +49,7 @@ struct FileInfo {
   std::set<size_t> freePages;  /// set of page numbers of free pages
   std::string file_path;
   mutable std::mutex freePagesMutex_;
-  mutable std::mutex readWriteMutex_;
+  mutable std::shared_mutex readWriteMutex_;
 
   /// Constructor
   FileInfo(FileMgr* fileMgr,
