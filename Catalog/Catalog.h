@@ -139,7 +139,7 @@ class Catalog final {
           std::shared_ptr<Calcite> calcite,
           bool is_new_db,
           const std::map<int32_t, std::string>& user_id_name_map,
-          const UserMetadata& root_user);
+          const UserMetadata* system_objects_owner);
 
   /**
    * @brief Destructor - deletes all
@@ -717,6 +717,7 @@ class Catalog final {
                       const std::string& new_owner);
 
   bool isInfoSchemaDb() const;
+  void conditionallyInitializeSystemObjects(const UserMetadata& root_user);
 
   void checkDateInDaysColumnMigration();
   bool checkDropRenderGroupColumnsMigration();
@@ -955,7 +956,6 @@ class Catalog final {
       const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
       int32_t new_owner_id);
 
-  void conditionallyInitializeSystemObjects(const UserMetadata& root_user);
   void initializeSystemServers();
   void initializeSystemTables();
   void initializeUsersSystemTable();

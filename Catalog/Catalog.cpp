@@ -166,7 +166,7 @@ Catalog::Catalog(const string& basePath,
                  std::shared_ptr<Calcite> calcite,
                  bool is_new_db,
                  const std::map<int32_t, std::string>& user_id_name_map,
-                 const UserMetadata& root_user)
+                 const UserMetadata* system_objects_owner)
     : basePath_(basePath)
     , sqliteConnector_(curDB.dbName, basePath + "/" + shared::kCatalogDirectoryName + "/")
     , currentDB_(curDB)
@@ -210,7 +210,9 @@ Catalog::Catalog(const string& basePath,
   if (g_serialize_temp_tables) {
     boost::filesystem::remove(table_json_filepath(basePath_, currentDB_.dbName));
   }
-  conditionallyInitializeSystemObjects(root_user);
+  if (system_objects_owner) {
+    conditionallyInitializeSystemObjects(*system_objects_owner);
+  }
   // once all initialized use real object
   initialized_ = true;
 }

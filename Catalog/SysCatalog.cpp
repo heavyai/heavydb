@@ -226,15 +226,24 @@ void SysCatalog::init(const std::string& basePath,
   }
   buildMaps(is_new_db);
   if (!is_new_db && g_enable_system_tables) {
-    // info shcmea db is only initialized when the server is run (not initdb AKA
-    // is_new_db) because we don't have the runtime context (we don't know what server
-    // flags are going to be enabled).
     if (DBMetadata db_metadata;
         getMetadataForDB(shared::kInfoSchemaDbName, db_metadata)) {
-      // Initializing the info schema db can lead to the DataMgr erasing data while
-      // calling back into the SysCatalog and cause lock-order inversions.  If we
-      // initialize that catalog here then we can avoid any concurrency issues.
-      getCatalog(db_metadata, is_new_db);
+      std::optional<UserMetadata> deferred_owner;
+      auto catalog = getOrCreateCatalog(
+          db_metadata, false, g_multi_instance ? nullptr : &deferred_owner);
+      if (deferred_owner) {
+        // Rebuilding a system table enters storage, which can look its catalog up
+        // again. Run this after publication and before accepting queries, without
+        // either the catalog-construction lock or the system catalog locks.
+        sqlite_lock.unlock();
+        write_lock.unlock();
+        try {
+          catalog->conditionallyInitializeSystemObjects(*deferred_owner);
+        } catch (...) {
+          removeCatalog(db_metadata.dbName);
+          throw;
+        }
+      }
     }
   }
 
@@ -3860,6 +3869,13 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const int32_t db_id) {
 }
 
 std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is_new_db) {
+  return getOrCreateCatalog(curDB, is_new_db, nullptr);
+}
+
+std::shared_ptr<Catalog> SysCatalog::getOrCreateCatalog(
+    const DBMetadata& curDB,
+    bool is_new_db,
+    std::optional<UserMetadata>* deferred_system_objects_owner) {
   const auto key = to_upper(curDB.dbName);
   {
     sys_read_lock read_lock(this);
@@ -3890,13 +3906,17 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is
     if (auto it = init_cat_map_.find(key); it != init_cat_map_.end()) {
       cat = it->second;
     } else {
-      cat = std::make_shared<Catalog>(basePath_,
-                                      curDB,
-                                      dataMgr_,
-                                      calciteMgr_,
-                                      is_new_db,
-                                      user_name_by_user_id,
-                                      root_user);
+      cat =
+          std::make_shared<Catalog>(basePath_,
+                                    curDB,
+                                    dataMgr_,
+                                    calciteMgr_,
+                                    is_new_db,
+                                    user_name_by_user_id,
+                                    deferred_system_objects_owner ? nullptr : &root_user);
+      if (deferred_system_objects_owner) {
+        deferred_system_objects_owner->emplace(std::move(root_user));
+      }
       init_cat_map_.emplace(key, cat);
     }
   }

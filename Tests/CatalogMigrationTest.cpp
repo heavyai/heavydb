@@ -19,6 +19,7 @@
 #include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
+#include "Shared/scope.h"
 #include "SqliteConnector/SqliteConnector.h"
 #include "TestHelpers.h"
 
@@ -87,8 +88,13 @@ class CatalogTest : public DBHandlerTestFixture {
     CHECK(Catalog_Namespace::SysCatalog::instance().getMetadataForUserById(
         shared::kRootUserId, root_user));
 
-    return std::make_unique<Catalog_Namespace::Catalog>(
-        BASE_PATH, db_metadata, nullptr, nullptr, false, user_name_by_user_id, root_user);
+    return std::make_unique<Catalog_Namespace::Catalog>(BASE_PATH,
+                                                        db_metadata,
+                                                        nullptr,
+                                                        nullptr,
+                                                        false,
+                                                        user_name_by_user_id,
+                                                        &root_user);
   }
 
   SqliteConnector cat_conn_;
@@ -553,6 +559,62 @@ TEST_F(SystemTableMigrationTest, SystemTablesEnabled) {
   g_enable_fsi = true;
   reinitializeSystemCatalog();
   ASSERT_TRUE(isInformationSchemaMigrationRecorded());
+}
+
+TEST_F(SystemTableMigrationTest, RestartRemovesDisabledLogTablesAndReadsNativeData) {
+  const bool old_logs = g_enable_logs_system_tables;
+  ScopeGuard restore_logs = [&] { g_enable_logs_system_tables = old_logs; };
+  auto restart = [](const bool enable_logs) {
+    destroyDBHandler();
+    g_enable_logs_system_tables = enable_logs;
+    createDBHandler();
+  };
+  auto expect_log_table = [](const bool expected) {
+    Catalog_Namespace::DBMetadata db;
+    ASSERT_TRUE(SC::instance().getMetadataForDB(shared::kInfoSchemaDbName, db));
+    auto catalog = SC::instance().getCatalog(db.dbId);
+    ASSERT_TRUE(catalog);
+    EXPECT_EQ(expected,
+              catalog->getMetadataForTable(Catalog_Namespace::SERVER_LOGS_SYS_TABLE_NAME,
+                                           false) != nullptr);
+  };
+
+  restart(true);
+  ASSERT_NO_FATAL_FAILURE(expect_log_table(true));
+  sql("CREATE TABLE restart_native (v INT);");
+  ScopeGuard drop_table = [] { sql("DROP TABLE IF EXISTS restart_native;"); };
+  sql("INSERT INTO restart_native VALUES (42);");
+
+  restart(false);
+  ASSERT_NO_FATAL_FAILURE(expect_log_table(false));
+  sqlAndCompareResult("SELECT SUM(v) FROM restart_native;", {{i(42)}});
+}
+
+TEST_F(SystemTableMigrationTest, FailedLogServerRemovalDoesNotPublishPartialCatalog) {
+  const bool old_logs = g_enable_logs_system_tables;
+  ScopeGuard restore_logs = [&] { g_enable_logs_system_tables = old_logs; };
+  g_enable_logs_system_tables = true;
+  reinitializeSystemCatalog();
+  Catalog_Namespace::DBMetadata db;
+  ASSERT_TRUE(SC::instance().getMetadataForDB(shared::kInfoSchemaDbName, db));
+  SC::destroy();
+  SqliteConnector conn(db.dbName,
+                       BF::absolute(shared::kCatalogDirectoryName, BASE_PATH).string());
+  conn.query(
+      "CREATE TRIGGER reject_log_server_removal BEFORE DELETE ON "
+      "omnisci_foreign_servers WHEN OLD.name = 'system_logs_server' BEGIN "
+      "SELECT RAISE(ABORT, 'injected log server removal failure'); END;");
+
+  g_enable_logs_system_tables = false;
+  executeLambdaAndAssertPartialException([] { initSysCatalog(); },
+                                         "injected log server removal failure");
+  EXPECT_FALSE(SC::instance().getCatalog(db.dbId));
+
+  conn.query("DROP TRIGGER reject_log_server_removal;");
+  ASSERT_NO_THROW(initSysCatalog());
+  auto catalog = SC::instance().getCatalog(db.dbId);
+  ASSERT_TRUE(catalog);
+  EXPECT_FALSE(catalog->getForeignServer("system_logs_server"));
 }
 
 TEST_F(SystemTableMigrationTest, PreExistingInformationSchemaDatabase) {

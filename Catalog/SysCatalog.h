@@ -451,6 +451,10 @@ class SysCatalog : private CommonFileOperations {
 
   SysCatalog();
 
+  std::shared_ptr<Catalog> getOrCreateCatalog(
+      const DBMetadata& db,
+      bool is_new_db,
+      std::optional<UserMetadata>* deferred_system_objects_owner);
   void initDB();
   void buildMaps(bool is_new_db = false);
   void buildMapsUnlocked(bool is_new_db = false);
