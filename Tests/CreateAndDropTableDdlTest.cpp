@@ -4854,6 +4854,41 @@ TEST_F(CreateShardedTableTest, ShardedTableName) {
   ASSERT_EQ("test_table_shard_#2", physical_tables[1]->tableName);
 }
 
+class ShardedRenameTest : public CreateShardedTableTest,
+                          public testing::WithParamInterface<bool> {};
+
+TEST_P(ShardedRenameTest, LeavesShardFragmentersUnopened) {
+  sql("CREATE TABLE test_table (i INT, SHARD KEY(i)) WITH (shard_count = 2);");
+  sql("INSERT INTO test_table VALUES (1), (2);");
+  ScopeGuard cleanup = [&] { sql("DROP TABLE IF EXISTS renamed_sharded;"); };
+
+  auto& catalog = getCatalog();
+  const auto* td = catalog.getMetadataForTable("test_table", false);
+  ASSERT_NE(td, nullptr);
+  const auto shards = catalog.getPhysicalTablesDescriptors(td, false);
+  ASSERT_EQ(shards.size(), 2u);
+  for (const auto* shard : shards) {
+    catalog.removeFragmenterForTable(shard->tableId);
+  }
+
+  if (GetParam()) {
+    sql("RENAME TABLE test_table TO renamed_sharded;");
+  } else {
+    catalog.renameTable(td, "renamed_sharded");
+  }
+
+  const auto* renamed = catalog.getMetadataForTable("renamed_sharded", false);
+  ASSERT_NE(renamed, nullptr);
+  const auto renamed_shards = catalog.getPhysicalTablesDescriptors(renamed, false);
+  ASSERT_EQ(renamed_shards.size(), 2u);
+  for (const auto* shard : renamed_shards) {
+    EXPECT_EQ(shard->fragmenter, nullptr) << shard->tableName;
+  }
+  sqlAndCompareResult("SELECT i FROM renamed_sharded ORDER BY i;", {{i(1)}, {i(2)}});
+}
+
+INSTANTIATE_TEST_SUITE_P(CatalogAndSql, ShardedRenameTest, testing::Bool());
+
 class MaxRollbackEpochsTest : public CreateAndDropTableDdlTest {
  protected:
   void SetUp() override {

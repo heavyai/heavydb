@@ -5592,7 +5592,8 @@ void Catalog::renameTable(const TableDescriptor* td, const string& newTableName)
       CHECK(!physicalTables.empty());
       for (size_t i = 0; i < physicalTables.size(); i++) {
         int32_t physical_tb_id = physicalTables[i];
-        const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+        const TableDescriptor* phys_td =
+            getMutableMetadataForTableUnlocked(physical_tb_id);
         CHECK(phys_td);
         std::string newPhysTableName =
             generatePhysicalTableName(newTableName, static_cast<int32_t>(i + 1));
@@ -5772,7 +5773,8 @@ void Catalog::renameTables(
         CHECK(!physicalTables.empty());
         for (size_t k = 0; k < physicalTables.size(); k++) {
           int32_t physical_tb_id = physicalTables[k];
-          const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+          const TableDescriptor* phys_td =
+              getMutableMetadataForTableUnlocked(physical_tb_id);
           CHECK(phys_td);
           std::string newPhysTableName = generatePhysicalTableName(newTableName, (k + 1));
           allNames.emplace_back(phys_td->tableName, newPhysTableName);
