@@ -412,7 +412,8 @@ void Calcite::updateMetadata(std::string catalog, std::string table) {
     }
   }
   try {
-    updateMetadataImpl(catalog, table, false);
+    MetadataConnection connection;
+    updateMetadataImpl(connection, catalog, table, false, true);
   } catch (...) {
     std::lock_guard<std::mutex> lock(statistics_mutex_);
     dirty_statistics_.merge(pending);
@@ -459,15 +460,28 @@ void Calcite::refreshCommittedMetadata() {
   has_pending_committed_metadata_ = false;
 }
 
-void Calcite::updateMetadataImpl(const std::string& catalog,
+Calcite::MetadataConnection Calcite::openMetadataConnection() {
+  return server_available_ ? MetadataConnection(getClient(remote_calcite_port_))
+                           : MetadataConnection{};
+}
+
+void Calcite::updateMetadataImpl(MetadataConnection& connection,
+                                 const std::string& catalog,
                                  const std::string& table,
-                                 const bool statistics_only) {
-  if (server_available_) {
-    auto ms = measure<>::execution([&]() {
-      auto clientP = getClient(remote_calcite_port_);
-      clientP.first->updateMetadata(catalog, table, statistics_only);
-      clientP.second->close();
-    });
+                                 const bool statistics_only,
+                                 const bool last_update) {
+  auto ms = measure<>::execution([&]() {
+    if (!connection.first) {
+      connection = openMetadataConnection();
+    }
+    if (connection.first) {
+      connection.first->updateMetadata(catalog, table, statistics_only);
+      if (last_update) {
+        connection.second->close();
+      }
+    }
+  });
+  if (connection.first) {
     LOG(INFO) << "Time to updateMetadata " << ms << " (ms), catalog=\"" << catalog
               << "\", table=\"" << table << "\"";
   } else {
@@ -493,11 +507,12 @@ void Calcite::refreshTableStatistics() {
     pending.swap(dirty_statistics_);
   }
   // Drain only this snapshot. Writes during an RPC belong to the next refresh.
+  MetadataConnection connection;
   try {
     while (!pending.empty()) {
       const auto it = pending.begin();
       try {
-        updateMetadataImpl(it->first, it->second, true);
+        updateMetadataImpl(connection, it->first, it->second, true, pending.size() == 1);
       } catch (const apache::thrift::TException& e) {
         // Stale statistics may affect the plan, but must not fail an unrelated query.
         // Stop this snapshot so a failed service is not called once per dirty table.

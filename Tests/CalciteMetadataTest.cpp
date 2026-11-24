@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 #include <thrift/TApplicationException.h>
+#include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TTransportException.h>
 
 #include <atomic>
@@ -20,6 +21,7 @@
 #include "Calcite/Calcite.h"
 #include "Tests/LogCaptureTestHelper.h"
 #include "ThriftHandler/QueryState.h"
+#include "gen-cpp/CalciteServer.h"
 
 namespace {
 
@@ -33,13 +35,31 @@ class MetadataCalcite : public Calcite {
 
   std::function<void(const std::string&, const std::string&)> update;
   std::vector<bool> statistics_scopes;
+  size_t connections_opened{0};
+  bool fail_to_connect{false};
 
  private:
-  void updateMetadataImpl(const std::string& catalog,
-                          const std::string& table,
-                          const bool statistics_only) override {
-    statistics_scopes.push_back(statistics_only);
-    update(catalog, table);
+  class Client : public CalciteServerNull {
+   public:
+    explicit Client(MetadataCalcite& owner) : owner_(owner) {}
+    void updateMetadata(const std::string& catalog,
+                        const std::string& table,
+                        const bool statistics_only) override {
+      owner_.statistics_scopes.push_back(statistics_only);
+      owner_.update(catalog, table);
+    }
+
+   private:
+    MetadataCalcite& owner_;
+  };
+
+  MetadataConnection openMetadataConnection() override {
+    ++connections_opened;
+    if (fail_to_connect) {
+      throw apache::thrift::transport::TTransportException("could not connect");
+    }
+    return {std::make_shared<Client>(*this),
+            std::make_shared<apache::thrift::transport::TMemoryBuffer>()};
   }
 };
 
@@ -152,6 +172,30 @@ TEST_F(CalciteMetadataTest, DistinguishesStatisticsRefreshFromSchemaInvalidation
   EXPECT_EQ((std::vector<bool>{true, false, false}), calcite_.statistics_scopes);
 }
 
+TEST_F(CalciteMetadataTest, OpensOneConnectionPerDirtySnapshot) {
+  Tables updates;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+  };
+  refresh();
+  EXPECT_EQ(0u, calcite_.connections_opened);
+  const Tables dirty{{"db", "a"}, {"db", "b"}, {"other", "a"}};
+  for (const auto& [db, table] : dirty) {
+    calcite_.markTableStatisticsDirty(db, table);
+  }
+  calcite_.fail_to_connect = true;
+  EXPECT_NO_THROW(refresh());
+  EXPECT_TRUE(updates.empty());
+  EXPECT_EQ(1u, calcite_.connections_opened);
+  calcite_.fail_to_connect = false;
+  refresh();
+  refresh();
+  EXPECT_EQ(dirty, updates);
+  EXPECT_EQ(2u, calcite_.connections_opened);
+  calcite_.updateMetadata("db", "unrelated");
+  EXPECT_EQ(3u, calcite_.connections_opened);
+}
+
 TEST_F(CalciteMetadataTest, RefreshDoesNotBlockWritersOrOtherPlanners) {
   PausedUpdate paused;
   std::atomic<size_t> updates{0};
@@ -200,9 +244,11 @@ TEST_F(CalciteMetadataTest, FailedRefreshRetainsOnlyUnfinishedTables) {
   EXPECT_NO_THROW(refresh());
   EXPECT_TRUE(log.contains("Statistics refresh failed for db.b: metadata update failed"));
   EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}}), updates);
+  EXPECT_EQ(1u, calcite_.connections_opened);
   refresh();
   refresh();
   EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}, {"db", "b"}, {"db", "c"}}), updates);
+  EXPECT_EQ(2u, calcite_.connections_opened);
 }
 
 TEST_F(CalciteMetadataTest, FailedRefreshMergesConcurrentWrites) {

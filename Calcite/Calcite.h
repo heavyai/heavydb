@@ -30,6 +30,7 @@ constexpr char const* kCalciteUserPassword = "HyperInteractive";
 }  // namespace
 
 class CalciteServerClient;
+class CalciteServerIf;
 
 namespace Catalog_Namespace {
 class SessionInfo;
@@ -99,6 +100,10 @@ class Calcite {
       bool enable_experimental_query_rewrites,
       bool trust_unenforced_table_constraints);
 
+ protected:
+  using MetadataConnection =
+      std::pair<std::shared_ptr<CalciteServerIf>, std::shared_ptr<TTransport>>;
+
  private:
   friend class CalciteMetadataTest;
 
@@ -119,9 +124,12 @@ class Calcite {
                           const std::string& calcite_session_id);
   std::vector<std::string> get_db_objects(const std::string ra);
   void inner_close_calcite_server(bool log);
-  virtual void updateMetadataImpl(const std::string& catalog,
-                                  const std::string& table,
-                                  bool statistics_only);
+  virtual MetadataConnection openMetadataConnection();
+  void updateMetadataImpl(MetadataConnection& connection,
+                          const std::string& catalog,
+                          const std::string& table,
+                          bool statistics_only,
+                          bool last_update);
   void refreshTableStatistics();
   void refreshCommittedMetadata();
   std::pair<std::shared_ptr<CalciteServerClient>, std::shared_ptr<TTransport>> getClient(
