@@ -2570,109 +2570,111 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
     if (!cat) {
       THROW_DB_EXCEPTION("Database " + database_name + " does not exist.");
     }
-    const auto td_with_lock =
-        lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-            *cat, table_name, false);
-    const auto td = td_with_lock();
-    CHECK(td);
+    std::shared_ptr<query_state::QueryState> view_query;
+    bool can_access_view = false;
+    {
+      const auto td_with_lock =
+          lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+              *cat, table_name, false);
+      const auto td = td_with_lock();
+      CHECK(td);
 
-    bool have_privileges_on_view_sources = true;
-    if (td->isView) {
-      auto query_state = create_query_state(session_info, td->viewSQL);
-      stdlog.setQueryState(query_state);
-      try {
-        if (hasTableAccessPrivileges(td, *session_info)) {
-          const auto [query_ra, locks] = parse_to_ra(query_state->createQueryStateProxy(),
-                                                     query_state->getQueryStr(),
-                                                     {},
-                                                     true,
-                                                     system_parameters_,
-                                                     false);
-          try {
-            query_auth::check_access_privileges(query_state->createQueryStateProxy(),
-                                                query_ra);
-          } catch (const std::runtime_error&) {
-            have_privileges_on_view_sources = false;
-          }
-
-          _return.row_desc =
-              validateRelAlg(query_ra.plan_result, query_state->createQueryStateProxy());
-        } else {
+      if (td->isView) {
+        view_query = create_query_state(session_info, td->viewSQL);
+        stdlog.setQueryState(view_query);
+        can_access_view = hasTableAccessPrivileges(td, *session_info);
+      } else {
+        if (!hasTableAccessPrivileges(td, *session_info)) {
           throw std::runtime_error(
-              "Unable to access view " + table_name +
-              ". The view may not exist, or the logged in user may not "
-              "have permission to access the view.");
+              "Unable to access table " + table_name +
+              ". The table may not exist, or the logged in user may not "
+              "have permission to access the table.");
         }
-      } catch (const std::exception& e) {
-        throw std::runtime_error("View '" + table_name +
-                                 "' query has failed with an error: '" +
-                                 std::string(e.what()) +
-                                 "'.\nThe view must be dropped and re-created to "
-                                 "resolve the error. \nQuery:\n" +
-                                 query_state->getQueryStr());
-      }
-    } else {
-      if (hasTableAccessPrivileges(td, *session_info)) {
+        _return.view_sql = td->viewSQL;
         const auto col_descriptors = cat->getAllColumnMetadataForTable(
             td->tableId, get_system, true, get_physical);
         const auto deleted_cd = cat->getDeletedColumn(td);
         for (const auto cd : col_descriptors) {
-          if (cd == deleted_cd) {
-            continue;
+          if (cd != deleted_cd) {
+            _return.row_desc.push_back(populateThriftColumnType(cat, cd));
           }
-          _return.row_desc.push_back(populateThriftColumnType(cat, cd));
         }
+      }
+      _return.fragment_size = td->maxFragRows;
+      _return.page_size = td->fragPageSize;
+      _return.max_rows = td->maxRows;
+      // Planner ordinals include system columns and must match that schema.
+      if (get_system && system_parameters_.enable_experimental_query_rewrites) {
+        const auto num_rows = get_table_num_rows(*cat, td);
+        if (num_rows >= 0) {
+          _return.__set_num_rows(num_rows);
+        }
+        _return.__set_foreign_key_column_ordinals(cat->getForeignKeyColumnOrdinals(td));
+      }
+      _return.shard_count = td->nShards;
+      if (td->nShards > 0) {
+        auto cd = cat->getMetadataForColumn(td->tableId, td->shardedColumnId);
+        CHECK(cd);
+        _return.sharded_column_name = cd->columnName;
+      }
+      _return.key_metainfo = td->keyMetainfo;
+      _return.is_temporary =
+          td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
+      if (td->partitions.empty()) {
+        _return.partition_detail = TPartitionDetail::DEFAULT;
+      } else if (td->partitions == "SHARDED") {
+        _return.partition_detail = TPartitionDetail::SHARDED;
       } else {
-        throw std::runtime_error(
-            "Unable to access table " + table_name +
-            ". The table may not exist, or the logged in user may not "
-            "have permission to access the table.");
+        throw std::runtime_error("Invalid PARTITIONS value '" + td->partitions +
+                                 "' for table " + table_name);
       }
-    }
-    _return.fragment_size = td->maxFragRows;
-    _return.page_size = td->fragPageSize;
-    _return.max_rows = td->maxRows;
-    // Planner ordinals include system columns and must match that schema.
-    if (get_system && system_parameters_.enable_experimental_query_rewrites) {
-      const auto num_rows = get_table_num_rows(*cat, td);
-      if (num_rows >= 0) {
-        _return.__set_num_rows(num_rows);
+      if (td->comment.has_value()) {
+        _return.__set_comment(td->comment.value());
       }
-      _return.__set_foreign_key_column_ordinals(cat->getForeignKeyColumnOrdinals(td));
-    }
-    _return.view_sql =
-        (have_privileges_on_view_sources ? td->viewSQL
-                                         : "[Not enough privileges to see the view SQL]");
-    _return.shard_count = td->nShards;
-    if (td->nShards > 0) {
-      auto cd = cat->getMetadataForColumn(td->tableId, td->shardedColumnId);
-      CHECK(cd);
-      _return.sharded_column_name = cd->columnName;
-    }
-    _return.key_metainfo = td->keyMetainfo;
-    _return.is_temporary = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
-    if (td->partitions.empty()) {
-      _return.partition_detail = TPartitionDetail::DEFAULT;
-    } else if (td->partitions == "SHARDED") {
-      _return.partition_detail = TPartitionDetail::SHARDED;
-    } else {
-      throw std::runtime_error("Invalid PARTITIONS value '" + td->partitions +
-                               "' for table " + table_name);
-    }
-    if (td->comment.has_value()) {
-      _return.__set_comment(td->comment.value());
-    }
-    if (td->isView) {
-      _return.table_type = TTableType::VIEW;
-    } else if (td->isTemporaryTable()) {
-      _return.table_type = TTableType::TEMPORARY;
-    } else if (td->isForeignTable()) {
-      _return.table_type = TTableType::FOREIGN;
-      _return.refresh_info = get_refresh_info(td);
-    } else {
-      _return.table_type = TTableType::DEFAULT;
+      if (td->isView) {
+        _return.table_type = TTableType::VIEW;
+      } else if (td->isTemporaryTable()) {
+        _return.table_type = TTableType::TEMPORARY;
+      } else if (td->isForeignTable()) {
+        _return.table_type = TTableType::FOREIGN;
+        _return.refresh_info = get_refresh_info(td);
+      } else {
+        _return.table_type = TTableType::DEFAULT;
+      }
     }
 
+    if (!view_query) {
+      return;
+    }
+    // The view definition is a snapshot. Lock its sources in the planner's normal
+    // order, without holding the view's (potentially higher-ID) schema lock.
+    try {
+      if (!can_access_view) {
+        throw std::runtime_error(
+            "Unable to access view " + table_name +
+            ". The view may not exist, or the logged in user may not "
+            "have permission to access the view.");
+      }
+      auto proxy = view_query->createQueryStateProxy();
+      const auto [query_ra, locks] = parse_to_ra(
+          proxy, view_query->getQueryStr(), {}, true, system_parameters_, false);
+      bool show_view_sql = true;
+      try {
+        query_auth::check_access_privileges(proxy, query_ra);
+      } catch (const std::runtime_error&) {
+        show_view_sql = false;
+      }
+      _return.row_desc = validateRelAlg(query_ra.plan_result, proxy);
+      _return.view_sql = show_view_sql ? view_query->getQueryStr()
+                                       : "[Not enough privileges to see the view SQL]";
+    } catch (const std::exception& e) {
+      throw std::runtime_error("View '" + table_name +
+                               "' query has failed with an error: '" +
+                               std::string(e.what()) +
+                               "'.\nThe view must be dropped and re-created to "
+                               "resolve the error. \nQuery:\n" +
+                               view_query->getQueryStr());
+    }
   } catch (const std::runtime_error& e) {
     THROW_DB_EXCEPTION(std::string(e.what()));
   }

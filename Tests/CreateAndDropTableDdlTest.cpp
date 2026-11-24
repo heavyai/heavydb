@@ -13,6 +13,8 @@
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/filesystem.hpp>
+#include <chrono>
+#include <future>
 #include <set>
 
 #include "Calcite/Calcite.h"
@@ -23,6 +25,7 @@
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/FileMgr/FileBuffer.h"
 #include "Fragmenter/FragmentDefaultValues.h"
+#include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
 #include "Shared/JsonUtils.h"
 #include "Shared/SysDefinitions.h"
@@ -1662,6 +1665,43 @@ TEST_F(TableConstraintTest, RowCountsRequireRewritesAndExcludeViews) {
   EXPECT_TRUE(native.__isset.num_rows);
   EXPECT_EQ(2, native.num_rows);
   EXPECT_FALSE(details("constraint_review_view").__isset.num_rows);
+}
+
+TEST_F(TableConstraintTest, ViewDetailsDoNotHoldViewLockWhileWaitingForSource) {
+  sql("CREATE TABLE constraint_review_parent (id INT);");
+  sql("CREATE VIEW constraint_review_view AS "
+      "SELECT id AS projected_id FROM constraint_review_parent;");
+  auto& catalog = getCatalog();
+  auto key = [&](const char* name) -> ChunkKey {
+    return {catalog.getDatabaseId(), catalog.getMetadataForTable(name, false)->tableId};
+  };
+  const auto source_key = key("constraint_review_parent");
+  auto& schemas = lockmgr::TableSchemaLockMgr::instance();
+  auto* source_schema = schemas.getTableMutex(source_key);
+  auto* view_schema = schemas.getTableMutex(key("constraint_review_view"));
+  auto [handler, session] = getDbHandlerAndSessionId();
+  std::future<TTableDetails> reader;
+  {
+    auto block_source = lockmgr::TableDataLockMgr::getWriteLockForTable(source_key);
+    reader = std::async(std::launch::async, [handler = handler, session = session] {
+      TTableDetails details;
+      handler->get_internal_table_details_for_database(
+          details, session, "constraint_review_view", shared::kDefaultDbName);
+      return details;
+    });
+    // The planner takes the source schema lock before waiting for its data lock.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    while (!source_schema->isAcquired() && std::chrono::steady_clock::now() < deadline &&
+           reader.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+    }
+    ASSERT_TRUE(source_schema->isAcquired());
+    lockmgr::WriteLockBase view_ddl(*view_schema, std::try_to_lock);
+    EXPECT_TRUE(view_ddl.owns_lock());
+  }
+  const auto details = reader.get();
+  EXPECT_EQ(TTableType::VIEW, details.table_type);
+  ASSERT_EQ(1u, details.row_desc.size());
+  EXPECT_EQ("projected_id", details.row_desc.front().col_name);
 }
 
 class ForeignKeyMetadataTest : public TableConstraintTest,
