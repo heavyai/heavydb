@@ -24,8 +24,6 @@
 #include "Shared/JsonUtils.h"
 #include "SqliteConnector/SqliteConnector.h"
 
-#include <map>
-#include <set>
 #include <stdexcept>
 
 #include <rapidjson/document.h>
@@ -297,78 +295,24 @@ void initialize_constraint_storage(SqliteConnector& db) {
   db.query("BEGIN TRANSACTION");
   try {
     create_constraint_table(db, false);
-    db.query("SELECT tableid, name, shard, key_metainfo FROM mapd_tables");
-    struct OldTable {
-      int id;
-      std::string name;
-      bool physical;
-      SplitKeyMetadata keys;
-    };
-    std::map<int, OldTable> tables;
-    std::map<std::string, int> logical_ids;
+    // Before constraint storage, master only wrote shard and dictionary directives.
+    db.query(
+        "SELECT name, key_metainfo FROM mapd_tables "
+        "WHERE key_metainfo NOT IN ('','[]')");
     for (size_t i = 0; i < db.getNumRows(); ++i) {
-      const auto id = db.getData<int>(i, 0);
-      const auto name = db.getData<std::string>(i, 1);
-      const bool physical = !db.isNull(i, 2) && db.getData<int>(i, 2) >= 0;
-      if (!physical) {
-        logical_ids.emplace(boost::to_upper_copy(name), id);
-      }
       try {
-        auto keys = split_key_metadata(db.getData<std::string>(i, 3));
-        if (!keys.constraints.empty()) {
-          tables.emplace(id, OldTable{id, name, physical, std::move(keys)});
+        const auto metadata = db.getData<std::string>(i, 1);
+        if (!parse_table_constraints_from_key_metainfo(metadata).empty()) {
+          throw std::runtime_error(
+              "Inline constraint declarations from a development build are not "
+              "supported.");
         }
       } catch (const std::runtime_error& e) {
-        const auto message =
-            "Cannot migrate constraint metadata for table " + name + ": " + e.what();
+        const auto message = "Cannot migrate constraint metadata for table " +
+                             db.getData<std::string>(i, 0) + ": " + e.what();
         LOG(ERROR) << message;
         throw std::runtime_error(message);
       }
-    }
-    // Only discard a physical copy when it agrees with the logical declaration.
-    db.query("SELECT physical_table_id,logical_table_id FROM mapd_logical_to_physical");
-    std::set<int> mapped;
-    for (size_t i = 0; i < db.getNumRows(); ++i) {
-      const auto shard_id = db.getData<int>(i, 0);
-      mapped.insert(shard_id);
-      const auto shard = tables.find(shard_id);
-      const auto logical = tables.find(db.getData<int>(i, 1));
-      if (shard == tables.end() && logical == tables.end()) {
-        continue;
-      }
-      if (shard == tables.end() || logical == tables.end() ||
-          !std::equal(shard->second.keys.constraints.begin(),
-                      shard->second.keys.constraints.end(),
-                      logical->second.keys.constraints.begin(),
-                      logical->second.keys.constraints.end(),
-                      [](const auto& a, const auto& b) {
-                        return a.definition == b.definition;
-                      })) {
-        throw std::runtime_error(
-            "Cannot migrate inconsistent constraints on physical table " +
-            std::to_string(shard_id) + ".");
-      }
-    }
-    for (const auto& item : tables) {
-      const auto& table = item.second;
-      if (table.physical && !mapped.count(table.id)) {
-        throw std::runtime_error("Cannot migrate constraints on unmapped shard " +
-                                 table.name + ".");
-      }
-      if (!table.physical) {
-        insert_constraint_records(
-            db, table.id, false, table.keys.constraints, [&](const std::string& name) {
-              const auto it = logical_ids.find(boost::to_upper_copy(name));
-              if (it == logical_ids.end()) {
-                throw std::runtime_error("Cannot migrate foreign key on " + table.name +
-                                         ": referenced table " + name + " is missing.");
-              }
-              return it->second;
-            });
-      }
-      db.query_with_text_params(
-          "UPDATE mapd_tables SET key_metainfo=? WHERE tableid=?",
-          std::vector<std::string>{table.keys.directives, std::to_string(table.id)});
     }
     db.query(
         "CREATE INDEX IF NOT EXISTS mapd_physical_table_lookup ON "

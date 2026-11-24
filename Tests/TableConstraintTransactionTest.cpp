@@ -51,6 +51,15 @@ int deny_rollback(void*,
              : SQLITE_OK;
 }
 
+void create_pre_constraint_schema(SqliteConnector& db) {
+  db.query(
+      "CREATE TABLE mapd_tables(tableid INTEGER PRIMARY KEY,name TEXT,shard "
+      "INTEGER,key_metainfo TEXT)");
+  db.query(
+      "CREATE TABLE mapd_logical_to_physical(physical_table_id "
+      "INTEGER,logical_table_id INTEGER)");
+}
+
 }  // namespace
 
 class TableConstraintTransactionTest : public testing::Test {
@@ -343,49 +352,59 @@ TEST_F(TableConstraintTransactionTest, FailedAlterPreservesIncomingForeignKey) {
   EXPECT_NO_THROW(catalog_->dropTable(parent));
 }
 
-TEST_F(TableConstraintTransactionTest, MigratesLegacyReferencesAtomically) {
-  // Use a separate database with the pre-migration schema, not a mock of the index.
+TEST_F(TableConstraintTransactionTest, RejectsInvalidCatalogBeforeInstallingConstraints) {
+  SqliteConnector db("legacy", dir_.string());
+  create_pre_constraint_schema(db);
+  db.query("INSERT INTO mapd_tables VALUES (1,'broken',-1,'not json')");
+  auto check_rejection = [&](const std::string& metadata, const std::string& reason) {
+    db.query_with_text_param("UPDATE mapd_tables SET key_metainfo=? WHERE tableid=1",
+                             metadata);
+    LogCapture logs;
+    EXPECT_THROW(Catalog_Namespace::initialize_constraint_storage(db),
+                 std::runtime_error);
+    EXPECT_TRUE(
+        logs.contains("Cannot migrate constraint metadata for table broken: " + reason));
+    db.query("SELECT 1 FROM sqlite_master WHERE name='mapd_constraints'");
+    EXPECT_EQ(0u, db.getNumRows());
+    db.query("SELECT key_metainfo FROM mapd_tables WHERE tableid=1");
+    EXPECT_EQ(metadata, db.getData<std::string>(0, 0));
+  };
+  check_rejection("not json", "Malformed table key metadata.");
+  check_rejection(
+      R"([{"type":"UNIQUE","name":"uq","columns":["id"]}])",
+      "Inline constraint declarations from a development build are not supported.");
+  db.query("UPDATE mapd_tables SET key_metainfo='[]'");
+  EXPECT_NO_THROW(Catalog_Namespace::initialize_constraint_storage(db));
+}
+
+TEST_F(TableConstraintTransactionTest, PreservesStorageDirectivesAndConstraintOrder) {
   const std::string fk =
       R"({"type":"FOREIGN KEY","name":"fk","columns":["id"],"foreign_table":"p","foreign_columns":["id"]})";
   const std::string directive = R"({"type":"SHARD KEY","name":"id"})";
+  const std::string dictionary =
+      R"({"type":"SHARED DICTIONARY","name":"label","foreign_table":"p","foreign_column":"label"})";
+  const auto storage = "[ " + directive + ", " + dictionary + " ]";
   const std::string uq = R"({"type":"UNIQUE","name":"uq","columns":["other"]})";
   const std::string pk = R"({"type":"PRIMARY KEY","name":"pk","columns":["id"]})";
   // Two constraints share a slot before the directive; one follows it.
-  const auto metadata = "[" + fk + "," + uq + "," + directive + "," + pk + "]";
+  const auto metadata =
+      "[" + fk + "," + uq + "," + directive + "," + pk + "," + dictionary + "]";
   {
     SqliteConnector db("legacy", dir_.string());
-    db.query(
-        "CREATE TABLE mapd_tables(tableid INTEGER PRIMARY KEY,name TEXT,shard "
-        "INTEGER,key_metainfo TEXT)");
-    db.query(
-        "CREATE TABLE mapd_logical_to_physical(physical_table_id "
-        "INTEGER,logical_table_id INTEGER)");
+    create_pre_constraint_schema(db);
+    db.query("INSERT INTO mapd_tables VALUES (1,'p',-1,'[]')");
     db.query_with_text_param(
-        "INSERT INTO mapd_tables VALUES (1,'p',-1,?),(4,'broken',-1,'not json')",
-        R"([{"type":"PRIMARY KEY","name":"pk","columns":["id"]}])");
-    db.query_with_text_param(
-        "INSERT INTO mapd_tables VALUES (2,'c',-1,?1),(3,'c_shard',0,?1)", metadata);
+        "INSERT INTO mapd_tables VALUES (2,'c',-1,?1),(3,'c_shard',0,?1)", storage);
     db.query("INSERT INTO mapd_logical_to_physical VALUES (3,2)");
-    {
-      LogCapture logs;
-      EXPECT_THROW(Catalog_Namespace::initialize_constraint_storage(db),
-                   std::runtime_error);
-      EXPECT_TRUE(
-          logs.contains("Cannot migrate constraint metadata for table broken: Malformed "
-                        "table key metadata."));
-    }
-    db.query("SELECT name FROM sqlite_master WHERE name='mapd_constraints'");
+    Catalog_Namespace::initialize_constraint_storage(db);
+    db.query("SELECT 1 FROM mapd_constraints");
     EXPECT_EQ(0u, db.getNumRows());
-    db.query("SELECT key_metainfo FROM mapd_tables WHERE tableid=2");
-    EXPECT_EQ(metadata, db.getData<std::string>(0, 0));
-    db.query("UPDATE mapd_tables SET key_metainfo='[]' WHERE tableid=4");
-    // Fail after the parent's declaration has already moved. Neither half may commit.
-    db.query("UPDATE mapd_tables SET name='missing' WHERE tableid=1");
-    EXPECT_THROW(Catalog_Namespace::initialize_constraint_storage(db),
-                 std::runtime_error);
-    db.query("SELECT key_metainfo FROM mapd_tables WHERE tableid=1");
-    EXPECT_NE(std::string::npos, db.getData<std::string>(0, 0).find("PRIMARY KEY"));
-    db.query("UPDATE mapd_tables SET name='p' WHERE tableid=1");
+    Catalog_Namespace::insert_constraint_records(
+        db,
+        2,
+        false,
+        {{fk, "p", 0}, {uq, std::nullopt, 0}, {pk, std::nullopt, 1}},
+        [](const auto&) { return 1; });
   }
   {
     SqliteConnector db("legacy", dir_.string());
@@ -396,8 +415,8 @@ TEST_F(TableConstraintTransactionTest, MigratesLegacyReferencesAtomically) {
     EXPECT_EQ(1, db.getData<int>(0, 1));
     db.query("SELECT key_metainfo FROM mapd_tables WHERE tableid IN (2,3)");
     ASSERT_EQ(2u, db.getNumRows());
-    EXPECT_EQ("[" + directive + "]", db.getData<std::string>(0, 0));
-    EXPECT_EQ("[" + directive + "]", db.getData<std::string>(1, 0));
+    EXPECT_EQ(storage, db.getData<std::string>(0, 0));
+    EXPECT_EQ(storage, db.getData<std::string>(1, 0));
     for (const auto reverse : {"OFF", "ON"}) {
       SCOPED_TRACE(reverse);
       db.query(std::string("PRAGMA reverse_unordered_selects=") + reverse);
