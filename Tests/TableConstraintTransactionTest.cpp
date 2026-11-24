@@ -348,7 +348,10 @@ TEST_F(TableConstraintTransactionTest, MigratesLegacyReferencesAtomically) {
   const std::string fk =
       R"({"type":"FOREIGN KEY","name":"fk","columns":["id"],"foreign_table":"p","foreign_columns":["id"]})";
   const std::string directive = R"({"type":"SHARD KEY","name":"id"})";
-  const auto metadata = "[" + fk + "," + directive + "]";
+  const std::string uq = R"({"type":"UNIQUE","name":"uq","columns":["other"]})";
+  const std::string pk = R"({"type":"PRIMARY KEY","name":"pk","columns":["id"]})";
+  // Two constraints share a slot before the directive; one follows it.
+  const auto metadata = "[" + fk + "," + uq + "," + directive + "," + pk + "]";
   {
     SqliteConnector db("legacy", dir_.string());
     db.query(
@@ -395,10 +398,14 @@ TEST_F(TableConstraintTransactionTest, MigratesLegacyReferencesAtomically) {
     ASSERT_EQ(2u, db.getNumRows());
     EXPECT_EQ("[" + directive + "]", db.getData<std::string>(0, 0));
     EXPECT_EQ("[" + directive + "]", db.getData<std::string>(1, 0));
-    db.query("SELECT key_metainfo FROM mapd_table_key_metadata WHERE tableid IN (2,3)");
-    ASSERT_EQ(2u, db.getNumRows());
-    EXPECT_EQ(metadata, db.getData<std::string>(0, 0));
-    EXPECT_EQ(metadata, db.getData<std::string>(1, 0));
+    for (const auto reverse : {"OFF", "ON"}) {
+      SCOPED_TRACE(reverse);
+      db.query(std::string("PRAGMA reverse_unordered_selects=") + reverse);
+      db.query("SELECT key_metainfo FROM mapd_table_key_metadata WHERE tableid IN (2,3)");
+      ASSERT_EQ(2u, db.getNumRows());
+      EXPECT_EQ(metadata, db.getData<std::string>(0, 0));
+      EXPECT_EQ(metadata, db.getData<std::string>(1, 0));
+    }
   }
 }
 

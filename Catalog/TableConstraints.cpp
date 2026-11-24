@@ -382,7 +382,7 @@ void initialize_constraint_storage(SqliteConnector& db) {
                   THEN t.key_metainfo
         WHEN NOT json_valid(coalesce(nullif(t.key_metainfo,''),'[]')) THEN t.key_metainfo
         WHEN json_type(coalesce(nullif(t.key_metainfo,''),'[]')) != 'array' THEN t.key_metainfo
-        ELSE (SELECT json_group_array(json(value)) FROM (
+        ELSE (SELECT json_group_array(json(value) ORDER BY slot, directive, pos) FROM (
           SELECT t.key_metainfo -> d.key AS value, d.key AS slot, 1 AS directive, 0 AS pos
             FROM json_each(coalesce(nullif(t.key_metainfo,''),'[]')) d
             WHERE CASE WHEN d.type='object' THEN
@@ -390,8 +390,7 @@ void initialize_constraint_storage(SqliteConnector& db) {
               ELSE 1 END
           UNION ALL
           SELECT definition, preceding_directives, 0, position FROM mapd_constraints
-            WHERE owner=coalesce(p.logical_table_id,t.tableid)
-          ORDER BY slot,directive,pos))
+            WHERE owner=coalesce(p.logical_table_id,t.tableid)))
         END AS key_metainfo
       FROM mapd_tables t LEFT JOIN mapd_logical_to_physical p
         ON p.physical_table_id=t.tableid)sql");
