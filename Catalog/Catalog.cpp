@@ -4738,7 +4738,7 @@ std::vector<std::string> normalize_constraint_columns(
   return result;
 }
 
-std::vector<int32_t> get_column_ordinals_for_table(
+std::optional<std::vector<int32_t>> get_column_ordinals_for_table(
     const Catalog& catalog,
     const TableDescriptor* td,
     const std::vector<std::string>& column_names) {
@@ -4758,8 +4758,7 @@ std::vector<int32_t> get_column_ordinals_for_table(
   for (const auto& column_name : column_names) {
     const auto it = column_ordinals.find(boost::to_upper_copy<std::string>(column_name));
     if (it == column_ordinals.end()) {
-      throw std::runtime_error("Column " + column_name + " does not exist for table " +
-                               td->tableName + ".");
+      return std::nullopt;
     }
     ordinals.emplace_back(it->second);
   }
@@ -5153,13 +5152,19 @@ std::map<std::string, std::vector<int32_t>> Catalog::getForeignKeyColumnOrdinals
     }
     const auto& reference = *constraint.foreign_key_reference;
     const auto foreign_td = getMetadataForTable(reference.table_name, false);
-    if (!foreign_td) {
-      throw std::runtime_error("Referenced table " + reference.table_name +
-                               " does not exist for table " + td->tableName + ".");
+    auto columns = foreign_td ? get_column_ordinals_for_table(
+                                    *this, foreign_td, reference.column_names)
+                              : std::nullopt;
+    if (!columns) {
+      LOG(WARNING) << "Skipping foreign key " << *constraint.name << " on table "
+                   << td->tableName << " in planner statistics: "
+                   << (foreign_td ? "missing referenced column in "
+                                  : "missing referenced table ")
+                   << reference.table_name << "("
+                   << constraint_column_list_to_string(reference.column_names) << ").";
+      continue;
     }
-    ordinals.emplace(
-        *constraint.name,
-        get_column_ordinals_for_table(*this, foreign_td, reference.column_names));
+    ordinals.emplace(*constraint.name, std::move(*columns));
   }
   return ordinals;
 }

@@ -1758,41 +1758,52 @@ TEST_P(ForeignKeyMetadataTest, OrdinalsRequireRewritesButNotTrust) {
   }
 }
 
-TEST_P(ForeignKeyMetadataTest, DisabledRewritesSkipReferencedTableLookup) {
+TEST_P(ForeignKeyMetadataTest, UnresolvedForeignKeyDoesNotHideChildOrSiblingKey) {
   const auto previous = system_parameters_.enable_experimental_query_rewrites;
   ScopeGuard restore_flag = [&] {
     system_parameters_.enable_experimental_query_rewrites = previous;
   };
-  sql("CREATE TABLE constraint_review_parent (id INT, PRIMARY KEY(id));");
-  sql("CREATE TABLE constraint_review_child (id INT, CONSTRAINT child_fk "
-      "FOREIGN KEY(id) REFERENCES constraint_review_parent(id));");
+  sql("CREATE TABLE constraint_review_parent (id INT, a INT, b INT, "
+      "PRIMARY KEY(id), UNIQUE(a,b));");
+  sql("CREATE TABLE constraint_review_child (id INT, a INT, b INT, "
+      "CONSTRAINT broken_fk FOREIGN KEY(a,b) REFERENCES constraint_review_parent(a,b), "
+      "CONSTRAINT good_fk FOREIGN KEY(id) REFERENCES constraint_review_parent(id));");
   auto td = const_cast<TableDescriptor*>(
       getCatalog().getMetadataForTable("constraint_review_child", false));
   const auto original = td->keyMetainfo;
   ScopeGuard restore_metadata = [&] { td->keyMetainfo = original; };
-  auto constraints = getCatalog().getTableConstraints(td);
-  ASSERT_EQ(1u, constraints.size());
-  ASSERT_TRUE(constraints.front().foreign_key_reference);
-  // DDL dependency guards prevent this state; inject it to detect an unwanted lookup.
-  constraints.front().foreign_key_reference->table_name = "constraint_review_missing";
-  td->keyMetainfo = Catalog_Namespace::append_table_constraint_to_key_metainfo(
-      "[]", constraints.front());
-
-  system_parameters_.enable_experimental_query_rewrites = false;
-  const auto details = getTableDetails();
-  EXPECT_EQ(td->keyMetainfo, details.key_metainfo);
-  ASSERT_GE(details.row_desc.size(), 1u);
-  EXPECT_EQ("id", details.row_desc[0].col_name);
-  EXPECT_FALSE(details.__isset.foreign_key_column_ordinals);
-
-  system_parameters_.enable_experimental_query_rewrites = true;
-  if (GetParam()) {
-    executeLambdaAndAssertException(
-        [&] { getTableDetails(); },
-        "Referenced table constraint_review_missing does not exist for table "
-        "constraint_review_child.");
-  } else {
-    EXPECT_FALSE(getTableDetails().__isset.foreign_key_column_ordinals);
+  const auto constraints = getCatalog().getTableConstraints(td);
+  ASSERT_EQ(2u, constraints.size());
+  for (const bool missing_table : {true, false}) {
+    SCOPED_TRACE(missing_table ? "missing table" : "missing second column");
+    // Normal DDL rejects either change; simulate a stale catalog declaration.
+    td->keyMetainfo = "[]";
+    for (auto constraint : constraints) {
+      if (constraint.name == "broken_fk") {
+        auto& reference = constraint.foreign_key_reference.value();
+        if (missing_table) {
+          reference.table_name = "constraint_review_missing";
+        } else {
+          reference.column_names.at(1) = "missing_column";
+        }
+      }
+      td->keyMetainfo = Catalog_Namespace::append_table_constraint_to_key_metainfo(
+          td->keyMetainfo, constraint);
+    }
+    for (const bool rewrites : {false, true}) {
+      SCOPED_TRACE(rewrites);
+      system_parameters_.enable_experimental_query_rewrites = rewrites;
+      TTableDetails details;
+      EXPECT_NO_THROW(details = getTableDetails());
+      EXPECT_EQ(td->keyMetainfo, details.key_metainfo);
+      EXPECT_GE(details.row_desc.size(), 3u);
+      EXPECT_EQ(rewrites && GetParam(), details.__isset.foreign_key_column_ordinals);
+      if (rewrites && GetParam()) {
+        const std::map<std::string, std::vector<int32_t>> expected{{"good_fk", {0}}};
+        EXPECT_EQ(expected, details.foreign_key_column_ordinals);
+        EXPECT_TRUE(details.__isset.num_rows);
+      }
+    }
   }
 }
 
