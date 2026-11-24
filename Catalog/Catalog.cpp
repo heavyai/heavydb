@@ -5373,6 +5373,10 @@ void Catalog::updateTableConstraintMetadata(
     const TableDescriptor* td,
     const std::function<std::string(const std::string&)>& update,
     const std::string& operation) {
+  if (td->shard >= 0) {
+    throw std::runtime_error("Cannot alter constraints on physical shard " +
+                             td->tableName + ". Alter the logical table instead.");
+  }
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
   std::map<int, std::string> updated_metadata;

@@ -925,6 +925,19 @@ TEST_F(TableConstraintTest, StorageDirectivesCoexistWithMarkerNamedConstraints) 
   EXPECT_EQ(std::optional<std::string>{"SHARED_DICT"}, constraints[1].name);
 }
 
+TEST_F(TableConstraintTest, PhysicalShardCannotOwnForeignKey) {
+  sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, PRIMARY KEY(id));");
+  sql("CREATE TABLE constraint_review_child (id INT, SHARD KEY(id)) WITH "
+      "(SHARD_COUNT=2);");
+  queryAndAssertException(
+      "ALTER TABLE \"constraint_review_child_shard_#1\" ADD CONSTRAINT child_fk "
+      "FOREIGN KEY(id) REFERENCES constraint_review_parent(id);",
+      "Cannot alter constraints on physical shard constraint_review_child_shard_#1. "
+      "Alter the logical table instead.");
+  // A rejected declaration must not leave a dependency on the parent.
+  sql("DROP TABLE constraint_review_parent;");
+}
+
 TEST_F(TableConstraintTest, ShardConstraintsFollowLogicalAddAndDrop) {
   sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, PRIMARY KEY(id));");
   sql("CREATE TABLE constraint_review_child (id INT NOT NULL, SHARD KEY(id)) WITH "
@@ -943,6 +956,11 @@ TEST_F(TableConstraintTest, ShardConstraintsFollowLogicalAddAndDrop) {
       EXPECT_EQ(shard->keyMetainfo, sqlite.getData<std::string>(0, 0));
     }
   };
+  check_metadata(1);
+  queryAndAssertException(
+      "ALTER TABLE \"constraint_review_child_shard_#1\" DROP CONSTRAINT child_fk;",
+      "Cannot alter constraints on physical shard constraint_review_child_shard_#1. "
+      "Alter the logical table instead.");
   check_metadata(1);
   sql("ALTER TABLE constraint_review_child DROP CONSTRAINT child_fk;");
   check_metadata(0);
