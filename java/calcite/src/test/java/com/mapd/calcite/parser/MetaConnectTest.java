@@ -45,6 +45,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -541,6 +542,55 @@ public class MetaConnectTest {
     });
     assertCachedRows(connection, connection.getTable("child"), 8);
     assertEquals(4, fetches.get());
+  }
+
+  @Test
+  public void continuousStatisticsChangesAllowPlanningWithoutAnEstimate() {
+    AtomicInteger fetches = new AtomicInteger();
+    AtomicBoolean changing = new AtomicBoolean(true);
+    MetaConnect connection = connection(name -> {
+      assertTrue("lookup did not finish", fetches.incrementAndGet() < 32);
+      TTableDetails result = details(8);
+      result.setKey_metainfo("[{\"type\":\"FOREIGN KEY\",\"name\":\"fk\","
+              + "\"columns\":[\"id\"],\"foreign_table\":\"parent\","
+              + "\"foreign_columns\":[\"id\"],\"enforced\":false}]");
+      result.setForeign_key_column_ordinals(
+              Collections.singletonMap("fk", Collections.singletonList(2)));
+      if (changing.get()) invalidateStatistics(DATABASE, "child");
+      return result;
+    });
+
+    Table table = connection.getTable("child");
+    assertNull(table.getStatistic().getRowCount());
+    assertEquals(Collections.singletonList(IntPair.of(0, 2)),
+            table.getStatistic().getReferentialConstraints().get(0).getColumnPairs());
+    assertNull(HeavyDBTable.getRowCountEstimate(Arrays.asList(DATABASE, "child")));
+
+    changing.set(false);
+    int before = fetches.get();
+    Table fresh = connection.getTable("child");
+    assertNotSame(table, fresh);
+    assertCachedRows(connection, fresh, 8);
+    assertEquals(before + 1, fetches.get());
+  }
+
+  @Test
+  public void continuousSchemaChangesFailLookupWithoutCachingIt() {
+    AtomicInteger fetches = new AtomicInteger();
+    MetaConnect connection = connection(name -> {
+      assertTrue("lookup did not finish", fetches.incrementAndGet() < 32);
+      invalidate(DATABASE, "parent");
+      invalidateStatistics(DATABASE, "child");
+      return details(5);
+    });
+
+    IllegalStateException failure =
+            assertThrows(IllegalStateException.class, () -> connection.getTable("child"));
+    assertTrue(failure.getMessage().contains(DATABASE + ".child"));
+    assertTrue(failure.getMessage().contains("retry the query"));
+    assertNull(HeavyDBTable.getRowCountEstimate(Arrays.asList(DATABASE, "child")));
+    MetaConnect stable = connection(name -> details(8));
+    assertCachedRows(stable, stable.getTable("child"), 8);
   }
 
   @Test

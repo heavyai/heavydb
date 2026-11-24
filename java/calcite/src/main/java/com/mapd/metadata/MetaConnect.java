@@ -88,6 +88,7 @@ public class MetaConnect {
   private static final int KMULTIPOINT = 31;
 
   private static final String CATALOG_DIR_NAME = "catalogs";
+  private static final int MAX_METADATA_REFETCHES = 3;
   private static volatile Map<String, Set<String>> DATABASE_TO_TABLES =
           new ConcurrentHashMap<>();
   private static volatile Map<List<String>, Table> DB_TABLE_DETAILS =
@@ -249,7 +250,7 @@ public class MetaConnect {
     }
 
     TableCacheGeneration generation = tableCacheGeneration(default_db);
-    while (true) {
+    for (int retries = 0;; ++retries) {
       final long fetchedGeneration;
       final long fetchedStatisticsGeneration;
       synchronized (generation) {
@@ -269,20 +270,29 @@ public class MetaConnect {
               : getViewSql(tableName);
 
       synchronized (generation) {
-        if (fetchedGeneration != generation.value
-                || fetchedStatisticsGeneration
-                        != generation.statisticsVersions.getOrDefault(dbTable.get(1), 0L)) {
-          continue;
-        }
         cTable = DB_TABLE_DETAILS.get(dbTable);
         if (cTable != null) {
           return cTable;
         }
-        // Construction also publishes the row count; do it only for the cache winner.
+        if (fetchedGeneration != generation.value) {
+          if (retries < MAX_METADATA_REFETCHES) continue;
+          throw new IllegalStateException("Schema changed while fetching metadata for "
+                  + default_db + "." + tableName + "; retry the query.");
+        }
+        boolean currentStatistics = fetchedStatisticsGeneration
+                == generation.statisticsVersions.getOrDefault(dbTable.get(1), 0L);
+        if (!currentStatistics) {
+          if (retries < MAX_METADATA_REFETCHES) continue;
+          // Only the estimate changed. Use the schema for this lookup without
+          // publishing the invalidated count or caching a table without it.
+          td.unsetNum_rows();
+        }
         Table rTable = viewSql == null
                 ? new HeavyDBTable(td, default_db, tableName)
                 : new HeavyDBView(viewSql, td, parser, default_db, tableName);
-        DB_TABLE_DETAILS.put(dbTable, rTable);
+        if (currentStatistics) {
+          DB_TABLE_DETAILS.put(dbTable, rTable);
+        }
         return rTable;
       }
     }
