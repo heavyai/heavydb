@@ -14,6 +14,8 @@
 #include "gen-cpp/calciteserver_types.h"
 #include "gen-cpp/extension_functions_types.h"
 
+#include <atomic>
+#include <functional>
 #include <mutex>
 #include <set>
 #include <string>
@@ -73,6 +75,9 @@ class Calcite {
   std::string getExtensionFunctionWhitelist();
   std::string getUserDefinedFunctionWhitelist();
   virtual void updateMetadata(std::string catalog, std::string table);
+  void publishTableMetadata(const std::string& catalog,
+                            const std::string& table,
+                            const std::function<void()>& publish);
   void markTableStatisticsDirty(const std::string& catalog, const std::string& table);
   void close_calcite_server(bool log = true);
   virtual ~Calcite();
@@ -118,6 +123,7 @@ class Calcite {
                                   const std::string& table,
                                   bool statistics_only);
   void refreshTableStatistics();
+  void refreshCommittedMetadata();
   std::pair<std::shared_ptr<CalciteServerClient>, std::shared_ptr<TTransport>> getClient(
       int port);
 
@@ -135,6 +141,10 @@ class Calcite {
   std::string ssl_keystore_password_;
   std::string ssl_ca_file_;
   std::string db_config_file_;
+  // A committed schema change must be acknowledged before planning, unlike statistics.
+  std::mutex committed_metadata_mutex_;
+  std::set<std::pair<std::string, std::string>> pending_committed_metadata_;
+  std::atomic<bool> has_pending_committed_metadata_{false};
   // Acquire refresh before statistics; never hold statistics across an RPC.
   std::mutex metadata_refresh_mutex_;
   std::mutex statistics_mutex_;

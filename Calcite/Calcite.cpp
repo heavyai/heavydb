@@ -420,6 +420,45 @@ void Calcite::updateMetadata(std::string catalog, std::string table) {
   }
 }
 
+void Calcite::publishTableMetadata(const std::string& catalog,
+                                   const std::string& table,
+                                   const std::function<void()>& publish) {
+  std::lock_guard<std::mutex> lock(committed_metadata_mutex_);
+  const auto [marker, inserted] = pending_committed_metadata_.emplace(catalog, table);
+  has_pending_committed_metadata_ = true;
+  try {
+    publish();
+  } catch (...) {
+    if (inserted) {
+      pending_committed_metadata_.erase(marker);
+    }
+    has_pending_committed_metadata_ = !pending_committed_metadata_.empty();
+    throw;
+  }
+  try {
+    updateMetadata(catalog, table);
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Catalog change committed for " << catalog << "." << table
+               << "; Calcite invalidation must be retried before planning: " << e.what();
+    return;
+  }
+  pending_committed_metadata_.erase(marker);
+  has_pending_committed_metadata_ = !pending_committed_metadata_.empty();
+}
+
+void Calcite::refreshCommittedMetadata() {
+  if (!has_pending_committed_metadata_) {
+    return;
+  }
+  std::lock_guard<std::mutex> lock(committed_metadata_mutex_);
+  while (!pending_committed_metadata_.empty()) {
+    const auto it = pending_committed_metadata_.begin();
+    updateMetadata(it->first, it->second);
+    pending_committed_metadata_.erase(it);
+  }
+  has_pending_committed_metadata_ = false;
+}
+
 void Calcite::updateMetadataImpl(const std::string& catalog,
                                  const std::string& table,
                                  const bool statistics_only) {
@@ -484,6 +523,7 @@ TPlanResult Calcite::process(query_state::QueryStateProxy query_state_proxy,
                              const TQueryParsingOption& query_parsing_option,
                              const TOptimizationOption& optimization_option,
                              const std::string& calcite_session_id) {
+  refreshCommittedMetadata();
   if (optimization_option.enable_experimental_query_rewrites) {
     refreshTableStatistics();
   }
@@ -500,6 +540,7 @@ std::vector<TCompletionHint> Calcite::getCompletionHints(
     const std::vector<std::string>& visible_tables,
     const std::string sql_string,
     const int cursor) {
+  refreshCommittedMetadata();
   std::vector<TCompletionHint> hints;
   auto& cat = session_info.getCatalog();
   const auto user = session_info.get_currentUser().userName;

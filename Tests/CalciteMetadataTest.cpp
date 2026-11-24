@@ -19,6 +19,7 @@
 
 #include "Calcite/Calcite.h"
 #include "Tests/LogCaptureTestHelper.h"
+#include "ThriftHandler/QueryState.h"
 
 namespace {
 
@@ -65,9 +66,63 @@ class PausedUpdate {
 class CalciteMetadataTest : public testing::Test {
  protected:
   void refresh() { calcite_.refreshTableStatistics(); }
+  void refreshCommitted() { calcite_.refreshCommittedMetadata(); }
 
   MetadataCalcite calcite_;
 };
+
+TEST_F(CalciteMetadataTest, PlanningRequiresAcknowledgementOfCommittedSchema) {
+  Tables calls;
+  bool unavailable = true;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    calls.emplace_back(db, table);
+    if (unavailable) {
+      throw apache::thrift::TApplicationException("invalidation not acknowledged");
+    }
+  };
+  ASSERT_NO_THROW(calcite_.publishTableMetadata("db", "child", [] {}));
+  auto query = query_state::QueryState::create(nullptr, "SELECT 1");
+  for (const bool rewrites : {false, true}) {
+    TOptimizationOption options;
+    options.enable_experimental_query_rewrites = rewrites;
+    EXPECT_THROW(
+        calcite_.process(query->createQueryStateProxy(), "SELECT 1", {}, options),
+        apache::thrift::TApplicationException);
+  }
+  unavailable = false;
+  refreshCommitted();
+  refreshCommitted();
+  EXPECT_EQ(Tables(4, Table("db", "child")), calls);
+  EXPECT_EQ(std::vector<bool>(4, false), calcite_.statistics_scopes);
+}
+
+TEST_F(CalciteMetadataTest, RolledBackDdlPreservesOnlyEarlierCommittedChanges) {
+  Tables calls;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    calls.emplace_back(db, table);
+    throw apache::thrift::TApplicationException("no reply");
+  };
+  calcite_.publishTableMetadata("db", "first", [] {});
+  calcite_.publishTableMetadata("db", "second", [] {});
+  auto rollback = [] { throw std::runtime_error("catalog write failed"); };
+  EXPECT_THROW(calcite_.publishTableMetadata("db", "first", rollback),
+               std::runtime_error);
+  EXPECT_THROW(calcite_.publishTableMetadata("db", "third", rollback),
+               std::runtime_error);
+  calls.clear();
+  bool fail_second = true;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    calls.emplace_back(db, table);
+    if (table == "second" && fail_second) {
+      throw apache::thrift::TApplicationException("still no reply");
+    }
+  };
+  EXPECT_THROW(refreshCommitted(), apache::thrift::TApplicationException);
+  fail_second = false;
+  refreshCommitted();
+  refreshCommitted();
+  EXPECT_EQ((Tables{{"db", "first"}, {"db", "second"}, {"db", "second"}}), calls);
+}
 
 TEST_F(CalciteMetadataTest, CoalescesWritesAndLeavesCleanReadsAlone) {
   Tables updates;

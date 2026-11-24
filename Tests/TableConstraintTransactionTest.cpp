@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 #include <boost/filesystem.hpp>
+#include <functional>
 
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
@@ -29,7 +30,13 @@ namespace {
 
 class MetadataOnlyCalcite : public Calcite {
  public:
-  void updateMetadata(std::string, std::string) override { ++updates; }
+  void updateMetadata(std::string, std::string) override {
+    ++updates;
+    if (on_update) {
+      on_update();
+    }
+  }
+  std::function<void()> on_update;
   size_t updates{0};
 };
 
@@ -184,6 +191,28 @@ class TableConstraintTransactionTest : public testing::Test {
     checkStoredConstraint(!drop);
   }
 
+  void checkInvalidationFailure(bool drop) {
+    initializeCatalog(drop);
+    const auto updates = calcite_->updates;
+    calcite_->on_update = [&] {
+      // A direct catalog reader can reload as soon as Calcite evicts the table.
+      checkStoredConstraint(!drop);
+      throw std::runtime_error("no invalidation reply");
+    };
+    LogCapture logs;
+    ASSERT_NO_THROW(changeConstraint(drop));
+    EXPECT_TRUE(logs.contains("no invalidation reply"));
+    EXPECT_EQ(updates + 1, calcite_->updates);
+    EXPECT_NE(sqlite3_get_autocommit(catalog_->getSqliteConnector().getSqlitePtr()), 0);
+    EXPECT_EQ(catalog_->getTableConstraints(td_).size(), drop ? 0u : 1u);
+    catalog_.reset();
+    SysCatalog::destroy();
+    openCatalog(false);
+    td_ = catalog_->getMetadataForTable("constraint_txn_test", false);
+    ASSERT_NE(nullptr, td_);
+    EXPECT_EQ(catalog_->getTableConstraints(td_).size(), drop ? 0u : 1u);
+  }
+
   bf::path dir_;
   std::string original_base_path_;
   AuthMetadata auth_;
@@ -226,6 +255,14 @@ TEST_F(TableConstraintTransactionTest, AddConstraintRollsBackFailedUpdate) {
 
 TEST_F(TableConstraintTransactionTest, DropConstraintRollsBackFailedUpdate) {
   checkUpdateFailure(true);
+}
+
+TEST_F(TableConstraintTransactionTest, MissingInvalidationReplyDoesNotUndoAdd) {
+  checkInvalidationFailure(false);
+}
+
+TEST_F(TableConstraintTransactionTest, MissingInvalidationReplyDoesNotUndoDrop) {
+  checkInvalidationFailure(true);
 }
 
 TEST_F(TableConstraintTransactionTest, DamagedChildDoesNotBlockUnrelatedDdlAfterRestart) {

@@ -5402,20 +5402,21 @@ void Catalog::updateTableConstraintMetadata(
     }
   }
   const auto context = "ALTER TABLE " + td->tableName + " " + operation;
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    delete_constraint_records(sqliteConnector_, td->tableId, table_is_temporary(td));
-    insertConstraintRecords(
-        *td, split_key_metadata(updated_metadata.at(td->tableId)).constraints);
-  } catch (const std::exception&) {
-    end_transaction_or_abort(sqliteConnector_, "ROLLBACK TRANSACTION", context);
-    throw;
-  }
-  end_transaction_or_abort(sqliteConnector_, "END TRANSACTION", context);
-  for (auto& [table_id, metadata] : updated_metadata) {
-    tableDescriptorMapById_.at(table_id)->keyMetainfo.swap(metadata);
-  }
-  calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
+  calciteMgr_->publishTableMetadata(currentDB_.dbName, td->tableName, [&] {
+    sqliteConnector_.query("BEGIN TRANSACTION");
+    try {
+      delete_constraint_records(sqliteConnector_, td->tableId, table_is_temporary(td));
+      insertConstraintRecords(
+          *td, split_key_metadata(updated_metadata.at(td->tableId)).constraints);
+    } catch (const std::exception&) {
+      end_transaction_or_abort(sqliteConnector_, "ROLLBACK TRANSACTION", context);
+      throw;
+    }
+    end_transaction_or_abort(sqliteConnector_, "END TRANSACTION", context);
+    for (auto& [table_id, metadata] : updated_metadata) {
+      tableDescriptorMapById_.at(table_id)->keyMetainfo.swap(metadata);
+    }
+  });
 }
 
 // used by rollback_table_epoch to clean up in memory artifacts after a rollback
