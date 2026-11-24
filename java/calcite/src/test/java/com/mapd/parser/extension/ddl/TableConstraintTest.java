@@ -130,6 +130,28 @@ public class TableConstraintTest extends DDLTest {
   }
 
   @Test
+  public void qualifiedForeignKeyParentsRequireAnUnqualifiedName() {
+    for (String sql : new String[] {"CREATE TABLE child (id INT, FOREIGN KEY(id) "
+                         + "REFERENCES otherdb.parent(id));",
+                 "ALTER TABLE child ADD FOREIGN KEY(id) REFERENCES otherdb.parent(id);"}) {
+      InvalidParseRequest error =
+              assertThrows(sql, InvalidParseRequest.class, () -> processDdlCommand(sql));
+      assertEquals(-2, error.getWhatUp());
+      assertTrue(error.getWhyUp(),
+              error.getWhyUp().contains(
+                      "REFERENCES requires an unqualified table name in the current database."));
+    }
+  }
+
+  @Test
+  public void quotedDotInForeignKeyParentIsNotAQualifier() throws Exception {
+    JsonObject key = constraint(
+            "CREATE TABLE child (id INT, FOREIGN KEY(id) REFERENCES \"one.name\"(id));");
+    assertEquals(
+            "one.name", key.getAsJsonObject("references").get("table").getAsString());
+  }
+
+  @Test
   public void createForeignKeyRequiresReferenceColumns() {
     assertReferenceColumnsRequired(
             "CREATE TABLE child (id INT, FOREIGN KEY(id) REFERENCES parent);");

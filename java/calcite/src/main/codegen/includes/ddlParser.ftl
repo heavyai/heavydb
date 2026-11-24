@@ -444,6 +444,12 @@ void TableConstraint(List<SqlNode> list) :
         columnList = ParenthesizedSimpleIdentifierList()
         <REFERENCES>
         referencesTable = CompoundIdentifier()
+        {
+            if (!referencesTable.isSimple()) {
+                throw new ParseException(
+                    "REFERENCES requires an unqualified table name in the current database.");
+            }
+        }
         referencesColumnList = ParenthesizedSimpleIdentifierList()
         {
             list.add(SqlDdlNodes.foreign(
