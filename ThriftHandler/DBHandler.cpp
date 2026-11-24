@@ -2450,33 +2450,44 @@ int64_t get_table_num_rows(const Catalog& cat, const TableDescriptor* td) {
   if (td->isView || td->isForeignTable()) {
     return -1;
   }
-  auto get_fragmenter_num_rows = [&cat](const TableDescriptor* table_desc) -> int64_t {
-    const auto populated_td = cat.getMetadataForTable(table_desc->tableId, true);
-    if (!populated_td || !populated_td->fragmenter) {
+  // Inserts can replace a fragmenter on rollback; maintenance can change its count.
+  // Never wait in a metadata callback for the statement that requested the plan.
+  std::vector<lockmgr::ReadLockBase> locks;
+  const auto try_lock_table = [&](int table_id) {
+    const ChunkKey key{cat.getDatabaseId(), table_id};
+    auto* insert = lockmgr::InsertDataLockMgr::instance().getTableMutex(key);
+    if (!locks.emplace_back(*insert, std::try_to_lock).owns_lock()) {
+      return false;
+    }
+    auto* data = lockmgr::TableDataLockMgr::instance().getTableMutex(key);
+    return locks.emplace_back(*data, std::try_to_lock).owns_lock();
+  };
+  const int logical_id = td->shard < 0 ? td->tableId : cat.getLogicalTableId(td->tableId);
+  if (!try_lock_table(logical_id)) {
+    cat.markTableStatisticsDirty(logical_id);
+    return -1;
+  }
+  const auto tables = cat.getPhysicalTablesDescriptors(td, false);
+  int64_t total = 0;
+  for (const auto* table : tables) {
+    if (!table) {
       return -1;
     }
-    return saturated_num_rows(populated_td->fragmenter->getNumRows());
-  };
-  if (td->nShards > 0) {
-    size_t num_rows{0};
-    const auto max_num_rows = static_cast<size_t>(std::numeric_limits<int64_t>::max());
-    for (const auto physical_td : cat.getPhysicalTablesDescriptors(td)) {
-      if (!physical_td) {
-        return -1;
-      }
-      const auto physical_num_rows = get_fragmenter_num_rows(physical_td);
-      if (physical_num_rows < 0) {
-        return -1;
-      }
-      const auto physical_rows = static_cast<size_t>(physical_num_rows);
-      if (physical_rows > max_num_rows - num_rows) {
-        return std::numeric_limits<int64_t>::max();
-      }
-      num_rows += physical_rows;
+    if (table->tableId != logical_id && !try_lock_table(table->tableId)) {
+      cat.markTableStatisticsDirty(logical_id);
+      return -1;
     }
-    return saturated_num_rows(num_rows);
+    const auto* populated = cat.getMetadataForTable(table->tableId, true);
+    if (!populated || !populated->fragmenter) {
+      return -1;
+    }
+    const auto rows = saturated_num_rows(populated->fragmenter->getNumRows());
+    if (rows > std::numeric_limits<int64_t>::max() - total) {
+      return std::numeric_limits<int64_t>::max();
+    }
+    total += rows;
   }
-  return get_fragmenter_num_rows(td);
+  return total;
 }
 
 TTableRefreshInfo get_refresh_info(const TableDescriptor* td) {

@@ -15,6 +15,7 @@
 #include <thrift/transport/TServerSocket.h>
 
 #include "DBHandlerTestHelpers.h"
+#include "LockMgr/LockMgr.h"
 #include "LogCaptureTestHelper.h"
 #include "Shared/heavyai_path.h"
 #include "TestHelpers.h"
@@ -220,6 +221,45 @@ TEST_P(TableStatisticsTest, InsertSelectInvalidatesDestinationBeforeNextRewrite)
   sqlAndCompareResult("SELECT id FROM statistics_source ORDER BY id;",
                       {{i(7)}, {i(8)}, {i(9)}, {i(10)}});
   EXPECT_FALSE(log.contains(kMetadataRefresh));
+}
+
+TEST_P(TableStatisticsTest, PlannerDefersRowCountWhileWriterOwnsTable) {
+  const auto& catalog = getCatalog();
+  const auto* table = catalog.getMetadataForTable("statistics_maintenance", false);
+  const auto shards = catalog.getPhysicalTablesDescriptors(table, false);
+  std::vector<int> writer_tables{table->tableId};
+  if (std::get<0>(GetParam())) {
+    writer_tables.push_back(shards.back()->tableId);
+  }
+  auto [handler, session] = getDbHandlerAndSessionId();
+  for (int writer_table : writer_tables) {
+    SCOPED_TRACE(writer_table);
+    std::future<TTableDetails> metadata;
+    {
+      const ChunkKey key{catalog.getDatabaseId(), writer_table};
+      auto writer = std::get<1>(GetParam())
+                        ? lockmgr::InsertDataLockMgr::getWriteLockForTable(key)
+                        : lockmgr::TableDataLockMgr::getWriteLockForTable(key);
+      // Rollback detaches the old fragmenter before restoring the storage epoch.
+      catalog.removeFragmenterForTable(shards.back()->tableId);
+      metadata = std::async(std::launch::async, [&] {
+        TTableDetails details;
+        handler->get_internal_table_details_for_database(
+            details, session, table->tableName, shared::kDefaultDbName);
+        return details;
+      });
+      EXPECT_EQ(std::future_status::ready, metadata.wait_for(std::chrono::seconds(5)));
+    }
+    const auto details = metadata.get();
+    EXPECT_FALSE(details.row_desc.empty());
+    EXPECT_FALSE(details.__isset.num_rows);
+    EXPECT_FALSE(shards.back()->fragmenter);
+    expectPhysicalRows(6);
+
+    LogCapture log;
+    expectVisibleRows(6);
+    EXPECT_TRUE(log.contains(kMetadataRefresh));
+  }
 }
 
 TEST_P(TableStatisticsTest, FailedCopyRollsBackBeforeDeferredRefresh) {
