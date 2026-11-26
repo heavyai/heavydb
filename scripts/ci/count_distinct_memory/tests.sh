@@ -70,25 +70,46 @@ query_status_row() {  # first SHOW QUERIES row that is our query: "<session>|<st
 }
 
 # ------------------------------------------------------------------------------------------
-run_limits_test() {  # run_limits_test <id> <label> <sql>
-  local id=$1 label=$2 sql=$3
+# Classifies what the query returned (query.out of the last start_query). A query that fails
+# for an unrelated reason (SQL error, missing table, dropped connection) must not count as
+# "survived": it has to return the expected result, or, if `reject_ok`, be rejected for
+# needing too much CPU result memory.
+#   outcome_of <result|result_or_reject>  -> prints "result", "rejected" or "unexpected: <text>"
+outcome_of() {
+  local mode=$1 out
+  out=$(tr -d '\000' <"$WORK_DIR/query.out")
+  if printf '%s\n' "$out" | grep -q "^${NUM_GROUPS}|"; then echo result; return 0; fi
+  if [ "$mode" = result_or_reject ] &&
+     printf '%s\n' "$out" | grep -q "more CPU result memory"; then echo rejected; return 0; fi
+  echo "unexpected: $(printf '%s' "$out" | head -c 120 | tr '\n' ' ')"; return 1
+}
+
+run_limits_test() {  # run_limits_test <id> <label> <sql> <result|result_or_reject>
+  local id=$1 label=$2 sql=$3 mode=$4
   fresh_server || { record "$id" "$label" "FAIL (server did not start)"; return; }
   RSS_CAP_MB=$((BASE_MB + POOL_MB + SLACK_MB))     # stands in for the kernel OOM killer
   start_rss_watchdog
   start_query "$sql"
   sample_rss_until_exit "$WORK_DIR/rss.txt" "$QPID"
   stop_rss_watchdog
-  local peak growth alive=no killed=no
+  local peak growth alive=no killed=no outcome outcome_ok=yes
   peak=$(peak_rss_mb "$WORK_DIR/rss.txt"); growth=$((peak - BASE_MB))
   kill -0 "$SERVER_PID" 2>/dev/null && alive=yes
   [ -e "$OOM_KILLED_FLAG" ] && killed=yes
-  local detail="baseline ${BASE_MB} MB, peak ${peak} MB (+${growth} MB) vs pool ${POOL_MB} MB + slack ${SLACK_MB} MB; server alive: ${alive}; killed at cap: ${killed}; result: $(head -c 100 "$WORK_DIR/query.out" | tr '\n\0' '  ')"
-  if [ "$alive" = yes ] && [ "$killed" = no ]; then record "$id" "$label" "PASS ($detail)"
-  else record "$id" "$label" "FAIL ($detail)"; fi
+  outcome=$(outcome_of "$mode") || outcome_ok=no
+  local detail="baseline ${BASE_MB} MB, peak ${peak} MB (+${growth} MB) vs pool ${POOL_MB} MB + slack ${SLACK_MB} MB; server alive: ${alive}; killed at cap: ${killed}; outcome: ${outcome}"
+  if [ "$alive" = yes ] && [ "$killed" = no ] && [ "$outcome_ok" = yes ]; then
+    record "$id" "$label" "PASS ($detail)"
+  else
+    record "$id" "$label" "FAIL ($detail)"
+  fi
 }
 
-test_T0() { run_limits_test T0 "control (MAX) stays within pool" "$QUERY_CONTROL"; }
-test_T1() { run_limits_test T1 "COUNT(DISTINCT expr) stays within pool or fails cleanly" "$QUERY_DISTINCT"; }
+test_T0() { run_limits_test T0 "control (MAX) stays within pool" "$QUERY_CONTROL" result; }
+test_T1() {
+  run_limits_test T1 "COUNT(DISTINCT expr) stays within pool or fails cleanly" \
+                  "$QUERY_DISTINCT" result_or_reject
+}
 
 # Wait (up to $2 s) until the server's RSS has grown by $1 MB over baseline.
 wait_for_growth() {
