@@ -809,10 +809,20 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       CHECK_EQ(size_t(2), rex_function->size());
       // What geo type will the constructor return? Could be anything.
       return {translateBinaryGeoConstructor(rex_function, arg_ti, with_bounds)};
-    } else if (func_resolve(rex_function->getName(), "ST_IsEmpty"sv, "ST_IsValid"sv)) {
+    } else if (func_resolve(rex_function->getName(),
+                            "ST_IsEmpty"sv,
+                            "ST_IsValid"sv,
+                            "ST_IsSimple"sv,
+                            "ST_IsRing"sv)) {
       CHECK_EQ(size_t(1), rex_function->size());
       return {translateUnaryGeoPredicate(rex_function, arg_ti, with_bounds)};
-    } else if (func_resolve(rex_function->getName(), "ST_Equals"sv)) {
+    } else if (func_resolve(rex_function->getName(),
+                            "ST_Equals"sv,
+                            "ST_Touches"sv,
+                            "ST_Crosses"sv,
+                            "ST_Overlaps"sv,
+                            "ST_Covers"sv,
+                            "ST_CoveredBy"sv)) {
       CHECK_EQ(size_t(2), rex_function->size());
       return {translateBinaryGeoPredicate(rex_function, arg_ti, with_bounds)};
     } else {
@@ -1064,9 +1074,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoPredicate(
   auto geoargs =
       translateGeoFunctionArg(rex_function->getOperand(0), arg_ti, false, true, true);
   ti = SQLTypeInfo(kBOOLEAN, false);
-  auto op = (rex_function->getName() == "ST_IsEmpty"sv)
-                ? Geospatial::GeoBase::GeoOp::kISEMPTY
-                : Geospatial::GeoBase::GeoOp::kISVALID;
+  Geospatial::GeoBase::GeoOp op;
+  if (rex_function->getName() == "ST_IsEmpty"sv) {
+    op = Geospatial::GeoBase::GeoOp::kISEMPTY;
+  } else if (rex_function->getName() == "ST_IsValid"sv) {
+    op = Geospatial::GeoBase::GeoOp::kISVALID;
+  } else if (rex_function->getName() == "ST_IsSimple"sv) {
+    op = Geospatial::GeoBase::GeoOp::kISSIMPLE;
+  } else {
+    op = Geospatial::GeoBase::GeoOp::kISRING;
+  }
   return makeExpr<Analyzer::GeoUOper>(op, ti, arg_ti, geoargs);
 }
 
@@ -1074,7 +1091,20 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoPredicate(
     const RexFunctionOperator* rex_function,
     SQLTypeInfo& ti,
     const bool with_bounds) const {
-  if (rex_function->getName() != "ST_Equals"sv) {
+  Geospatial::GeoBase::GeoOp op;
+  if (rex_function->getName() == "ST_Equals"sv) {
+    op = Geospatial::GeoBase::GeoOp::kEQUALS;
+  } else if (rex_function->getName() == "ST_Touches"sv) {
+    op = Geospatial::GeoBase::GeoOp::kTOUCHES;
+  } else if (rex_function->getName() == "ST_Crosses"sv) {
+    op = Geospatial::GeoBase::GeoOp::kCROSSES;
+  } else if (rex_function->getName() == "ST_Overlaps"sv) {
+    op = Geospatial::GeoBase::GeoOp::kOVERLAPS;
+  } else if (rex_function->getName() == "ST_Covers"sv) {
+    op = Geospatial::GeoBase::GeoOp::kCOVERS;
+  } else if (rex_function->getName() == "ST_CoveredBy"sv) {
+    op = Geospatial::GeoBase::GeoOp::kCOVEREDBY;
+  } else {
     throw QueryNotSupported(rex_function->getName() + " geo predicate is not supported");
   }
 #ifndef ENABLE_GEOS
@@ -1088,7 +1118,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoPredicate(
   auto geoargs1 =
       translateGeoFunctionArg(rex_function->getOperand(1), arg1_ti, false, true, true);
   ti = SQLTypeInfo(kBOOLEAN, false);
-  auto op = Geospatial::GeoBase::GeoOp::kEQUALS;
   return makeExpr<Analyzer::GeoBinOper>(op, ti, arg0_ti, arg1_ti, geoargs0, geoargs1);
 }
 

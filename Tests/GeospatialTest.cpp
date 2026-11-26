@@ -2139,6 +2139,73 @@ TEST(GeoSpatial, Math) {
               v<int64_t>(run_simple_agg(
                   R"(SELECT ST_Equals('POINT(1 1)', 'POINT(1.00000001 1)');)", dt)));
 
+    // GEOS-backed DE-9IM predicates (CPU path)
+    if (dt == ExecutorDeviceType::CPU) {
+      // ST_Touches: boundary contact, no shared interior
+      ASSERT_EQ(static_cast<int64_t>(1),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_Touches('POINT(0 0)', 'LINESTRING(0 0, 1 1)');)", dt)));
+      ASSERT_EQ(static_cast<int64_t>(0),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_Touches('POINT(0.5 0.5)', 'LINESTRING(0 0, 1 1)');)",
+                    dt)));
+
+      // ST_Crosses: line crossing a polygon boundary
+      ASSERT_EQ(static_cast<int64_t>(1),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_Crosses('LINESTRING(-1 1, 3 1)', 'POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))');)",
+                    dt)));
+      ASSERT_EQ(static_cast<int64_t>(0),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_Crosses('POINT(1 1)', 'POINT(1 1)');)", dt)));
+
+      // ST_Overlaps: same-dimension partial overlap
+      ASSERT_EQ(static_cast<int64_t>(1),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_Overlaps('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))', 'POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))');)",
+                    dt)));
+      ASSERT_EQ(static_cast<int64_t>(0),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_Overlaps('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))', 'POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))');)",
+                    dt)));
+
+      // ST_Covers: every point of b in/on a
+      ASSERT_EQ(static_cast<int64_t>(1),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_Covers('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))', 'POINT(2 2)');)",
+                    dt)));
+      ASSERT_EQ(static_cast<int64_t>(0),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_Covers('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))', 'POINT(3 3)');)",
+                    dt)));
+
+      // ST_CoveredBy: converse of ST_Covers
+      ASSERT_EQ(static_cast<int64_t>(1),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_CoveredBy('POINT(1 1)', 'POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))');)",
+                    dt)));
+      ASSERT_EQ(static_cast<int64_t>(0),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_CoveredBy('POINT(3 3)', 'POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))');)",
+                    dt)));
+
+      // ST_IsSimple: self-intersecting bowtie is not simple
+      ASSERT_EQ(static_cast<int64_t>(1),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_IsSimple('LINESTRING(0 0, 1 1)');)", dt)));
+      ASSERT_EQ(static_cast<int64_t>(0),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_IsSimple('LINESTRING(0 0, 1 1, 1 0, 0 1)');)", dt)));
+
+      // ST_IsRing: closed simple linestring
+      ASSERT_EQ(static_cast<int64_t>(1),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_IsRing('LINESTRING(0 0, 1 0, 1 1, 0 0)');)", dt)));
+      ASSERT_EQ(static_cast<int64_t>(0),
+                v<int64_t>(run_simple_agg(
+                    R"(SELECT ST_IsRing('LINESTRING(0 0, 1 1)');)", dt)));
+    }
+
     // ST_Intersects
     ASSERT_EQ(
         static_cast<int64_t>(0),

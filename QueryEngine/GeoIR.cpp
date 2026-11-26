@@ -234,7 +234,9 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
 
   // Deal with unary geo predicates
   if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kISEMPTY ||
-      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kISVALID) {
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kISVALID ||
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kISSIMPLE ||
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kISRING) {
     return codegenGeosPredicateCall(func, argument_list, co);
   }
 
@@ -308,12 +310,18 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
 
   auto arg1_list = codegenGeoArgs(geo_expr->getArgs1(), co);
 
+  const bool is_binary_predicate =
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kEQUALS ||
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kTOUCHES ||
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kCROSSES ||
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kOVERLAPS ||
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kCOVERS ||
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kCOVEREDBY;
   if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kDIFFERENCE ||
       geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kINTERSECTION ||
-      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kUNION ||
-      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kEQUALS) {
+      geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kUNION || is_binary_predicate) {
     func += "_Wkb"s;
-    if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kEQUALS) {
+    if (is_binary_predicate) {
       func += "_Predicate"s;
     }
     // Prepend arg1 geo SQLType
@@ -354,7 +362,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   argument_list.insert(argument_list.end(), arg1_list.begin(), arg1_list.end());
 
   // Deal with binary geo predicates
-  if (geo_expr->getOp() == Geospatial::GeoBase::GeoOp::kEQUALS) {
+  if (is_binary_predicate) {
     return codegenGeosPredicateCall(func, argument_list, co);
   }
 
