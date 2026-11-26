@@ -5491,11 +5491,28 @@ void DBHandler::import_geo_table(const TSessionId& session_id_or_json,
 void DBHandler::importGeoTableGlobFilterSort(const TSessionId& session_id,
                                              const std::string& table_name,
                                              const std::string& file_name,
-                                             const import_export::CopyParams& copy_params,
+                                             const import_export::CopyParams& copy_params_in,
                                              const TRowDescriptor& row_desc) {
   // this is called by the above direct Thrift endpoint
   // and also for a deferred COPY FROM for geo/raster
   // it DOES support the full FSI regex/filter/sort options
+  auto copy_params = copy_params_in;
+#ifdef HAVE_AWS_S3
+  // the deferred geo/raster COPY FROM path builds copy_params from SQL WITH
+  // options only and never passes through thrift_to_copyparams(), so apply the
+  // same server-credential fallback here. without it, GDAL /vsis3/ requests are
+  // sent unsigned (AWS_NO_SIGN_REQUEST is forced when s3_config has no keys)
+  // and imports fail with 403 even though server credentials are available.
+  if (g_allow_s3_server_privileges && copy_params.s3_config.access_key.empty() &&
+      copy_params.s3_config.secret_key.empty() &&
+      copy_params.s3_config.session_token.empty()) {
+    const auto& server_credentials =
+        Aws::Auth::DefaultAWSCredentialsProviderChain().GetAWSCredentials();
+    copy_params.s3_config.access_key = server_credentials.GetAWSAccessKeyId();
+    copy_params.s3_config.secret_key = server_credentials.GetAWSSecretKey();
+    copy_params.s3_config.session_token = server_credentials.GetSessionToken();
+  }
+#endif
   std::vector<std::string> file_names;
   try {
     const shared::FilePathOptions options{copy_params.regex_path_filter,
