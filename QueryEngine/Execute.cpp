@@ -3233,6 +3233,11 @@ void Executor::launchKernelsViaResourceMgr(
   // sets exhaust host memory outside any configured limit. If the request does not fit,
   // the ERM reduces the slot count or rejects the query with
   // QueryNeedsTooMuchCpuResultMem.
+  // As for the output buffers themselves, the grant covers the time the kernels launch
+  // and run: it is released when this function returns, while the sets stay allocated in
+  // the RowSetMemoryOwner until the query's results are released. So this bounds what
+  // concurrent launches can allocate, not the memory that earlier steps or queries still
+  // hold.
   const size_t cpu_result_mem_bytes_per_kernel =
       query_mem_desc.getBufferSizeBytes(device_type) +
       query_mem_desc.getCountDistinctSetHeapBytes(device_type);

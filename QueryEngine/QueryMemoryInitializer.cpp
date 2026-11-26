@@ -10,7 +10,6 @@
 #include "Logger/Logger.h"
 #include "OutputBufferInitialization.h"
 #include "QueryEngine/QueryEngine.h"
-#include "RuntimeFunctions.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/likely.h"
 #include "StreamingTopN.h"
@@ -36,10 +35,15 @@ struct AddNbytes {
 
 // Initializing the output buffer of a set-based COUNT(DISTINCT) allocates one heap object
 // per group-by entry, which can run for a long time and use a lot of memory for a
-// high-cardinality group by. Neither the generated row loop's interrupt check nor the
-// resource manager's limits are active at that point, so the init loop polls here every
-// kInitAbortCheckInterval entries and gives up if
-//  * the query was interrupted (KILL QUERY), or
+// high-cardinality group by. The generated row loop's interrupt check is not active at
+// that point, so the init loop polls here every kInitAbortCheckInterval entries and gives
+// up if
+//  * this query's session was interrupted (KILL QUERY). Only the session's own interrupt
+//    state is consulted: the process-wide runtime interrupt flag that the row loop polls
+//    is shared by all executors and is also set for other sessions' kills, so using it
+//    here could abort an unrelated query's initialization, including a GPU query's or one
+//    that does not allow runtime interrupts. A session is only registered for interrupts
+//    if its query allows them, so this is a no-op for queries that do not.
 //  * a sibling kernel of the same launch has already failed (e.g. OUT_OF_CPU_MEM), which
 //    cancels the launch's task group; finishing this kernel's allocation would only add
 //    to the memory pressure and delay reporting the original error.
@@ -48,12 +52,8 @@ struct AddNbytes {
 constexpr size_t kInitAbortCheckInterval = size_t(1) << 16;
 
 inline void throw_if_init_should_abort(const Executor* executor) {
-  if (g_enable_runtime_query_interrupt &&
-      check_interrupt_init(static_cast<unsigned>(INT_CHECK))) {
-    throw QueryExecutionError(ErrorCode::INTERRUPTED);
-  }
-  if (g_enable_non_kernel_time_query_interrupt && executor &&
-      executor->checkNonKernelTimeInterrupted()) {
+  if ((g_enable_runtime_query_interrupt || g_enable_non_kernel_time_query_interrupt) &&
+      executor && executor->checkNonKernelTimeInterrupted()) {
     throw QueryExecutionError(ErrorCode::INTERRUPTED);
   }
   if (tbb::is_current_task_group_canceling()) {
