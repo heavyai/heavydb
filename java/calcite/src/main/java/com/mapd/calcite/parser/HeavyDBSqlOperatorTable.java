@@ -2748,7 +2748,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createTypeWithNullability(
-              typeFactory.createSqlType(SqlTypeName.INTEGER),
+              typeFactory.createSqlType(SqlTypeName.GEOMETRY),
               opBinding.getOperandType(0).isNullable());
     }
   }
@@ -2888,7 +2888,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createTypeWithNullability(
-              typeFactory.createSqlType(SqlTypeName.INTEGER),
+              typeFactory.createSqlType(SqlTypeName.GEOMETRY),
               opBinding.getOperandType(0).isNullable());
     }
   }
@@ -2908,7 +2908,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createTypeWithNullability(
-              typeFactory.createSqlType(SqlTypeName.INTEGER),
+              typeFactory.createSqlType(SqlTypeName.GEOMETRY),
               opBinding.getOperandType(0).isNullable());
     }
   }
@@ -2928,7 +2928,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createTypeWithNullability(
-              typeFactory.createSqlType(SqlTypeName.INTEGER),
+              typeFactory.createSqlType(SqlTypeName.GEOMETRY),
               opBinding.getOperandType(0).isNullable());
     }
   }
@@ -3088,7 +3088,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createTypeWithNullability(
-              typeFactory.createSqlType(SqlTypeName.INTEGER),
+              typeFactory.createSqlType(SqlTypeName.GEOMETRY),
               opBinding.getOperandType(0).isNullable());
     }
   }
@@ -3107,7 +3107,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 2;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
     }
   }
 
@@ -3125,7 +3125,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
@@ -3150,7 +3150,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 2;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
@@ -3176,7 +3176,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 2;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
@@ -3202,7 +3202,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
@@ -3227,7 +3227,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 2;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
@@ -3253,7 +3253,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 2;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
@@ -3279,7 +3279,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 2;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
@@ -3305,7 +3305,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
     }
   }
 
@@ -4259,7 +4259,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      return typeFactory.createSqlType(SqlTypeName.GEOMETRY);
     }
   }
 
