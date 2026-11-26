@@ -1185,6 +1185,29 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
   return getBufferSizeBytes(device_type, entry_count_);
 }
 
+size_t QueryMemoryDescriptor::getCountDistinctSetHeapBytes(
+    const ExecutorDeviceType device_type) const {
+  // The sets are only created for group-by output on CPU; a GPU step with a set-based
+  // COUNT(DISTINCT) is retried on CPU (QueryMustRunOnCpu), where it is budgeted anew.
+  if (device_type != ExecutorDeviceType::CPU || !isGroupBy()) {
+    return 0;
+  }
+  const size_t set_targets =
+      std::count_if(count_distinct_descriptors_.begin(),
+                    count_distinct_descriptors_.end(),
+                    [](const CountDistinctDescriptor& desc) {
+                      return desc.impl_type_ == CountDistinctImplType::UnorderedSet;
+                    });
+  // Saturate instead of overflowing; callers multiply this by the number of slots.
+  constexpr size_t kMaxBytes = size_t(1) << 50;
+  size_t bytes{0};
+  if (__builtin_mul_overflow(
+          set_targets * kCountDistinctSetHeapBytesPerEntry, entry_count_, &bytes)) {
+    return kMaxBytes;
+  }
+  return std::min(bytes, kMaxBytes);
+}
+
 void QueryMemoryDescriptor::setOutputColumnar(const bool val) {
   output_columnar_ = val;
   if (isLogicalSizedColumnsAllowed()) {

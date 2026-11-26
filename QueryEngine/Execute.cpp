@@ -2274,6 +2274,12 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     }
     if (!eo.just_validate) {
       auto const available_cpus = static_cast<size_t>(cpu_threads());
+      // A query can run several steps (e.g. a cardinality estimation step followed by the
+      // main step), and each one ends in RUNNING_REDUCTION. Without this, the next step's
+      // kernels would run while SHOW QUERIES keeps reporting RUNNING_REDUCTION, and
+      // KILL QUERY would not be routed to the executor running them.
+      updateCurrentQuerySessionStatus(
+          eo, ra_exe_unit.query_state, QuerySessionStatus::RUNNING_QUERY_KERNEL);
       try {
         auto kernels = createKernels(shared_context,
                                      ra_exe_unit,
@@ -2316,26 +2322,9 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       }
     }
     if (is_agg) {
-      if (eo.allow_runtime_query_interrupt && ra_exe_unit.query_state) {
-        // update query status to let user know we are now in the reduction phase
-        std::string curRunningSession{""};
-        std::string curRunningQuerySubmittedTime{""};
-        bool sessionEnrolled = false;
-        {
-          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
-              executor_session_mutex_);
-          curRunningSession = getCurrentQuerySession(session_read_lock);
-          curRunningQuerySubmittedTime = ra_exe_unit.query_state->getQuerySubmittedTime();
-          sessionEnrolled =
-              checkIsQuerySessionEnrolled(curRunningSession, session_read_lock);
-        }
-        if (!curRunningSession.empty() && !curRunningQuerySubmittedTime.empty() &&
-            sessionEnrolled) {
-          updateQuerySessionStatus(curRunningSession,
-                                   curRunningQuerySubmittedTime,
-                                   QuerySessionStatus::RUNNING_REDUCTION);
-        }
-      }
+      // update query status to let user know we are now in the reduction phase
+      updateCurrentQuerySessionStatus(
+          eo, ra_exe_unit.query_state, QuerySessionStatus::RUNNING_REDUCTION);
       try {
         if (eo.estimate_output_cardinality) {
           for (const auto& result : shared_context.getFragmentResults()) {
@@ -3238,8 +3227,15 @@ void Executor::launchKernelsViaResourceMgr(
                                  : ExecutorResourceMgr_Namespace::ResourceType::CPU_SLOTS)
                          .second)
           : num_kernels;
+  // The per-group sets of a set-based COUNT(DISTINCT) are heap allocated while each
+  // kernel initializes its output buffer, so they are not part of the buffer size. Budget
+  // them here, otherwise the ERM admits as many slots as the buffers alone allow and the
+  // sets exhaust host memory outside any configured limit. If the request does not fit,
+  // the ERM reduces the slot count or rejects the query with
+  // QueryNeedsTooMuchCpuResultMem.
   const size_t cpu_result_mem_bytes_per_kernel =
-      query_mem_desc.getBufferSizeBytes(device_type);
+      query_mem_desc.getBufferSizeBytes(device_type) +
+      query_mem_desc.getCountDistinctSetHeapBytes(device_type);
 
   std::vector<std::pair<int32_t, FragmentsList>> kernel_fragments_list;
   kernel_fragments_list.reserve(num_kernels);
@@ -5169,6 +5165,31 @@ void Executor::updateQuerySessionStatus(
   }
   updateQuerySessionStatusWithLock(
       query_session, submitted_time_str, new_query_status, session_write_lock);
+}
+
+void Executor::updateCurrentQuerySessionStatus(
+    const ExecutionOptions& eo,
+    const std::shared_ptr<const query_state::QueryState>& query_state,
+    const QuerySessionStatus::QueryStatus new_query_status) {
+  if (!eo.allow_runtime_query_interrupt || !query_state) {
+    return;
+  }
+  std::string cur_running_session;
+  std::string cur_running_query_submitted_time;
+  bool session_enrolled = false;
+  {
+    heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+        executor_session_mutex_);
+    cur_running_session = getCurrentQuerySession(session_read_lock);
+    cur_running_query_submitted_time = query_state->getQuerySubmittedTime();
+    session_enrolled =
+        checkIsQuerySessionEnrolled(cur_running_session, session_read_lock);
+  }
+  if (!cur_running_session.empty() && !cur_running_query_submitted_time.empty() &&
+      session_enrolled) {
+    updateQuerySessionStatus(
+        cur_running_session, cur_running_query_submitted_time, new_query_status);
+  }
 }
 
 void Executor::enrollQuerySession(

@@ -315,6 +315,13 @@ class QueryMemoryDescriptor {
   size_t getBufferSizeBytes(const ExecutorDeviceType device_type,
                             const size_t override_entry_count) const;
 
+  // Host heap, in addition to getBufferSizeBytes(), that one kernel allocates for the
+  // set-based COUNT(DISTINCT) implementation: one heap-allocated set per group-by entry,
+  // created while the output buffer is initialized. It is not part of the output buffer,
+  // so callers that budget per-kernel result memory (e.g. the Executor Resource Manager)
+  // must add it. Zero when no target uses the set-based implementation.
+  size_t getCountDistinctSetHeapBytes(const ExecutorDeviceType device_type) const;
+
   const ColSlotContext& getColSlotContext() const { return col_slot_context_; }
 
   // TODO(alex): remove

@@ -1321,9 +1321,15 @@ TEST(ExecutorResourceMgr, AdjustedNumCPUSlotBecomeZero) {
     ASSERT_TRUE(false) << "We should throw an exception.";
   } catch (std::runtime_error const& e) {
     std::string const err_msg{e.what()};
+    // 40 slots of 1592 bytes each were requested (62.18 KB) but only 800 bytes can be
+    // granted, so not even one slot fits.
     std::string const expected_msg{
-        "Failed to adjust CPU slots for \'QueryNeedsTooMuchCpuResultMem\' error: "
-        "adjusted CPU slots should be larger than zero"};
+        "Query requested more CPU result memory (62.18 KB) than available per query "
+        "(800 bytes) in executor resource pool, and even a single CPU slot needs 1.55 KB "
+        "of it, so the query cannot run with fewer slots. Reduce the memory the query "
+        "needs (for example fewer GROUP BY groups, or a filter on the input; set-based "
+        "COUNT(DISTINCT) allocates memory for every group), or increase "
+        "cpu-buffer-mem-bytes or executor-per-query-max-cpu-result-mem-ratio."};
     ASSERT_EQ(err_msg, expected_msg);
   }
 }

@@ -144,9 +144,19 @@ std::unique_ptr<ExecutorResourceHandle> ExecutorResourceMgr::request_resources(
       // Check if a valid number of CPU slots was found
       if (adjusted_cpu_slots <= 0u) {
         VLOG(1) << e.getErrorMsg();
+        // Even one slot's result memory exceeds what a query may be granted, so running
+        // with fewer slots cannot help. Say what was asked for, what is available and
+        // what to change, rather than reporting the internal slot adjustment.
         throw std::runtime_error(
-            "Failed to adjust CPU slots for \'QueryNeedsTooMuchCpuResultMem\' error: "
-            "adjusted CPU slots should be larger than zero");
+            "Query requested more CPU result memory (" +
+            format_num_bytes(request_info.cpu_result_mem) +
+            ") than available per query (" + format_num_bytes(max_result_mem_bytes) +
+            ") in executor resource pool, and even a single CPU slot needs " +
+            format_num_bytes(current_per_slot_res_buf_mem_bytes) +
+            " of it, so the query cannot run with fewer slots. Reduce the memory the "
+            "query needs (for example fewer GROUP BY groups, or a filter on the input; "
+            "set-based COUNT(DISTINCT) allocates memory for every group), or increase "
+            "cpu-buffer-mem-bytes or executor-per-query-max-cpu-result-mem-ratio.");
       }
       if (adjusted_cpu_slots == request_info.cpu_slots) {
         VLOG(1) << e.getErrorMsg();

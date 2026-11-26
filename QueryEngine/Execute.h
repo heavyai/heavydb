@@ -1390,6 +1390,12 @@ class Executor {
   void updateQuerySessionStatus(const QuerySessionId& query_session,
                                 const std::string& submitted_time_str,
                                 const QuerySessionStatus::QueryStatus new_query_status);
+  // Moves the session this executor is currently running (if it is enrolled) to the
+  // given status. No-op unless runtime query interrupt is enabled for the query.
+  void updateCurrentQuerySessionStatus(
+      const ExecutionOptions& eo,
+      const std::shared_ptr<const query_state::QueryState>& query_state,
+      const QuerySessionStatus::QueryStatus new_query_status);
   void enrollQuerySession(const QuerySessionId& query_session,
                           const std::string& query_str,
                           const std::string& submitted_time_str,
