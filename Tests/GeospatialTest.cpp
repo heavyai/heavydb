@@ -1638,6 +1638,64 @@ TEST_P(GeoSpatialTestTablesFixture, AsText) {
   }
 }
 
+TEST_P(GeoSpatialTestTablesFixture, GeoJSONAndIntrospection) {
+  // ST_AsGeoJSON, ST_GeometryType, ST_Dimension and ST_CoordDim are
+  // CPU-specific UDFs (row function manager path), like ST_AsText.
+  for (auto dt : {ExecutorDeviceType::CPU}) {
+    const auto num_rows = static_cast<int64_t>(g_num_rows);
+
+    // type names are PostGIS-style
+    for (const auto& kv : std::vector<std::pair<std::string, std::string>>{
+             {"p", "ST_Point"},
+             {"mp", "ST_MultiPoint"},
+             {"l", "ST_LineString"},
+             {"ml", "ST_MultiLineString"},
+             {"poly", "ST_Polygon"},
+             {"mpoly", "ST_MultiPolygon"}}) {
+      ASSERT_EQ(num_rows,
+                v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                          "ST_GeometryType(" +
+                                              kv.first + ") = '" + kv.second + "';",
+                                          dt)))
+          << kv.second;
+    }
+
+    // topological dimension
+    for (const auto& kv : std::vector<std::pair<std::string, int64_t>>{
+             {"p", 0}, {"mp", 0}, {"l", 1}, {"ml", 1}, {"poly", 2}, {"mpoly", 2}}) {
+      ASSERT_EQ(num_rows,
+                v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_test WHERE "
+                                          "ST_Dimension(" +
+                                              kv.first + ") = " +
+                                              std::to_string(kv.second) + ";",
+                                          dt)))
+          << kv.first;
+    }
+
+    // HeavyDB geometries are always 2D
+    ASSERT_EQ(num_rows,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_test WHERE ST_CoordDim(p) = 2;", dt)));
+
+    // GeoJSON output contains the type name and a coordinates member
+    for (const auto& kv : std::vector<std::pair<std::string, std::string>>{
+             {"p", "Point"},
+             {"mp", "MultiPoint"},
+             {"l", "LineString"},
+             {"ml", "MultiLineString"},
+             {"poly", "Polygon"},
+             {"mpoly", "MultiPolygon"}}) {
+      ASSERT_EQ(num_rows,
+                v<int64_t>(run_simple_agg(
+                    "SELECT COUNT(*) FROM geospatial_test WHERE ST_AsGeoJSON(" +
+                        kv.first + ") LIKE '%" + kv.second +
+                        "%' AND ST_AsGeoJSON(" + kv.first + ") LIKE '%coordinates%';",
+                    dt)))
+          << kv.second;
+    }
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(GeoSpatialTablesTests,
                          GeoSpatialTestTablesFixture,
                          ::testing::Values(true, false));

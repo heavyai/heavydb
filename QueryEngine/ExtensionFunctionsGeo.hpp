@@ -5800,4 +5800,153 @@ ST_AsWkb__GeoMultiPolygon__cpu_(RowFunctionManager& mgr, GeoMultiPolygon& p) {
   return ST_AsBinary__GeoMultiPolygon__cpu_(mgr, p);
 }
 
+/*
+  Return the geometry as a GeoJSON "geometry" element.
+
+  Reference
+  ---------
+  https://postgis.net/docs/ST_AsGeoJSON.html
+*/
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsGeoJSON__GeoPoint__cpu_(RowFunctionManager& mgr, GeoPoint& p) {
+  Geospatial::GeoPoint point = to_Geospatial_GeoPoint(p);
+  return TextEncodingNone(mgr, point.getGeoJSONString());
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsGeoJSON__GeoMultiPoint__cpu_(RowFunctionManager& mgr, GeoMultiPoint& mp) {
+  Geospatial::GeoMultiPoint multipoint = to_Geospatial_GeoMultiPoint(mp);
+  return TextEncodingNone(mgr, multipoint.getGeoJSONString());
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsGeoJSON__GeoLineString__cpu_(RowFunctionManager& mgr, GeoLineString& l) {
+  Geospatial::GeoLineString linestring = to_Geospatial_GeoLineString(l);
+  return TextEncodingNone(mgr, linestring.getGeoJSONString());
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsGeoJSON__GeoMultiLineString__cpu_(RowFunctionManager& mgr,
+                                       GeoMultiLineString& ml) {
+  Geospatial::GeoMultiLineString multilinestring = to_Geospatial_GeoMultiLineString(ml);
+  return TextEncodingNone(mgr, multilinestring.getGeoJSONString());
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsGeoJSON__GeoPolygon__cpu_(RowFunctionManager& mgr, GeoPolygon& p) {
+  Geospatial::GeoPolygon polygon = to_Geospatial_GeoPolygon(p);
+  return TextEncodingNone(mgr, polygon.getGeoJSONString());
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_AsGeoJSON__GeoMultiPolygon__cpu_(RowFunctionManager& mgr, GeoMultiPolygon& mp) {
+  Geospatial::GeoMultiPolygon multipolygon = to_Geospatial_GeoMultiPolygon(mp);
+  return TextEncodingNone(mgr, multipolygon.getGeoJSONString());
+}
+
+/*
+  Return the geometry type of the argument as a PostGIS-style type
+  name ('ST_Point', 'ST_LineString', ...). The result depends only on
+  the overload's argument type, so no geometry decoding is needed.
+
+  Reference
+  ---------
+  https://postgis.net/docs/ST_GeometryType.html
+*/
+EXTENSION_NOINLINE TextEncodingNone
+ST_GeometryType__GeoPoint__cpu_(RowFunctionManager& mgr, GeoPoint&) {
+  return TextEncodingNone(mgr, "ST_Point");
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_GeometryType__GeoMultiPoint__cpu_(RowFunctionManager& mgr, GeoMultiPoint&) {
+  return TextEncodingNone(mgr, "ST_MultiPoint");
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_GeometryType__GeoLineString__cpu_(RowFunctionManager& mgr, GeoLineString&) {
+  return TextEncodingNone(mgr, "ST_LineString");
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_GeometryType__GeoMultiLineString__cpu_(RowFunctionManager& mgr,
+                                          GeoMultiLineString&) {
+  return TextEncodingNone(mgr, "ST_MultiLineString");
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_GeometryType__GeoPolygon__cpu_(RowFunctionManager& mgr, GeoPolygon&) {
+  return TextEncodingNone(mgr, "ST_Polygon");
+}
+
+EXTENSION_NOINLINE TextEncodingNone
+ST_GeometryType__GeoMultiPolygon__cpu_(RowFunctionManager& mgr, GeoMultiPolygon&) {
+  return TextEncodingNone(mgr, "ST_MultiPolygon");
+}
+
+/*
+  Return the topological dimension of the geometry (0 for points,
+  1 for lines, 2 for polygons), matching PostGIS ST_Dimension for
+  OGC geometry types.
+
+  Reference
+  ---------
+  https://postgis.net/docs/ST_Dimension.html
+*/
+EXTENSION_NOINLINE int32_t ST_Dimension__GeoPoint__cpu_(GeoPoint&) {
+  return 0;
+}
+
+EXTENSION_NOINLINE int32_t ST_Dimension__GeoMultiPoint__cpu_(GeoMultiPoint&) {
+  return 0;
+}
+
+EXTENSION_NOINLINE int32_t ST_Dimension__GeoLineString__cpu_(GeoLineString&) {
+  return 1;
+}
+
+EXTENSION_NOINLINE int32_t ST_Dimension__GeoMultiLineString__cpu_(GeoMultiLineString&) {
+  return 1;
+}
+
+EXTENSION_NOINLINE int32_t ST_Dimension__GeoPolygon__cpu_(GeoPolygon&) {
+  return 2;
+}
+
+EXTENSION_NOINLINE int32_t ST_Dimension__GeoMultiPolygon__cpu_(GeoMultiPolygon&) {
+  return 2;
+}
+
+/*
+  Return the coordinate dimension of the geometry. HeavyDB geometries
+  are always 2-dimensional (no Z or M support).
+
+  Reference
+  ---------
+  https://postgis.net/docs/ST_CoordDim.html
+*/
+EXTENSION_NOINLINE int32_t ST_CoordDim__GeoPoint__cpu_(GeoPoint&) {
+  return 2;
+}
+
+EXTENSION_NOINLINE int32_t ST_CoordDim__GeoMultiPoint__cpu_(GeoMultiPoint&) {
+  return 2;
+}
+
+EXTENSION_NOINLINE int32_t ST_CoordDim__GeoLineString__cpu_(GeoLineString&) {
+  return 2;
+}
+
+EXTENSION_NOINLINE int32_t ST_CoordDim__GeoMultiLineString__cpu_(GeoMultiLineString&) {
+  return 2;
+}
+
+EXTENSION_NOINLINE int32_t ST_CoordDim__GeoPolygon__cpu_(GeoPolygon&) {
+  return 2;
+}
+
+EXTENSION_NOINLINE int32_t ST_CoordDim__GeoMultiPolygon__cpu_(GeoMultiPolygon&) {
+  return 2;
+}
+
 #endif  // #ifndef __CUDACC__
