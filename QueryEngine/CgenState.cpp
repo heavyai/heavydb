@@ -173,9 +173,15 @@ void CgenState::maybeCloneFunctionRecursive(llvm::Function* fn) {
     return;
   }
 
-  // Get the implementation from the runtime module.
+  // Get the implementation from the runtime module. A declared call
+  // with no runtime body is a caller bug (e.g. a suffixed geo builtin
+  // name that was never implemented); fail the query cleanly instead
+  // of aborting the server.
   auto func_impl = getExecutor()->get_rt_module()->getFunction(fn->getName());
-  CHECK(func_impl) << fn->getName().str();
+  if (!func_impl) {
+    throw std::runtime_error("no implementation for runtime function: " +
+                             fn->getName().str());
+  }
 
   if (func_impl->isDeclaration()) {
     return;
@@ -381,6 +387,20 @@ llvm::Value* CgenState::emitExternalCall(
     const std::vector<llvm::Value*> args,
     const std::vector<llvm::Attribute::AttrKind>& fnattrs,
     const bool has_struct_return) {
+  // Guard against emitting a call to a name with no implementation.
+  // getOrInsertFunction() below happily creates an undefined declaration
+  // for any name; the execution engine then binds the unresolved symbol
+  // to nullptr and the JIT'd code crashes with a call to address 0
+  // (e.g. ST_MaxDistance_MultiPolygon_MultiPolygon — a suffixed name
+  // constructed by geo codegen that has no runtime builtin). All
+  // legitimate callees are already declared in this module (runtime
+  // functions via the shallow copy of rt_module, registered UDF/TF and
+  // helper decls) or resolvable from the runtime module.
+  if (!module_->getFunction(fname) &&
+      !(getExecutor() && getExecutor()->get_rt_module() &&
+        getExecutor()->get_rt_module()->getFunction(fname))) {
+    throw std::runtime_error("no implementation for runtime function: " + fname);
+  }
   std::vector<llvm::Type*> arg_types;
   for (const auto arg : args) {
     CHECK(arg);

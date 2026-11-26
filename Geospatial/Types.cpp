@@ -166,6 +166,16 @@ std::string GeoBase::getWktString() const {
   return wkt_str;
 }
 
+std::string GeoBase::getGeoJSONString() const {
+  char* json = geom_->exportToJson();
+  if (!json) {
+    return std::string();
+  }
+  std::string json_str(json);
+  CPLFree(json);
+  return json_str;
+}
+
 OGRErr GeoBase::createFromWkbView(OGRGeometry** geom, WkbView const wkb_view) {
 #if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 3)
   OGRErr ogr_status =
