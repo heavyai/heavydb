@@ -4,14 +4,21 @@
  */
 
 #include "QueryMemoryInitializer.h"
+#include "ErrorHandling.h"
 #include "Execute.h"
 #include "GpuInitGroups.h"
 #include "Logger/Logger.h"
 #include "OutputBufferInitialization.h"
 #include "QueryEngine/QueryEngine.h"
 #include "Shared/checked_alloc.h"
+#include "Shared/likely.h"
 #include "StreamingTopN.h"
 #include "Utils/FlatBuffer.h"
+
+#include <tbb/task_group.h>
+
+extern bool g_enable_runtime_query_interrupt;
+extern bool g_enable_non_kernel_time_query_interrupt;
 
 // 8 GB, the limit of perfect hash group by under normal conditions
 int64_t g_bitmap_memory_limit{8LL * 1000 * 1000 * 1000};
@@ -25,6 +32,34 @@ struct AddNbytes {
            entry_count * quantile::TDigest::nbytes(aqd.buffer_size, aqd.centroids_size);
   }
 };
+
+// Initializing the output buffer of a set-based COUNT(DISTINCT) allocates one heap object
+// per group-by entry, which can run for a long time and use a lot of memory for a
+// high-cardinality group by. The generated row loop's interrupt check is not active at
+// that point, so the init loop polls here every kInitAbortCheckInterval entries and gives
+// up if
+//  * this query's session was interrupted (KILL QUERY). Only the session's own interrupt
+//    state is consulted: the process-wide runtime interrupt flag that the row loop polls
+//    is shared by all executors and is also set for other sessions' kills, so using it
+//    here could abort an unrelated query's initialization, including a GPU query's or one
+//    that does not allow runtime interrupts. A session is only registered for interrupts
+//    if its query allows them, so this is a no-op for queries that do not.
+//  * a sibling kernel of the same launch has already failed (e.g. OUT_OF_CPU_MEM), which
+//    cancels the launch's task group; finishing this kernel's allocation would only add
+//    to the memory pressure and delay reporting the original error.
+// A kernel stopped for the second reason throws too, but the task group only keeps the
+// first exception, so the original error is what the query reports.
+constexpr size_t kInitAbortCheckInterval = size_t(1) << 16;
+
+inline void throw_if_init_should_abort(const Executor* executor) {
+  if ((g_enable_runtime_query_interrupt || g_enable_non_kernel_time_query_interrupt) &&
+      executor && executor->checkNonKernelTimeInterrupted()) {
+    throw QueryExecutionError(ErrorCode::INTERRUPTED);
+  }
+  if (tbb::is_current_task_group_canceling()) {
+    throw QueryExecutionError(ErrorCode::INTERRUPTED);
+  }
+}
 
 inline void check_total_bitmap_memory(const QueryMemoryDescriptor& query_mem_desc) {
   const size_t groups_buffer_entry_count = query_mem_desc.getEntryCount();
@@ -667,6 +702,9 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
       for (size_t warp_idx = 0; warp_idx < warp_size; ++warp_idx) {
         for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
              ++bin, buffer_ptr += row_size) {
+          if (UNLIKELY((bin & (kInitAbortCheckInterval - 1)) == 0)) {
+            throw_if_init_should_abort(executor);
+          }
           initColumnsPerRow(query_mem_desc_fixedup,
                             &buffer_ptr[col_base_off],
                             init_vals,
@@ -678,6 +716,9 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
 
     for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
          ++bin, buffer_ptr += row_size) {
+      if (UNLIKELY((bin & (kInitAbortCheckInterval - 1)) == 0)) {
+        throw_if_init_should_abort(executor);
+      }
       result_set::fill_empty_key(
           buffer_ptr, key_count, query_mem_desc.getEffectiveKeyWidth());
       initColumnsPerRow(

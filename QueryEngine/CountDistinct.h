@@ -23,6 +23,16 @@
 using CountDistinctDescriptors = std::vector<CountDistinctDescriptor>;
 using CountDistinctSet = robin_hood::unordered_set<int64_t>;
 
+// Approximate host heap used by one CountDistinctSet that
+// QueryMemoryInitializer::allocateCountDistinctSet() creates per group-by entry: the set
+// object itself, malloc chunk header and rounding, and the pointer RowSetMemoryOwner
+// keeps to free it. This memory lives outside the output buffer and the CPU buffer pool,
+// so it has to be accounted for separately (see QueryMemoryDescriptor::
+// getCountDistinctSetHeapBytes()). The table each non-empty set allocates on its first
+// insert is data dependent and not included.
+constexpr size_t kCountDistinctSetHeapBytesPerEntry =
+    sizeof(CountDistinctSet) + sizeof(CountDistinctSet*) + 16;
+
 inline size_t bitmap_set_size(const int8_t* bitmap, const size_t bitmap_byte_sz) {
   const auto bitmap_word_count = bitmap_byte_sz >> 3;
   const auto bitmap_rem_bytes = bitmap_byte_sz & 7;

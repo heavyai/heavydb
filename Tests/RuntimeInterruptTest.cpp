@@ -6,10 +6,15 @@
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>
+#include <algorithm>
+#include <atomic>
+#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include <exception>
+#include <fstream>
 #include <future>
 #include <stdexcept>
+#include <thread>
 
 #include "Catalog/Catalog.h"
 #include "Geospatial/ColumnNames.h"
@@ -1029,6 +1034,116 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
   } catch (...) {
     CHECK(false);
   }
+}
+
+namespace {
+
+const char* query_status_name(const QuerySessionStatus::QueryStatus status) {
+  switch (status) {
+    case QuerySessionStatus::UNDEFINED:
+      return "UNDEFINED";
+    case QuerySessionStatus::PENDING_QUEUE:
+      return "PENDING_QUEUE";
+    case QuerySessionStatus::PENDING_EXECUTOR:
+      return "PENDING_EXECUTOR";
+    case QuerySessionStatus::RUNNING_QUERY_KERNEL:
+      return "RUNNING_QUERY_KERNEL";
+    case QuerySessionStatus::RUNNING_REDUCTION:
+      return "RUNNING_REDUCTION";
+    case QuerySessionStatus::RUNNING_IMPORTER:
+      return "RUNNING_IMPORTER";
+  }
+  return "?";
+}
+
+}  // namespace
+
+// A query with a wide-range, high-cardinality group by first runs a cardinality
+// estimation step and then the main step, and each step ends in RUNNING_REDUCTION. The
+// main step's kernels must be reported as RUNNING_QUERY_KERNEL again; if the status stays
+// RUNNING_REDUCTION, SHOW QUERIES shows the wrong phase for the whole step, and a
+// KILL QUERY is not routed to the executor running its kernels.
+TEST(Interrupt, StatusReturnsToKernelAfterEstimatorStep) {
+  constexpr size_t kNumRows = 500000;
+  run_ddl_statement("DROP TABLE IF EXISTS t_status_phase;");
+  // Small fragments give the main step several kernels to run.
+  run_ddl_statement(
+      "CREATE TABLE t_status_phase (k BIGINT, d DOUBLE) WITH (fragment_size = 100000);");
+  boost::filesystem::path csv_path =
+      boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+  csv_path.replace_extension(boost::filesystem::path{".csv"});
+  ScopeGuard cleanup = [&csv_path] {
+    run_ddl_statement("DROP TABLE IF EXISTS t_status_phase;");
+    boost::system::error_code ec;
+    boost::filesystem::remove(csv_path, ec);
+  };
+  {
+    std::ofstream out(csv_path.string(), std::ios::trunc);
+    CHECK(out.is_open()) << csv_path.string();
+    for (size_t i = 0; i < kNumRows; ++i) {
+      // Unique keys spread over a wide range: baseline hash group by, which needs the
+      // cardinality estimation step.
+      out << (static_cast<int64_t>(i) * 7919 + 1000000007) << "," << i << ".5\n";
+    }
+  }
+  run_ddl_statement("COPY t_status_phase FROM '" + csv_path.string() +
+                    "' WITH (header='false');");
+
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  const std::string session = generate_random_string(32);
+  QR::get()->addSessionId(session, ExecutorDeviceType::CPU);
+
+  std::atomic<bool> done{false};
+  std::exception_ptr query_error;
+  auto query_future = std::async(std::launch::async, [&] {
+    try {
+      // A set-based COUNT(DISTINCT) keeps the main step busy for a while.
+      run_query(
+          "SELECT COUNT(*), SUM(c) FROM (SELECT k, COUNT(DISTINCT d) AS c FROM "
+          "t_status_phase GROUP BY k) x;",
+          ExecutorDeviceType::CPU,
+          session);
+    } catch (...) {
+      query_error = std::current_exception();
+    }
+    done.store(true);
+  });
+
+  // Record every status change the session goes through while the query runs.
+  std::vector<QuerySessionStatus::QueryStatus> seen;
+  while (!done.load()) {
+    {
+      heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+          executor->getSessionLock());
+      auto infos = executor->getQuerySessionInfo(session, session_read_lock);
+      if (!infos.empty()) {
+        const auto status = infos.front().getQueryStatus();
+        if (seen.empty() || seen.back() != status) {
+          seen.push_back(status);
+        }
+      }
+    }
+    std::this_thread::sleep_for(std::chrono::microseconds(500));
+  }
+  query_future.get();
+  if (query_error) {
+    std::rethrow_exception(query_error);
+  }
+
+  std::string trace;
+  for (const auto status : seen) {
+    trace += std::string(trace.empty() ? "" : " -> ") + query_status_name(status);
+  }
+  const auto first_reduction = std::find(
+      seen.begin(), seen.end(), QuerySessionStatus::QueryStatus::RUNNING_REDUCTION);
+  ASSERT_NE(first_reduction, seen.end())
+      << "never observed the estimation step's reduction phase; statuses: " << trace;
+  EXPECT_NE(std::find(first_reduction,
+                      seen.end(),
+                      QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL),
+            seen.end())
+      << "status stayed RUNNING_REDUCTION while the main step's kernels ran; statuses: "
+      << trace;
 }
 
 int main(int argc, char* argv[]) {
