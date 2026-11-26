@@ -307,6 +307,21 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb_Predicate(
           *result = GEOSEquals_r(context, g1, g2);
         }
         status = true;
+      } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kTOUCHES) {
+        *result = GEOSTouches_r(context, g1, g2);
+        status = true;
+      } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kCROSSES) {
+        *result = GEOSCrosses_r(context, g1, g2);
+        status = true;
+      } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kOVERLAPS) {
+        *result = GEOSOverlaps_r(context, g1, g2);
+        status = true;
+      } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kCOVERS) {
+        *result = GEOSCovers_r(context, g1, g2);
+        status = true;
+      } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kCOVEREDBY) {
+        *result = GEOSCoveredBy_r(context, g1, g2);
+        status = true;
       }
       GEOSGeom_destroy_r(context, g2);
     }
@@ -467,6 +482,12 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb(
       status = true;
     } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kISVALID) {
       *result = GEOSisValid_r(context, g1);
+      status = true;
+    } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kISSIMPLE) {
+      *result = GEOSisSimple_r(context, g1);
+      status = true;
+    } else if (static_cast<GeoBase::GeoOp>(op) == GeoBase::GeoOp::kISRING) {
+      *result = GEOSisRing_r(context, g1);
       status = true;
     }
     GEOSGeom_destroy_r(context, g1);

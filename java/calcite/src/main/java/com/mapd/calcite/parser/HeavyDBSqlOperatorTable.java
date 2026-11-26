@@ -222,6 +222,13 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new ST_Approx_Overlaps());
     addOperator(new ST_Disjoint());
     addOperator(new ST_Within());
+    addOperator(new GeoBinaryPredicateFunction("ST_Touches"));
+    addOperator(new GeoBinaryPredicateFunction("ST_Crosses"));
+    addOperator(new GeoBinaryPredicateFunction("ST_Overlaps"));
+    addOperator(new GeoBinaryPredicateFunction("ST_Covers"));
+    addOperator(new GeoBinaryPredicateFunction("ST_CoveredBy"));
+    addOperator(new GeoUnaryPredicateFunction("ST_IsSimple"));
+    addOperator(new GeoUnaryPredicateFunction("ST_IsRing"));
     addOperator(new ST_DWithin());
     addOperator(new ST_DFullyWithin());
     addOperator(new ST_Distance());
@@ -2433,6 +2440,67 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       st_equals_sig.add(SqlTypeFamily.ANY);
       st_equals_sig.add(SqlTypeFamily.ANY);
       return st_equals_sig;
+    }
+  }
+
+  // Generic GEOS-backed binary DE-9IM predicate over two geometry
+  // arguments (ST_Touches, ST_Crosses, ST_Overlaps, ST_Covers,
+  // ST_CoveredBy). Evaluated through the Geos_Wkb_Wkb_Predicate
+  // runtime entry point.
+  static class GeoBinaryPredicateFunction extends SqlFunction {
+    GeoBinaryPredicateFunction(String name) {
+      super(name,
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 2;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.BOOLEAN),
+              opBinding.getOperandType(0).isNullable()
+                      || opBinding.getOperandType(1).isNullable());
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> sig = new java.util.ArrayList<SqlTypeFamily>();
+      sig.add(SqlTypeFamily.ANY);
+      sig.add(SqlTypeFamily.ANY);
+      return sig;
+    }
+  }
+
+  // Generic GEOS-backed unary predicate over a geometry argument
+  // (ST_IsSimple, ST_IsRing). Evaluated through the Geos_Wkb runtime
+  // entry point.
+  static class GeoUnaryPredicateFunction extends SqlFunction {
+    GeoUnaryPredicateFunction(String name) {
+      super(name,
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.BOOLEAN),
+              opBinding.getOperandType(0).isNullable());
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> sig = new java.util.ArrayList<SqlTypeFamily>();
+      sig.add(SqlTypeFamily.ANY);
+      return sig;
     }
   }
 

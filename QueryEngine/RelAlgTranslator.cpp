@@ -2073,7 +2073,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     SQLTypeInfo ti;
     return translateBinaryGeoConstructor(rex_function, ti, false);
   }
-  if (func_resolve(rex_function->getName(), "ST_IsEmpty"sv, "ST_IsValid"sv)) {
+  if (func_resolve(rex_function->getName(),
+                   "ST_IsEmpty"sv,
+                   "ST_IsValid"sv,
+                   "ST_IsSimple"sv,
+                   "ST_IsRing"sv)) {
     CHECK_EQ(rex_function->size(), size_t(1));
     SQLTypeInfo ti;
     return translateUnaryGeoPredicate(rex_function, ti, false);
@@ -2084,6 +2088,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     if (auto distance_check = translateBinaryGeoFunction(rex_function)) {
       return distance_check;
     }
+    SQLTypeInfo ti;
+    return translateBinaryGeoPredicate(rex_function, ti, false);
+  }
+  if (func_resolve(rex_function->getName(),
+                   "ST_Touches"sv,
+                   "ST_Crosses"sv,
+                   "ST_Overlaps"sv,
+                   "ST_Covers"sv,
+                   "ST_CoveredBy"sv)) {
+    CHECK_EQ(rex_function->size(), size_t(2));
     SQLTypeInfo ti;
     return translateBinaryGeoPredicate(rex_function, ti, false);
   }
