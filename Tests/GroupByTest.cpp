@@ -523,6 +523,117 @@ TEST_F(BigCardinalityThresholdTest, EmptyFilters) {
   }
 }
 
+// A set-based COUNT(DISTINCT) (here over a DOUBLE, which has no value range) allocates
+// one heap-allocated set per group-by entry while each kernel initializes its output
+// buffer. That heap is not part of the output buffer, so the Executor Resource Manager
+// has to budget it separately; otherwise it admits queries whose real host memory use is
+// a multiple of what it grants and nothing bounds it.
+class CountDistinctSetMemoryTest : public ::testing::Test {
+ protected:
+  static constexpr size_t kNumGroups = 200000;
+
+  // Sized from the query, not from a measurement: with one group-by entry per key, the
+  // output buffer of the queries below is about 16-24 bytes per group (3-5 MB) and the
+  // set heap about 70 bytes per group (14 MB). A limit between the two admits the
+  // buffer alone but not buffer plus sets, with margin on both sides.
+  static constexpr size_t kLimitBetweenBufferAndSets = 9 * 1000 * 1000;
+  static constexpr size_t kLimitAboveBoth = 256 * 1000 * 1000;
+
+  void SetUp() override {
+    resource_mgr_ = Executor::executor_resource_mgr_;
+    if (!resource_mgr_) {
+      GTEST_SKIP() << "ExecutorResourceMgr is disabled";
+    }
+    original_cpu_result_mem_ =
+        resource_mgr_
+            ->get_resource_info(
+                ExecutorResourceMgr_Namespace::ResourceType::CPU_RESULT_MEM)
+            .second;
+
+    run_ddl_statement("DROP TABLE IF EXISTS count_distinct_set_mem;");
+    run_ddl_statement("CREATE TABLE count_distinct_set_mem (k INT, d DOUBLE);");
+    csv_path_ =
+        boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+    csv_path_.replace_extension(boost::filesystem::path{".csv"});
+    {
+      std::fstream f(csv_path_.native(),
+                     std::ios::binary | std::ios::out | std::ios::trunc);
+      CHECK(f.is_open()) << csv_path_.string();
+      for (size_t i = 0; i < kNumGroups; ++i) {
+        f << i << ", " << i << ".5" << std::endl;  // every group has one distinct value
+      }
+    }
+    run_ddl_statement("COPY count_distinct_set_mem FROM '" + csv_path_.string() +
+                      "' WITH (header='false');");
+  }
+
+  void TearDown() override {
+    if (resource_mgr_) {
+      resource_mgr_->set_resource(
+          ExecutorResourceMgr_Namespace::ResourceType::CPU_RESULT_MEM,
+          original_cpu_result_mem_);
+    }
+    run_ddl_statement("DROP TABLE IF EXISTS count_distinct_set_mem;");
+    boost::system::error_code ec;
+    boost::filesystem::remove(csv_path_, ec);
+  }
+
+  void setCpuResultMemLimit(const size_t bytes) {
+    resource_mgr_->set_resource(
+        ExecutorResourceMgr_Namespace::ResourceType::CPU_RESULT_MEM, bytes);
+  }
+
+  // COUNT(*) of the groups, and with `with_sum` also SUM(c) (BIGINT, so only for COUNT).
+  static std::string groupByQuery(const std::string& agg, const bool with_sum) {
+    return std::string("SELECT COUNT(*)") + (with_sum ? ", SUM(c)" : "") +
+           " FROM (SELECT k, " + agg + " AS c FROM count_distinct_set_mem GROUP BY k) x;";
+  }
+
+  // Runs on CPU: a set-based COUNT(DISTINCT) cannot run on GPU and is retried there
+  // anyway.
+  static std::vector<int64_t> run(const std::string& sql) {
+    const auto rows = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+    CHECK_EQ(size_t(1), rows->rowCount());
+    const auto row = rows->getNextRow(false, false);
+    std::vector<int64_t> values;
+    for (const auto& value : row) {
+      values.push_back(v<int64_t>(value));
+    }
+    return values;
+  }
+
+  decltype(Executor::executor_resource_mgr_) resource_mgr_;
+  size_t original_cpu_result_mem_{0};
+  boost::filesystem::path csv_path_;
+};
+
+// The output buffer alone fits the limit, buffer plus per-group sets does not: the query
+// must be rejected up front rather than admitted and left to exhaust host memory.
+TEST_F(CountDistinctSetMemoryTest, RejectedWhenSetHeapExceedsLimit) {
+  setCpuResultMemLimit(kLimitBetweenBufferAndSets);
+
+  // Same group-by without a set-based aggregate needs only the output buffer.
+  const auto control = run(groupByQuery("MAX(d)", /*with_sum=*/false));
+  ASSERT_EQ(control.size(), size_t(1));
+  EXPECT_EQ(control[0], static_cast<int64_t>(kNumGroups));
+
+  try {
+    run(groupByQuery("COUNT(DISTINCT d)", /*with_sum=*/true));
+    FAIL() << "Expected the query to be rejected for needing too much CPU result memory";
+  } catch (const std::runtime_error& e) {
+    EXPECT_NE(std::string(e.what()).find("CPU result memory"), std::string::npos)
+        << e.what();
+  }
+}
+
+TEST_F(CountDistinctSetMemoryTest, RunsWhenWithinLimit) {
+  setCpuResultMemLimit(kLimitAboveBoth);
+  const auto result = run(groupByQuery("COUNT(DISTINCT d)", /*with_sum=*/true));
+  ASSERT_EQ(result.size(), size_t(2));
+  EXPECT_EQ(result[0], static_cast<int64_t>(kNumGroups));
+  EXPECT_EQ(result[1], static_cast<int64_t>(kNumGroups));  // one distinct d per group
+}
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 
