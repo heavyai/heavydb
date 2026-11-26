@@ -4416,6 +4416,13 @@ void DBHandler::detect_column_types(TDetectResult& _return,
 
   bool is_raster = false;
   boost::filesystem::path file_path;
+  // Record whether the caller actually sent S3 credentials. When they
+  // didn't, thrift_to_copyparams() fills s3_config from the server's own
+  // credential provider chain — those are server secrets and must never
+  // be echoed back in _return.copy_params.
+  const bool caller_supplied_s3_creds =
+      !(cp.s3_access_key.empty() && cp.s3_secret_key.empty() &&
+        cp.s3_session_token.empty());
   import_export::CopyParams copy_params = thrift_to_copyparams(cp);
   if (copy_params.source_type != import_export::SourceType::kOdbc) {
     std::string file_name{file_name_in};
@@ -4510,6 +4517,13 @@ void DBHandler::detect_column_types(TDetectResult& _return,
       copy_params = detector.get_copy_params();
 
       _return.copy_params = copyparams_to_thrift(copy_params);
+      if (!caller_supplied_s3_creds) {
+        // s3 creds here came from the server's credential chain — strip
+        // them so server secrets don't leak to the client.
+        _return.copy_params.s3_access_key.clear();
+        _return.copy_params.s3_secret_key.clear();
+        _return.copy_params.s3_session_token.clear();
+      }
       _return.row_set.row_desc.resize(best_types.size());
       for (size_t col_idx = 0; col_idx < best_types.size(); col_idx++) {
         TColumnType col;
@@ -4584,6 +4598,11 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         }
       }
       _return.copy_params = copyparams_to_thrift(copy_params);
+      if (!caller_supplied_s3_creds) {
+        _return.copy_params.s3_access_key.clear();
+        _return.copy_params.s3_secret_key.clear();
+        _return.copy_params.s3_session_token.clear();
+      }
     }
   } catch (const std::exception& e) {
     THROW_DB_EXCEPTION("detect_column_types error: " + std::string(e.what()));
