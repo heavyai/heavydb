@@ -56,6 +56,7 @@
 #include "RuntimeLibManager/RuntimeLibManager.h"
 #endif
 #include "Shared/ArrowUtil.h"
+#include "Shared/base64.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
@@ -4891,6 +4892,35 @@ void check_not_info_schema_db(const std::string& db_name, bool throw_db_exceptio
 }
 }  // namespace dbhandler
 
+namespace {
+// dashboard_state is opaque to the server, but it is an Immerse document —
+// either base64-encoded JSON or raw JSON — and a payload that is neither is
+// stored successfully yet renders the dashboard unopenable in every client.
+// Reject obviously un-storable states at write time rather than letting the
+// failure surface as a client-side crash.
+void validate_dashboard_state(const std::string& dashboard_state) {
+  if (dashboard_state.empty()) {
+    return;
+  }
+  const auto is_json_object = [](const std::string& s) {
+    rapidjson::Document doc;
+    doc.Parse(s.c_str(), s.size());
+    return !doc.HasParseError() && doc.IsObject();
+  };
+  if (is_json_object(dashboard_state)) {
+    return;  // raw JSON document
+  }
+  try {
+    if (is_json_object(shared::decode_base64(dashboard_state))) {
+      return;  // base64-encoded document (Immerse wire format)
+    }
+  } catch (const std::exception&) {
+  }
+  THROW_DB_EXCEPTION(
+      "dashboard_state must be a JSON object or a base64-encoded JSON object");
+}
+}  // namespace
+
 int32_t DBHandler::create_dashboard(const TSessionId& session_id_or_json,
                                     const std::string& dashboard_name,
                                     const std::string& dashboard_state,
@@ -4916,6 +4946,8 @@ int32_t DBHandler::create_dashboard(const TSessionId& session_id_or_json,
   if (dashboard_exists(cat, session_ptr->get_currentUser().userId, dashboard_name)) {
     THROW_DB_EXCEPTION("Dashboard with name: " + dashboard_name + " already exists.");
   }
+
+  validate_dashboard_state(dashboard_state);
 
   DashboardDescriptor dd;
   dd.dashboardName = dashboard_name;
@@ -4966,6 +4998,8 @@ void DBHandler::replace_dashboard(const TSessionId& session_id_or_json,
       THROW_DB_EXCEPTION("Dashboard with name: " + dashboard_name + " already exists.");
     }
   }
+
+  validate_dashboard_state(dashboard_state);
 
   DashboardDescriptor dd;
   dd.dashboardName = dashboard_name;

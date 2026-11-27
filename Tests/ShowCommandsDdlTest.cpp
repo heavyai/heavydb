@@ -4301,7 +4301,7 @@ class SystemTablesTest : public DBHandlerTestFixture {
                            "{\"table\":\"test_table, ${test_custom_source}\"}") {
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
     auto id = db_handler->create_dashboard(
-        session_id, dashboard_name, "state", "image", metadata_json);
+        session_id, dashboard_name, "{}", "image", metadata_json);
     dashboard_id_by_name_[dashboard_name] = id;
   }
 
