@@ -85,11 +85,11 @@ class DashboardBasicTest : public BaseTestFixture {
 TEST_F(DashboardBasicTest, CreateReplaceDelete) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   auto db_id =
-      db_handler->create_dashboard(session_id, "testdb", "state", "image", "metadata");
+      db_handler->create_dashboard(session_id, "testdb", "{}", "image", "metadata");
   ASSERT_EQ(getNumDashboards(), size_t(1));
 
   db_handler->replace_dashboard(
-      session_id, db_id, "testdb", "test_user", "state", "image", "metadata");
+      session_id, db_id, "testdb", "test_user", "{}", "image", "metadata");
 
   TDashboard db;
   db_handler->get_dashboard(db, session_id, db_id);
@@ -99,16 +99,37 @@ TEST_F(DashboardBasicTest, CreateReplaceDelete) {
   ASSERT_EQ(getNumDashboards(), size_t(0));
 }
 
+TEST_F(DashboardBasicTest, RejectsInvalidDashboardState) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  // garbage that is neither raw JSON nor base64(JSON) must not be stored —
+  // it renders the dashboard unopenable in every client
+  ASSERT_ANY_THROW(db_handler->create_dashboard(
+      session_id, "testdb", "!!!not-a-doc!!!", "image", "metadata"));
+  ASSERT_ANY_THROW(db_handler->create_dashboard(
+      session_id, "testdb", "aGVsbG8gd29ybGQ=", "image", "metadata"));
+  // raw JSON object, base64(JSON object), and empty are all storable
+  auto id1 = db_handler->create_dashboard(
+      session_id, "testdb1", "{}", "image", "metadata");
+  auto id2 = db_handler->create_dashboard(
+      session_id, "testdb2", "e30=", "image", "metadata");  // b64("{}")
+  auto id3 = db_handler->create_dashboard(
+      session_id, "testdb3", "", "image", "metadata");
+  ASSERT_EQ(getNumDashboards(), size_t(3));
+  db_handler->delete_dashboard(session_id, id1);
+  db_handler->delete_dashboard(session_id, id2);
+  db_handler->delete_dashboard(session_id, id3);
+}
+
 TEST_F(DashboardBasicTest, ReplaceWithTableChange) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   auto db_id = db_handler->create_dashboard(
-      session_id, "testdb", "state", "image", "\"table\":\"heavyai_us_states\"");
+      session_id, "testdb", "{}", "image", "\"table\":\"heavyai_us_states\"");
 
   db_handler->replace_dashboard(session_id,
                                 db_id,
                                 "testdb",
                                 "test_user",
-                                "state",
+                                "{}",
                                 "image",
                                 "\"table\":\"heavyai_countries\"");
 
@@ -118,11 +139,11 @@ TEST_F(DashboardBasicTest, ReplaceWithTableChange) {
 TEST_F(DashboardBasicTest, DuplicateCreateDashboards) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   db_handler->create_dashboard(
-      session_id, "testdb", "state", "image", "\"table\":\"heavyai_us_states\"");
+      session_id, "testdb", "{}", "image", "\"table\":\"heavyai_us_states\"");
   executeLambdaAndAssertException(
       [db_handler = db_handler, session_id = session_id]() {
         db_handler->create_dashboard(
-            session_id, "testdb", "state", "image", "\"table\":\"heavyai_us_states\"");
+            session_id, "testdb", "{}", "image", "\"table\":\"heavyai_us_states\"");
       },
       "Dashboard with name: testdb already exists.");
 }
@@ -130,16 +151,16 @@ TEST_F(DashboardBasicTest, DuplicateCreateDashboards) {
 TEST_F(DashboardBasicTest, DuplicateReplaceDashboards) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   db_handler->create_dashboard(
-      session_id, "testdb", "state", "image", "\"table\":\"heavyai_us_states\"");
+      session_id, "testdb", "{}", "image", "\"table\":\"heavyai_us_states\"");
   auto db2_id = db_handler->create_dashboard(
-      session_id, "testdb2", "state", "image", "\"table\":\"heavyai_us_states\"");
+      session_id, "testdb2", "{}", "image", "\"table\":\"heavyai_us_states\"");
   executeLambdaAndAssertException(
       [db_handler = db_handler, session_id = session_id, db2_id = db2_id]() {
         db_handler->replace_dashboard(session_id,
                                       db2_id,
                                       "testdb",
                                       "test_user",
-                                      "state",
+                                      "{}",
                                       "image",
                                       "\"table\":\"heavyai_us_states\"");
       },
@@ -257,7 +278,7 @@ class GetDashboardTest : public DBHandlerTestFixture {
 TEST_F(GetDashboardTest, AsAdmin) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   const auto test_dashboard_id = db_handler->create_dashboard(
-      session_id, shared::kDefaultDbName, "state", "image", "metadata");
+      session_id, shared::kDefaultDbName, "{}", "image", "metadata");
   ASSERT_EQ(getNumDashboards(), size_t(1));
 
   TDashboard db;
@@ -275,7 +296,7 @@ TEST_F(GetDashboardTest, AsUser) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
 
   const auto test_dashboard_id = db_handler->create_dashboard(
-      session_id, shared::kDefaultDbName, "state", "image", "metadata");
+      session_id, shared::kDefaultDbName, "{}", "image", "metadata");
 
   DBObject object(test_dashboard_id, DBObjectType::DashboardDBObjectType);
   TestPermissions usr_privs(false, false, true, true);
@@ -398,7 +419,7 @@ class ShareDashboardsTest : public DBHandlerTestFixture {
   }
 
   const static inline std::string dashboard_name_prefix_ = "test_dashboard";
-  const static inline std::string dashboard_state_prefix_ = "test_state";
+  const static inline std::string dashboard_state_prefix_ = "{}";
   const static inline std::string dashboard_image_hash_prefix_ = "test_image_hash";
   const static inline std::string dashboard_metadata_prefix_ = "test_metadata";
   const static inline int num_test_dashboards_ = 3;
@@ -419,7 +440,7 @@ class ShareDashboardsTest : public DBHandlerTestFixture {
       const auto suffix = get_suffix(unique_id);
       dashboard_id = handler->create_dashboard(session,
                                                dashboard_name_prefix_ + suffix,
-                                               dashboard_state_prefix_ + suffix,
+                                               dashboard_state_prefix_,
                                                dashboard_image_hash_prefix_ + suffix,
                                                dashboard_metadata_prefix_ + suffix);
     }
@@ -810,9 +831,9 @@ class DashboardBulkDeleteTest : public DBHandlerTestFixture {
 TEST_F(DashboardBulkDeleteTest, CreateDelete) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   auto db_id_1 =
-      db_handler->create_dashboard(session_id, "test1", "state", "image", "metadata");
+      db_handler->create_dashboard(session_id, "test1", "{}", "image", "metadata");
   auto db_id_2 =
-      db_handler->create_dashboard(session_id, "test2", "state", "image", "metadata");
+      db_handler->create_dashboard(session_id, "test2", "{}", "image", "metadata");
   ASSERT_EQ(getNumDashboards(), size_t(2));
   db_handler->delete_dashboards(session_id, {db_id_1, db_id_2});
   ASSERT_EQ(getNumDashboards(), size_t(0));
@@ -821,7 +842,7 @@ TEST_F(DashboardBulkDeleteTest, CreateDelete) {
 TEST_F(DashboardBulkDeleteTest, SomeInvalidIDs) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   auto db_id =
-      db_handler->create_dashboard(session_id, "test1", "state", "image", "metadata");
+      db_handler->create_dashboard(session_id, "test1", "{}", "image", "metadata");
 
   try {
     db_handler->delete_dashboards(session_id, {db_id, 0});
@@ -839,9 +860,9 @@ TEST_F(DashboardBulkDeleteTest, SomeInvalidIDs) {
 TEST_F(DashboardBulkDeleteTest, NoDeleteDashboardPrivilege) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   auto db_id_1 =
-      db_handler->create_dashboard(session_id, "test1", "state", "image", "metadata");
+      db_handler->create_dashboard(session_id, "test1", "{}", "image", "metadata");
   auto db_id_2 =
-      db_handler->create_dashboard(session_id, "test2", "state", "image", "metadata");
+      db_handler->create_dashboard(session_id, "test2", "{}", "image", "metadata");
   TSessionId unprivileged_session;
   login("test_user", "test_pass", shared::kDefaultDbName, unprivileged_session);
   sql("GRANT DELETE ON DASHBOARD " + std::to_string(db_id_1) + " to test_user");
@@ -864,9 +885,9 @@ TEST_F(DashboardBulkDeleteTest, NoDeleteDashboardPrivilege) {
 TEST_F(DashboardBulkDeleteTest, NonSuperDeleteDashboardPrivilege) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   auto db_id_1 =
-      db_handler->create_dashboard(session_id, "test1", "state", "image", "metadata");
+      db_handler->create_dashboard(session_id, "test1", "{}", "image", "metadata");
   auto db_id_2 =
-      db_handler->create_dashboard(session_id, "test2", "state", "image", "metadata");
+      db_handler->create_dashboard(session_id, "test2", "{}", "image", "metadata");
   TSessionId non_super_session;
   login("test_user", "test_pass", shared::kDefaultDbName, non_super_session);
   sql("GRANT DELETE ON DASHBOARD " + std::to_string(db_id_1) + " to test_user");
@@ -879,7 +900,7 @@ TEST_F(DashboardBulkDeleteTest, NonSuperDeleteDashboardPrivilege) {
 TEST_F(DashboardBulkDeleteTest, InvalidNoPrivilegeMix) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   auto db_id =
-      db_handler->create_dashboard(session_id, "test1", "state", "image", "metadata");
+      db_handler->create_dashboard(session_id, "test1", "{}", "image", "metadata");
   TSessionId non_super_session;
   login("test_user", "test_pass", shared::kDefaultDbName, non_super_session);
   try {

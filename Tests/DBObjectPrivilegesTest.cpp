@@ -3992,7 +3992,7 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
         "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
     db_handler->create_dashboard(
-        session_id, "test_dashboard_" + name_suffix, "state", "image", "metadata");
+        session_id, "test_dashboard_" + name_suffix, "{}", "image", "metadata");
   }
 
   void assertDatabaseObjectsOwnership(const std::string& user_name,
